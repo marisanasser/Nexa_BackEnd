@@ -29,6 +29,7 @@ class User extends Authenticatable
         'avatar',
         'bio',
         'company_name',
+        'profession',
         'whatsapp_number',
         'student_verified',
         'student_expires_at',
