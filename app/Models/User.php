@@ -48,6 +48,8 @@ class User extends Authenticatable
         'languages',
         'has_premium',
         'premium_expires_at',
+        'stripe_account_id',
+        'stripe_verification_status',
         'free_trial_expires_at',
         'google_id',
         'google_token',
