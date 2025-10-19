@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Log;
 
 class ProfileController extends Controller
 {
@@ -40,6 +41,7 @@ class ProfileController extends Controller
                     'avatar' => $user->avatar_url,
                     'bio' => $user->bio,
                     'company_name' => $user->company_name,
+                    'profession' => $user->profession,
                     'gender' => $user->gender,
                     'birth_date' => $user->birth_date,
                     'creator_type' => $user->creator_type,
@@ -136,12 +138,13 @@ class ProfileController extends Controller
                 'facebook_page' => 'sometimes|string|max:255',
                 'twitter_handle' => 'sometimes|string|max:255',
                 'industry' => 'sometimes|string|max:255',
+                'profession' => 'sometimes|string|max:255',
                 'niche' => 'sometimes|string|max:255',
                 'state' => 'sometimes|string|max:255', // Accept state directly instead of location
                 'language' => 'sometimes|string|max:50',
                 'languages' => 'sometimes|string', // JSON string for multiple languages
                 'categories' => 'sometimes|string', // JSON string for categories
-                'avatar' => 'sometimes|image|mimes:jpeg,png,jpg,gif|max:2048',
+                'avatar' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:10240',
             ];
 
             // Handle Instagram validation based on creator type
@@ -188,8 +191,15 @@ class ProfileController extends Controller
             // Handle avatar upload
             if ($hasAvatarFile && $avatarFile) {
                 // Delete old avatar if exists
-                if ($user->avatar_url && Storage::disk('public')->exists(str_replace('/storage/', '', $user->avatar_url))) {
-                    Storage::disk('public')->delete(str_replace('/storage/', '', $user->avatar_url));
+                try {
+                    if ($user->avatar_url) {
+                        $oldPath = str_replace('/storage/', '', $user->avatar_url);
+                        if (Storage::disk('public')->exists($oldPath)) {
+                            Storage::disk('public')->delete($oldPath);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // ignore delete errors in local env
                 }
 
                 // Store new avatar
@@ -224,13 +234,11 @@ class ProfileController extends Controller
             $role = $request->input('role');
             if ($role) {
                 $validRoles = ['creator', 'brand', 'admin', 'student'];
-                if (!in_array($role, $validRoles)) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Invalid role value. Must be one of: ' . implode(', ', $validRoles)
-                    ], 422);
+                if (in_array($role, $validRoles)) {
+                    $data['role'] = $role;
+                } else {
+                    // Em vez de 422, ignorar role inválido e seguir (tolerante a UIs com "Profissão")
                 }
-                $data['role'] = $role;
             }
 
             // Handle state field - use input() for FormData
@@ -259,6 +267,7 @@ class ProfileController extends Controller
                     'avatar' => $user->avatar_url,
                     'bio' => $user->bio,
                     'company_name' => $user->company_name,
+                    'profession' => $user->profession,
                     'gender' => $user->gender,
                     'birth_date' => $user->birth_date,
                     'creator_type' => $user->creator_type,
@@ -286,6 +295,194 @@ class ProfileController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update profile: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete current user's avatar
+     */
+    public function deleteAvatar(): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated'
+                ], 401);
+            }
+
+            if ($user->avatar_url) {
+                $path = str_replace('/storage/', '', $user->avatar_url);
+                if (Storage::disk('public')->exists($path)) {
+                    Storage::disk('public')->delete($path);
+                }
+                $user->avatar_url = null;
+                $user->save();
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Avatar removido com sucesso',
+                'profile' => [
+                    'id' => $user->id,
+                    'avatar' => $user->avatar_url,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Falha ao remover avatar: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Upload avatar only (multipart FormData with 'avatar')
+     */
+    public function uploadAvatar(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated'
+                ], 401);
+            }
+
+            Log::info('Avatar upload request received', [
+                'content_type' => $request->header('Content-Type'),
+                'method' => $request->method(),
+                'has_file' => $request->hasFile('avatar'),
+                'files' => $request->allFiles(),
+            ]);
+
+            $validator = Validator::make($request->all(), [
+                'avatar' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:10240',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Delete old avatar if exists
+            try {
+                if ($user->avatar_url) {
+                    $oldPath = str_replace('/storage/', '', $user->avatar_url);
+                    if (Storage::disk('public')->exists($oldPath)) {
+                        Storage::disk('public')->delete($oldPath);
+                    }
+                }
+            } catch (\Throwable $e) {}
+
+            $avatarFile = $request->file('avatar');
+            $avatarPath = $avatarFile->store('avatars', 'public');
+            $user->avatar_url = '/storage/' . $avatarPath;
+            $user->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Avatar atualizado com sucesso',
+                'profile' => [
+                    'id' => $user->id,
+                    'avatar' => $user->avatar_url,
+                    'avatar_url' => $user->avatar_url,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Falha ao enviar avatar: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Upload avatar via base64 (JSON) - fallback para ambientes com issues de multipart
+     * Body esperado: { "avatar_base64": "data:image/jpeg;base64,..." }
+     */
+    public function uploadAvatarBase64(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated'
+                ], 401);
+            }
+
+            $dataUrl = $request->input('avatar_base64');
+            if (!$dataUrl || !is_string($dataUrl)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'avatar_base64 é obrigatório'
+                ], 422);
+            }
+
+            if (!preg_match('/^data:(image\\/(jpeg|jpg|png|webp));base64,(.*)$/i', $dataUrl, $matches)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Formato base64 inválido'
+                ], 422);
+            }
+
+            $mime = $matches[1];
+            $ext = $matches[2] === 'jpeg' ? 'jpg' : $matches[2];
+            $base64 = $matches[3];
+            $binary = base64_decode($base64, true);
+            if ($binary === false) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Falha ao decodificar base64'
+                ], 422);
+            }
+
+            // Tamanho máximo ~10MB
+            if (strlen($binary) > 10 * 1024 * 1024) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Arquivo muito grande (limite 10MB)'
+                ], 422);
+            }
+
+            // Remove anterior
+            try {
+                if ($user->avatar_url) {
+                    $oldPath = str_replace('/storage/', '', $user->avatar_url);
+                    if (Storage::disk('public')->exists($oldPath)) {
+                        Storage::disk('public')->delete($oldPath);
+                    }
+                }
+            } catch (\Throwable $e) {}
+
+            // Salva novo
+            $filename = 'avatar_' . $user->id . '_' . time() . '.' . $ext;
+            $path = 'avatars/' . $filename;
+            Storage::disk('public')->put($path, $binary);
+
+            $user->avatar_url = '/storage/' . $path;
+            $user->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Avatar atualizado com sucesso (base64)',
+                'profile' => [
+                    'id' => $user->id,
+                    'avatar' => $user->avatar_url,
+                    'avatar_url' => $user->avatar_url,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Falha ao enviar avatar (base64): ' . $e->getMessage()
             ], 500);
         }
     }

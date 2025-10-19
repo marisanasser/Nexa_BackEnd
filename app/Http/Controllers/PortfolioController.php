@@ -50,27 +50,7 @@ class PortfolioController extends Controller
             ], 403);
         }
 
-        // Students don't have portfolios, return empty data
-        if ($user->isStudent()) {
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'portfolio' => [
-                        'id' => null,
-                        'title' => null,
-                        'bio' => null,
-                        'profile_picture' => null,
-                        'project_links' => [],
-                        'items' => [],
-                    ],
-                    'items_count' => 0,
-                    'images_count' => 0,
-                    'videos_count' => 0,
-                    'is_complete' => false,
-                    'total_items' => 0
-                ]
-            ]);
-        }
+        // Students can have portfolios as well
 
         $portfolio = $user->portfolio()->with(['items' => function ($query) {
             $query->orderBy('order');
@@ -105,6 +85,7 @@ class PortfolioController extends Controller
             'success' => true,
             'data' => [
                 'portfolio' => [
+                    'user_id' => $portfolio->user_id,
                     'id' => $portfolio->id,
                     'title' => $portfolio->title,
                     'bio' => $portfolio->bio,
@@ -146,13 +127,7 @@ class PortfolioController extends Controller
             ], 403);
         }
 
-        // Students can't update portfolios, return success with no changes
-        if ($user->isStudent()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Students cannot update portfolios'
-            ]);
-        }
+        // Students can update portfolios
 
         // Log all incoming data for debugging
         Log::info('Portfolio update request received', [
@@ -304,40 +279,55 @@ class PortfolioController extends Controller
                 'all_request_data' => $request->all()
             ]);
 
-            // Handle project_links
+            // Handle project_links (preserve se ausente ou string vazia)
             if ($request->has('project_links')) {
-                $projectLinks = $request->input('project_links');
-                if (is_string($projectLinks)) {
-                    $projectLinks = json_decode($projectLinks, true);
-                }
-                if (is_array($projectLinks)) {
-                    $validLinks = [];
-                    foreach ($projectLinks as $link) {
-                        if (is_array($link)) {
-                            // New object structure
-                            if (!empty(trim($link['title'] ?? '')) && !empty(trim($link['url'] ?? ''))) {
-                                $validLinks[] = [
-                                    'title' => trim($link['title']),
-                                    'url' => trim($link['url'])
-                                ];
-                            }
+                $projectLinksRaw = $request->input('project_links');
+
+                // Se vier string vazia, não atualiza (preserva valor atual)
+                if (is_string($projectLinksRaw) && trim($projectLinksRaw) === '') {
+                    // skip
+                } else {
+                    $projectLinks = $projectLinksRaw;
+                    if (is_string($projectLinks)) {
+                        $decoded = json_decode($projectLinks, true);
+                        if (json_last_error() === JSON_ERROR_NONE) {
+                            $projectLinks = $decoded;
                         } else {
-                            // Legacy string structure - convert to object
-                            if (!empty(trim($link))) {
-                                $validLinks[] = [
-                                    'title' => 'Link',
-                                    'url' => trim($link)
-                                ];
-                            }
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'Validation failed',
+                                'errors' => ['project_links' => ['Formato JSON inválido para project_links']]
+                            ], 422);
                         }
                     }
-                    $data['project_links'] = $validLinks;
-                } else {
-                    $data['project_links'] = null;
+
+                    if (is_array($projectLinks)) {
+                        $validLinks = [];
+                        foreach ($projectLinks as $link) {
+                            if (is_array($link)) {
+                                // New object structure
+                                if (!empty(trim($link['title'] ?? '')) && !empty(trim($link['url'] ?? ''))) {
+                                    $validLinks[] = [
+                                        'title' => trim($link['title']),
+                                        'url' => trim($link['url'])
+                                    ];
+                                }
+                            } else {
+                                // Legacy string structure - convert to object
+                                if (!empty(trim($link))) {
+                                    $validLinks[] = [
+                                        'title' => 'Link',
+                                        'url' => trim($link)
+                                    ];
+                                }
+                            }
+                        }
+                        // Só atualiza se houver algo válido; se vier array vazio, interpreta como limpar explicitamente
+                        $data['project_links'] = count($validLinks) > 0 ? $validLinks : [];
+                    }
                 }
             } else {
-                // If no project_links sent, don't update it (preserve existing)
-                // Only set to null if explicitly sent as empty
+                // Se campo não veio, preserva valor existente
             }
 
             // Handle profile picture upload
@@ -450,6 +440,7 @@ class PortfolioController extends Controller
                 'message' => 'Portfolio updated successfully',
                 'data' => [
                     'id' => $portfolio->id,
+                    'user_id' => $portfolio->user_id,
                     'title' => $portfolio->title,
                     'bio' => $portfolio->bio,
                     'profile_picture' => $portfolio->profile_picture ? asset('storage/' . $portfolio->profile_picture) : null,
