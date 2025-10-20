@@ -458,10 +458,15 @@ Route::post('/google/auth', [GoogleController::class, 'handleGoogleWithRole'])
 
 Route::post('/account/checked', [AccountController::class, 'checkAccount']);
 
+// Public Stripe configuration check
+Route::get('/stripe/config-check', [App\Http\Controllers\StripeController::class, 'checkConfiguration']);
+
 // Stripe routes
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/stripe/create-account', [App\Http\Controllers\StripeController::class, 'createAccount']);
     Route::get('/stripe/account-status', [App\Http\Controllers\StripeController::class, 'getAccountStatus']);
+    Route::post('/stripe/verify-payment-method', [App\Http\Controllers\StripeController::class, 'verifyPaymentMethod']);
     Route::post('/stripe/account-link', [App\Http\Controllers\StripeController::class, 'createAccountLink']);
+    Route::post('/stripe/setup-intent', [App\Http\Controllers\StripeController::class, 'setupIntent']);
 });
 
