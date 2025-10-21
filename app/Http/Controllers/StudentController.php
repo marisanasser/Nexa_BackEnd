@@ -47,10 +47,8 @@ class StudentController extends Controller
                 $user->student_expires_at = now()->addYear(); // Student status valid for 1 year
                 $user->role = 'student'; // Update role to student
                 
-                // Grant or extend free trial for 1 month (30 days)
-                // If user already has a trial, extend it by 1 month from now
-                // If user doesn't have a trial, give them 1 month from now
-                $user->free_trial_expires_at = now()->addMonth();
+                // Grant free trial for 1 year
+                $user->free_trial_expires_at = now()->addYear();
                 
                 $user->save();
 
