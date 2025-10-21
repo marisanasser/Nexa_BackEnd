@@ -16,13 +16,11 @@ use App\Services\PaymentSimulator;
 
 class ContractPaymentController extends Controller
 {
-    private string $apiKey;
-    private string $baseUrl;
+    private ?string $stripeKey = null;
 
     public function __construct()
     {
-        $this->apiKey = env('PAGARME_API_KEY', '');
-        $this->baseUrl = 'https://api.pagar.me/core/v5';
+        $this->stripeKey = config('services.stripe.secret');
         
         // Log simulation mode status
         if (PaymentSimulator::isSimulationMode()) {
@@ -47,6 +45,9 @@ class ContractPaymentController extends Controller
 
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'contract_id' => 'required|exists:contracts,id,brand_id,' . $user->id,
+            // When using Stripe directly, expect a Stripe PaymentMethod id
+            'stripe_payment_method_id' => 'nullable|string',
+            // Legacy brand payment method (Pagar.me) will be ignored when Stripe is configured
             'payment_method_id' => 'nullable|exists:brand_payment_methods,id,brand_id,' . $user->id,
         ]);
 
@@ -76,19 +77,14 @@ class ContractPaymentController extends Controller
             ], 400);
         }
 
-        // Get payment method
-        $paymentMethod = null;
-        if ($request->payment_method_id) {
-            $paymentMethod = BrandPaymentMethod::find($request->payment_method_id);
-        } else {
-            $paymentMethod = $user->defaultPaymentMethod;
-        }
-
-        if (!$paymentMethod) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No payment method found. Please add a payment method first.',
-            ], 400);
+        // If Stripe is configured, require a Stripe payment method id from frontend
+        if ($this->stripeKey) {
+            if (!$request->filled('stripe_payment_method_id')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'stripe_payment_method_id is required when using Stripe',
+                ], 422);
+            }
         }
 
         // Check if simulation mode is enabled
@@ -116,13 +112,13 @@ class ContractPaymentController extends Controller
                 // Create transaction record
                 $transaction = Transaction::create([
                     'user_id' => $user->id,
-                    'pagarme_transaction_id' => $simulationResult['transaction_id'],
+                    'stripe_payment_intent_id' => $simulationResult['transaction_id'],
                     'status' => 'paid',
                     'amount' => $contract->budget,
                     'payment_method' => 'credit_card',
-                    'card_brand' => $paymentMethod->card_brand,
-                    'card_last4' => $paymentMethod->card_last4,
-                    'card_holder_name' => $paymentMethod->card_holder_name,
+                    'card_brand' => null,
+                    'card_last4' => null,
+                    'card_holder_name' => null,
                     'payment_data' => [
                         'simulation' => true,
                         'contract_id' => $contract->id,
@@ -196,9 +192,9 @@ class ContractPaymentController extends Controller
             }
         }
 
-        // Check if Pagar.me is configured
-        if (empty($this->apiKey)) {
-            Log::error('Pagar.me API key not configured');
+        // Use Stripe for real processing
+        if (!$this->stripeKey) {
+            Log::error('Stripe secret not configured');
             return response()->json([
                 'success' => false,
                 'message' => 'Payment gateway not configured. Please contact support.',
@@ -207,89 +203,58 @@ class ContractPaymentController extends Controller
 
         try {
             DB::beginTransaction();
+            \Stripe\Stripe::setApiKey($this->stripeKey);
 
-            // Create order in Pagar.me
-            $orderData = [
-                'code' => 'CONTRACT_' . $contract->id . '_' . time(),
-                'customer_id' => $paymentMethod->pagarme_customer_id,
-                'items' => [
-                    [
-                        'amount' => (int)($contract->budget * 100), // Convert to cents
-                        'description' => 'Contract: ' . $contract->title,
-                        'quantity' => 1,
-                        'code' => 'CONTRACT_' . $contract->id,
-                    ]
-                ],
-                'payments' => [
-                    [
-                        'payment_method' => 'credit_card',
-                        'credit_card' => [
-                            'operation_type' => 'auth_and_capture',
-                            'installments' => 1,
-                            'statement_descriptor' => 'NEXA CONTRACT',
-                            'card_id' => $paymentMethod->pagarme_card_id,
-                        ]
-                    ]
-                ]
-            ];
-
-            // Make actual request to Pagar.me
-            $response = Http::withHeaders([
-                'Authorization' => 'Basic ' . base64_encode($this->apiKey . ':'),
-                'Content-Type' => 'application/json',
-            ])->post($this->baseUrl . '/orders', $orderData);
-
-            if (!$response->successful()) {
-                Log::error('Pagar.me order creation failed', [
-                    'contract_id' => $contract->id,
-                    'brand_id' => $user->id,
-                    'response' => $response->json(),
-                    'status' => $response->status()
+            // Ensure Stripe customer for brand
+            if (!$user->stripe_customer_id) {
+                $customer = \Stripe\Customer::create([
+                    'email' => $user->email,
+                    'metadata' => [ 'user_id' => $user->id, 'role' => 'brand' ],
                 ]);
-
-                DB::rollBack();
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Payment processing failed. Please check your payment method and try again.',
-                    'error' => $response->json()
-                ], 400);
+                $user->update(['stripe_customer_id' => $customer->id]);
+            } else {
+                $customer = \Stripe\Customer::retrieve($user->stripe_customer_id);
             }
 
-            $paymentResponse = $response->json();
+            // Attach PM if needed and set as default for invoices
+            $pmId = $request->string('stripe_payment_method_id')->toString();
+            \Stripe\PaymentMethod::attach($pmId, ['customer' => $customer->id]);
 
-            $order = $paymentResponse;
-            $charge = $order['charges'][0] ?? null;
+            // Create PaymentIntent and confirm
+            $intent = \Stripe\PaymentIntent::create([
+                'amount' => (int) round($contract->budget * 100),
+                'currency' => 'brl',
+                'customer' => $customer->id,
+                'payment_method' => $pmId,
+                'confirm' => true,
+                'confirmation_method' => 'automatic',
+                'description' => 'Contract #' . $contract->id . ' - ' . ($contract->title ?? 'Campaign'),
+                'metadata' => [
+                    'contract_id' => (string) $contract->id,
+                    'brand_id' => (string) $user->id,
+                    'creator_id' => (string) $contract->creator_id,
+                ],
+            ]);
 
-            if (!$charge) {
-                Log::error('No charge found in PagarMe response', [
-                    'contract_id' => $contract->id,
-                    'brand_id' => $user->id,
-                    'response' => $paymentResponse
-                ]);
-
+            if (!in_array($intent->status, ['succeeded', 'requires_action', 'processing'])) {
                 DB::rollBack();
-
                 return response()->json([
                     'success' => false,
-                    'message' => 'Payment processing failed. No charge found in response.',
-                    'error' => $paymentResponse
+                    'message' => 'Payment failed',
+                    'stripe_status' => $intent->status,
                 ], 400);
             }
 
             // Create transaction record
             $transaction = Transaction::create([
                 'user_id' => $user->id,
-                'pagarme_transaction_id' => $charge['id'],
-                'pagarme_order_id' => $order['id'],
-                'status' => $charge['status'],
+                'stripe_payment_intent_id' => $intent->id,
+                'stripe_charge_id' => $intent->latest_charge ?? null,
+                'status' => $intent->status === 'succeeded' ? 'paid' : $intent->status,
                 'amount' => $contract->budget,
-                'payment_method' => 'credit_card',
-                'card_brand' => $charge['payment_method_details']['card']['brand'] ?? $paymentMethod->card_brand,
-                'card_last4' => $charge['payment_method_details']['card']['last_four_digits'] ?? $paymentMethod->card_last4,
-                'card_holder_name' => $paymentMethod->card_holder_name,
-                'payment_data' => $charge,
-                'paid_at' => $charge['status'] === 'paid' ? now() : null,
+                'payment_method' => 'stripe',
+                'payment_data' => ['intent' => $intent->toArray()],
+                'paid_at' => $intent->status === 'succeeded' ? now() : null,
                 'contract_id' => $contract->id,
             ]);
 
@@ -301,8 +266,8 @@ class ContractPaymentController extends Controller
                 'total_amount' => $contract->budget,
                 'platform_fee' => $contract->budget * 0.05, // 5% platform fee
                 'creator_amount' => $contract->budget * 0.95, // 95% for creator
-                'payment_method' => 'credit_card',
-                'status' => $charge['status'] === 'paid' ? 'paid' : 'pending',
+                'payment_method' => 'stripe',
+                'status' => $intent->status === 'succeeded' ? 'paid' : 'pending',
                 'transaction_id' => $transaction->id,
             ]);
 
@@ -325,7 +290,7 @@ class ContractPaymentController extends Controller
                 'creator_id' => $contract->creator_id,
                 'amount' => $contract->budget,
                 'transaction_id' => $transaction->id,
-                'payment_status' => $charge['status']
+                'payment_status' => $transaction->status
             ]);
 
             return response()->json([
@@ -334,9 +299,8 @@ class ContractPaymentController extends Controller
                 'data' => [
                     'contract_id' => $contract->id,
                     'amount' => $contract->budget,
-                    'payment_status' => $charge['status'],
+                    'payment_status' => $transaction->status,
                     'transaction_id' => $transaction->id,
-                    'order_id' => $order['id'],
                 ]
             ]);
 
