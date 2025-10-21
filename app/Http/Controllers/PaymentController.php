@@ -15,14 +15,6 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
-use Stripe\Stripe;
-use Stripe\PaymentIntent;
-use Stripe\Exception\CardException;
-use Stripe\Exception\RateLimitException;
-use Stripe\Exception\InvalidRequestException;
-use Stripe\Exception\AuthenticationException;
-use Stripe\Exception\ApiConnectionException;
-use Stripe\Exception\ApiErrorException;
 
 class PaymentController extends Controller
 {
@@ -35,7 +27,7 @@ class PaymentController extends Controller
         $this->baseUrl = config('services.pagarme.environment') === 'production' 
             ? 'https://api.pagar.me/core/v5' 
             : 'https://api.pagar.me/core/v5';
-         Stripe::setApiKey(config('services.stripe.secret'));
+        
         // Log simulation mode status
         if (PaymentSimulator::isSimulationMode()) {
             Log::info('Payment simulation mode is ENABLED - All payments will be simulated');
@@ -61,21 +53,10 @@ class PaymentController extends Controller
     }
 
     /**
-     * Process a subscription payment for creators using Stripe
-     * 
-     * Expected request data:
-     * - subscription_plan_id: ID of the selected subscription plan
-     * - payment_method_id: Stripe payment method ID from frontend
+     * Process a subscription payment for creators
      */
     public function processSubscription(Request $request): JsonResponse
     {
-        $secretKey = config('services.stripe.secret');
-
-Log::info('Stripe secret key check', [
-    'key_set' => $secretKey ? true : false // only log whether it exists, not the actual key
-]);
-
-\Stripe\Stripe::setApiKey($secretKey);
         // Check if user is authenticated
         if (!auth()->check()) {
             return response()->json([
@@ -87,7 +68,7 @@ Log::info('Stripe secret key check', [
         try {
             $request->validate([
                 'subscription_plan_id' => 'required|integer|exists:subscription_plans,id',
-                'payment_method_id' => 'required|string',
+                'cpf' => 'required|string|regex:/^\d{3}\.\d{3}\.\d{3}-\d{2}$/', // CPF format validation
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
@@ -95,10 +76,21 @@ Log::info('Stripe secret key check', [
                 'message' => 'Validation failed',
                 'errors' => $e->errors(),
                 'debug_info' => [
+                    'received_card_number_length' => strlen($request->card_number ?? ''),
+                    'received_expiration_format' => $request->card_expiration_date ?? 'not_provided',
+                    'received_cpf_format' => $request->cpf ?? 'not_provided',
                     'received_plan_id' => $request->subscription_plan_id ?? 'not_provided',
-                    'received_payment_method_id' => $request->payment_method_id ?? 'not_provided',
                 ]
             ], 400);
+        }
+
+        // Validate CPF
+        if (!$this->validateCPF($request->cpf)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'CPF inválido. Por favor, verifique o número.',
+                'errors' => ['cpf' => ['CPF inválido. Use um CPF válido como: 111.444.777-35']]
+            ], 422);
         }
 
         DB::beginTransaction();
@@ -158,156 +150,41 @@ Log::info('Stripe secret key check', [
                 ], 400);
             }
 
-            // Process Stripe payment
+            // Simulate subscription payment
             $expiresAt = now()->addMonths($subscriptionPlan->duration_months);
-            
-            try {
-                // Create PaymentIntent with Stripe
-               $paymentIntent = PaymentIntent::create([
-                                'amount' => $subscriptionPlan->price * 100,
-                                'currency' => 'usd',
-                                'payment_method' => $request->payment_method_id,
-                                'confirmation_method' => 'manual',
-                                'confirm' => true,
-                                'return_url' => 'https://your-frontend.com/payment/return', // must exist
-                                'description' => "Subscription to {$subscriptionPlan->name}",
-                            ]);
 
+            // Create transaction record (simulated)
+            $dbTransaction = \App\Models\Transaction::create([
+                'user_id' => $user->id,
+                'pagarme_transaction_id' => 'simulated_' . time(),
+                'status' => 'paid',
+                'amount' => $subscriptionPlan->price,
+                'payment_method' => 'simulated',
+                'card_brand' => null,
+                'card_last4' => null,
+                'card_holder_name' => null,
+                'payment_data' => ['simulated' => true],
+                'paid_at' => now(),
+                'expires_at' => $expiresAt,
+            ]);
 
+            // Create subscription record
+            \App\Models\Subscription::create([
+                'user_id' => $user->id,
+                'subscription_plan_id' => $subscriptionPlan->id,
+                'status' => \App\Models\Subscription::STATUS_ACTIVE,
+                'starts_at' => now(),
+                'expires_at' => $expiresAt,
+                'amount_paid' => $subscriptionPlan->price,
+                'payment_method' => 'simulated',
+                'transaction_id' => $dbTransaction->id,
+                'auto_renew' => false,
+            ]);
 
-
-                // Check if payment was successful
-                if ($paymentIntent->status === 'succeeded') {
-                    // Create transaction record
-                    $dbTransaction = \App\Models\Transaction::create([
-                        'user_id' => $user->id,
-                        'pagarme_transaction_id' => $paymentIntent->id, // Store Stripe payment intent ID
-                        'status' => 'paid',
-                        'amount' => $subscriptionPlan->price,
-                        'payment_method' => 'stripe',
-                        'card_brand' => $paymentIntent->charges->data[0]->payment_method_details->card->brand ?? null,
-                        'card_last4' => $paymentIntent->charges->data[0]->payment_method_details->card->last4 ?? null,
-                        'card_holder_name' => $paymentIntent->charges->data[0]->billing_details->name ?? null,
-                        'payment_data' => [
-                            'stripe_payment_intent_id' => $paymentIntent->id,
-                            'stripe_charge_id' => $paymentIntent->charges->data[0]->id ?? null,
-                            'payment_method_id' => $request->payment_method_id,
-                        ],
-                        'paid_at' => now(),
-                        'expires_at' => $expiresAt,
-                    ]);
-
-                    // Create subscription record
-                    \App\Models\Subscription::create([
-                        'user_id' => $user->id,
-                        'subscription_plan_id' => $subscriptionPlan->id,
-                        'status' => \App\Models\Subscription::STATUS_ACTIVE,
-                        'starts_at' => now(),
-                        'expires_at' => $expiresAt,
-                        'amount_paid' => $subscriptionPlan->price,
-                        'payment_method' => 'stripe',
-                        'transaction_id' => $dbTransaction->id,
-                        'auto_renew' => false,
-                    ]);
-
-                    $user->update([
-                        'has_premium' => true,
-                        'premium_expires_at' => $expiresAt,
-                    ]);
-
-                    Log::info('Stripe subscription payment successful', [
-                        'user_id' => $user->id,
-                        'payment_intent_id' => $paymentIntent->id,
-                        'amount' => $subscriptionPlan->price,
-                        'subscription_plan_id' => $subscriptionPlan->id,
-                    ]);
-
-                } else {
-                    // Payment failed
-                    Log::error('Stripe payment failed', [
-                        'user_id' => $user->id,
-                        'payment_intent_id' => $paymentIntent->id,
-                        'status' => $paymentIntent->status,
-                        'last_payment_error' => $paymentIntent->last_payment_error,
-                    ]);
-
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Payment failed. Please try again.',
-                        'error' => $paymentIntent->last_payment_error->message ?? 'Payment could not be processed',
-                    ], 400);
-                }
-
-            } catch (CardException $e) {
-                Log::error('Stripe card error', [
-                    'user_id' => $user->id,
-                    'error' => $e->getMessage(),
-                    'decline_code' => $e->getDeclineCode(),
-                ]);
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Your card was declined. Please try a different payment method.',
-                    'error' => $e->getMessage(),
-                ], 400);
-
-            } catch (RateLimitException $e) {
-                Log::error('Stripe rate limit error', [
-                    'user_id' => $user->id,
-                    'error' => $e->getMessage(),
-                ]);
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Too many requests. Please try again later.',
-                ], 429);
-
-            } catch (InvalidRequestException $e) {
-                Log::error('Stripe invalid request error', [
-                    'user_id' => $user->id,
-                    'error' => $e->getMessage(),
-                ]);
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid payment request. Please check your payment method.',
-                    'error' => $e->getMessage(),
-                ], 400);
-
-            } catch (AuthenticationException $e) {
-                Log::error('Stripe authentication error', [
-                    'user_id' => $user->id,
-                    'error' => $e->getMessage(),
-                ]);
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Payment service authentication error. Please contact support.',
-                ], 500);
-
-            } catch (ApiConnectionException $e) {
-                Log::error('Stripe API connection error', [
-                    'user_id' => $user->id,
-                    'error' => $e->getMessage(),
-                ]);
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Payment service is temporarily unavailable. Please try again later.',
-                ], 503);
-
-            } catch (ApiErrorException $e) {
-                Log::error('Stripe API error', [
-                    'user_id' => $user->id,
-                    'error' => $e->getMessage(),
-                ]);
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Payment processing error. Please try again.',
-                    'error' => $e->getMessage(),
-                ], 500);
-            }
+            $user->update([
+                'has_premium' => true,
+                'premium_expires_at' => $expiresAt,
+            ]);
 
             DB::commit();
 
@@ -319,8 +196,6 @@ Log::info('Stripe secret key check', [
                     'status' => $dbTransaction->status,
                     'amount' => $dbTransaction->amount,
                     'expires_at' => $dbTransaction->expires_at->format('Y-m-d H:i:s'),
-                    'payment_method' => $dbTransaction->payment_method,
-                    'stripe_payment_intent_id' => $paymentIntent->id,
                 ],
                 'user' => [
                     'has_premium' => $user->has_premium,

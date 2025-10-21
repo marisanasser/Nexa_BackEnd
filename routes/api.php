@@ -458,10 +458,3 @@ Route::post('/google/auth', [GoogleController::class, 'handleGoogleWithRole'])
 
 Route::post('/account/checked', [AccountController::class, 'checkAccount']);
 
-// Stripe routes
-Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/stripe/create-account', [App\Http\Controllers\StripeController::class, 'createAccount']);
-    Route::get('/stripe/account-status', [App\Http\Controllers\StripeController::class, 'getAccountStatus']);
-    Route::post('/stripe/account-link', [App\Http\Controllers\StripeController::class, 'createAccountLink']);
-});
-
