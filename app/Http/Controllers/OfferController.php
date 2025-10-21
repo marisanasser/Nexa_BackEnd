@@ -509,7 +509,7 @@ class OfferController extends Controller
                     Message::create([
                         'chat_room_id' => $chatRoom->id,
                         'sender_id' => null, // System message
-                        'message' => 'Creator accepted the offer.',
+                        'message' => 'A criadora aceitou a oferta.',
                         'message_type' => 'system',
                         'is_system_message' => true,
                     ]);

@@ -92,6 +92,9 @@ Route::middleware(['auth:sanctum', 'user.status'])->group(function () {
     Route::prefix('profile')->group(function () {
         Route::get('/', [ProfileController::class, 'show'])->middleware(['throttle:dashboard']); // Get current user profile
         Route::put('/', [ProfileController::class, 'update']); // Update current user profile
+        Route::post('/avatar', [ProfileController::class, 'uploadAvatar']); // Upload avatar (multipart)
+        Route::post('/avatar-base64', [ProfileController::class, 'uploadAvatarBase64']); // Upload avatar via base64
+        Route::delete('/avatar', [ProfileController::class, 'deleteAvatar']); // Delete avatar
     });
     
     // Brand Profile management
