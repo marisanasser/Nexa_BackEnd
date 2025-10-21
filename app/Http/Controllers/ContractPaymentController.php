@@ -266,10 +266,23 @@ class ContractPaymentController extends Controller
                 'total_amount' => $contract->budget,
                 'platform_fee' => $contract->budget * 0.05, // 5% platform fee
                 'creator_amount' => $contract->budget * 0.95, // 95% for creator
-                'payment_method' => 'stripe',
-                'status' => $intent->status === 'succeeded' ? 'paid' : 'pending',
+                'payment_method' => 'stripe_escrow',
+                // Brand was charged, but creator's payment is pending (escrow)
+                'status' => 'pending',
                 'transaction_id' => $transaction->id,
             ]);
+
+            // Credit pending balance to creator escrow
+            $balance = \App\Models\CreatorBalance::firstOrCreate(
+                ['creator_id' => $contract->creator_id],
+                [
+                    'available_balance' => 0,
+                    'pending_balance' => 0,
+                    'total_earned' => 0,
+                    'total_withdrawn' => 0,
+                ]
+            );
+            $balance->increment('pending_balance', $jobPayment->creator_amount);
 
             // Update contract status
             $contract->update([

@@ -302,8 +302,18 @@ class Contract extends Model
             ]);
         }
 
-        // Update creator balance
-        $this->updateCreatorBalance($this->creator_amount);
+        // Move escrow from pending to available balance upon review
+        $balance = CreatorBalance::firstOrCreate(
+            ['creator_id' => $this->creator_id],
+            [
+                'available_balance' => 0,
+                'pending_balance' => 0,
+                'total_earned' => 0,
+                'total_withdrawn' => 0,
+            ]
+        );
+        $balance->movePendingToAvailable($this->creator_amount);
+        $balance->addEarning($this->creator_amount);
 
         // Update workflow status
         $this->update([
