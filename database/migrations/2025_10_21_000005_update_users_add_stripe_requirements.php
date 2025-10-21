@@ -6,26 +6,25 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Run the migrations.
+     */
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (!Schema::hasColumn('users', 'profession')) {
-                $table->string('profession', 255)->nullable()->after('company_name');
-            }
+            $table->json('stripe_requirements_due')->nullable()->after('stripe_customer_id');
         });
     }
 
+    /**
+     * Reverse the migrations.
+     */
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (Schema::hasColumn('users', 'profession')) {
-                $table->dropColumn('profession');
-            }
+            $table->dropColumn(['stripe_requirements_due']);
         });
     }
 };
-
-
-
 
 
