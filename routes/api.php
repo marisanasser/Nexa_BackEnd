@@ -434,6 +434,11 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::get('/students', [AdminController::class, 'getStudents']);
     Route::patch('/students/{student}/trial', [AdminController::class, 'updateStudentTrial'])->where('student', '[0-9]+');
     Route::patch('/students/{student}/status', [AdminController::class, 'updateStudentStatus'])->where('student', '[0-9]+');
+
+    // Student verification requests
+    Route::get('/student-requests', [AdminController::class, 'getStudentVerificationRequests']);
+    Route::patch('/student-requests/{id}/approve', [AdminController::class, 'approveStudentVerification'])->where('id', '[0-9]+');
+    Route::patch('/student-requests/{id}/reject', [AdminController::class, 'rejectStudentVerification'])->where('id', '[0-9]+');
     
     // Withdrawal methods management
     Route::apiResource('withdrawal-methods', \App\Http\Controllers\Admin\WithdrawalMethodController::class);
