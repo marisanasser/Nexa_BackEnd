@@ -33,6 +33,8 @@ use App\Http\Controllers\Admin\BrandRankingController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\StripeController;
+use App\Http\Controllers\StripeWebhookController;
 
 
 // Health check endpoint
@@ -299,6 +301,15 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/methods', [BrandPaymentController::class, 'deletePaymentMethod']);
     });
 
+    // Stripe Connect and setup
+    Route::prefix('stripe')->group(function () {
+        Route::post('/connect/create-or-link', [StripeController::class, 'createAccount']);
+        Route::post('/connect/account-link', [StripeController::class, 'createAccountLink']);
+        Route::get('/connect/status', [StripeController::class, 'getAccountStatus']);
+        Route::post('/setup-intent', [StripeController::class, 'setupIntent']);
+        Route::get('/check', [StripeController::class, 'checkConfiguration']);
+    });
+
     // Contract payment processing
     Route::prefix('contract-payment')->group(function () {
         Route::post('/process', [ContractPaymentController::class, 'processContractPayment']);
@@ -460,4 +471,7 @@ Route::post('/google/auth', [GoogleController::class, 'handleGoogleWithRole'])
 
 
 Route::post('/account/checked', [AccountController::class, 'checkAccount']);
+
+// Stripe webhook (public)
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
 
