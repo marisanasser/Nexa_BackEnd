@@ -48,11 +48,5 @@ return [
         'account_id' => env('PAGARME_ACCOUNT_ID'),
         'simulation_mode' => env('PAGARME_SIMULATION_MODE', false), // Enable payment simulation
     ],
-    'stripe' => [
-        'key' => env('STRIPE_KEY'),
-        'publishable_key' => env('STRIPE_PUBLISHABLE_KEY'),
-        'secret' => env('STRIPE_SECRET_KEY'),
-        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
-    ],
 
 ];
