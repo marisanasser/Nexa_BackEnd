@@ -16,6 +16,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PortfolioController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\StripeBillingController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\OfferController;
 use App\Http\Controllers\ContractController;
@@ -251,9 +252,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     
     // Subscription routes
     Route::middleware(['throttle:payment'])->group(function () {
-        Route::post('/payment/subscription', [PaymentController::class, 'processSubscription']);
-        Route::get('/payment/subscription-status', [PaymentController::class, 'getSubscriptionStatus']);
-        Route::get('/payment/debug-subscription', [PaymentController::class, 'debugSubscriptionValidation']);
+        Route::post('/payment/subscription', [StripeBillingController::class, 'createSubscription']);
+        Route::get('/payment/subscription-status', [StripeBillingController::class, 'getSubscriptionStatus']);
     });
     
     // Debug routes (temporary)
