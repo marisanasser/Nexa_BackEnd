@@ -17,13 +17,7 @@ class StudentController extends Controller
      */
     public function verifyStudent(Request $request): JsonResponse
     {
-        $request->validate([
-            'full_name' => 'required|string|max:255',
-            'purchase_email' => 'required|email|max:255',
-            'cpf' => 'required|string|size:11',
-            'course_name' => 'required|string|max:255',
-        ]);
-
+        
         try {
             $user = auth()->user();
             
