@@ -230,15 +230,9 @@ class ProfileController extends Controller
                 $data['gender'] = $genderMapping[$data['gender']] ?? $data['gender'];
             }
 
-            // Validate role field - use input() for FormData
-            $role = $request->input('role');
-            if ($role) {
-                $validRoles = ['creator', 'brand', 'admin', 'student'];
-                if (in_array($role, $validRoles)) {
-                    $data['role'] = $role;
-                } else {
-                    // Em vez de 422, ignorar role inválido e seguir (tolerante a UIs com "Profissão")
-                }
+            // NUNCA permitir update de role via profile update; protege contra UIs que enviam 'role' por engano
+            if (array_key_exists('role', $data)) {
+                unset($data['role']);
             }
 
             // Handle state field - use input() for FormData
