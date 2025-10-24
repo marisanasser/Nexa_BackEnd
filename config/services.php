@@ -39,6 +39,12 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
+    'stripe' => [
+        'secret' => env('STRIPE_SECRET'),
+        'publishable_key' => env('STRIPE_PUBLISHABLE_KEY'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+    ],
+
     'pagarme' => [
         'api_key' => env('PAGARME_API_KEY'),
         'secret_key' => env('PAGARME_SECRET_KEY'),

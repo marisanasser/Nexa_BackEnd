@@ -682,6 +682,88 @@ class AdminController extends Controller
     }
 
     /**
+     * List student verification requests
+     */
+    public function getStudentVerificationRequests(Request $request): JsonResponse
+    {
+        $request->validate([
+            'status' => 'nullable|in:pending,approved,rejected',
+            'per_page' => 'nullable|integer|min:1|max:100',
+        ]);
+
+        $query = \App\Models\StudentVerificationRequest::query()->with('user');
+        if ($request->status) {
+            $query->where('status', $request->status);
+        }
+
+        $requests = $query->orderBy('created_at', 'desc')->paginate($request->per_page ?? 10);
+        return response()->json([
+            'success' => true,
+            'data' => $requests,
+        ]);
+    }
+
+    /**
+     * Approve a student verification request
+     */
+    public function approveStudentVerification(int $id, Request $request): JsonResponse
+    {
+        $request->validate([
+            'duration_months' => 'nullable|integer|min:1|max:24',
+        ]);
+        $svr = \App\Models\StudentVerificationRequest::findOrFail($id);
+        if ($svr->status !== 'pending') {
+            return response()->json(['success' => false, 'message' => 'Request not pending'], 422);
+        }
+
+        $duration = $request->input('duration_months', 12);
+        $user = $svr->user;
+
+        DB::beginTransaction();
+        try {
+            $svr->update([
+                'status' => 'approved',
+                'reviewed_by' => auth()->id(),
+                'reviewed_at' => now(),
+                'review_notes' => $request->review_notes,
+            ]);
+
+            $user->update([
+                'student_verified' => true,
+                'student_expires_at' => now()->addMonths($duration),
+                'role' => 'student',
+                'free_trial_expires_at' => now()->addMonths($duration),
+            ]);
+
+            DB::commit();
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json(['success' => false, 'message' => 'Approval failed'], 500);
+        }
+    }
+
+    /**
+     * Reject a student verification request
+     */
+    public function rejectStudentVerification(int $id, Request $request): JsonResponse
+    {
+        $svr = \App\Models\StudentVerificationRequest::findOrFail($id);
+        if ($svr->status !== 'pending') {
+            return response()->json(['success' => false, 'message' => 'Request not pending'], 422);
+        }
+
+        $svr->update([
+            'status' => 'rejected',
+            'reviewed_by' => auth()->id(),
+            'reviewed_at' => now(),
+            'review_notes' => $request->review_notes,
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
      * Update student trial period
      */
     public function updateStudentTrial(Request $request, User $student): JsonResponse

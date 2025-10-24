@@ -181,6 +181,9 @@ class Withdrawal extends Model
     {
         // Handle different withdrawal methods
         switch ($this->withdrawal_method) {
+            case 'stripe_connect':
+                $this->processStripeConnectWithdrawal();
+                break;
             case 'pagarme_bank_transfer':
                 $this->processPagarMeWithdrawal();
                 break;
@@ -193,6 +196,48 @@ class Withdrawal extends Model
             default:
                 throw new \Exception('Método de saque não suportado: ' . $this->withdrawal_method);
         }
+    }
+
+    private function processStripeConnectWithdrawal(): void
+    {
+        // Ensure creator has a connected account
+        $creator = User::find($this->creator_id);
+        if (!$creator || empty($creator->stripe_account_id)) {
+            throw new \Exception('Conta Stripe Connect não configurada para este criador.');
+        }
+
+        // Ensure Stripe is configured
+        $stripeSecret = config('services.stripe.secret');
+        if (empty($stripeSecret)) {
+            throw new \Exception('Stripe não configurado.');
+        }
+
+        \Stripe\Stripe::setApiKey($stripeSecret);
+
+        // Compute net amount = requested amount - fixed fee (R$5)
+        $netAmount = max(0, ($this->amount - 5.00));
+        $amountInCents = (int) round($netAmount * 100);
+        if ($amountInCents <= 0) {
+            throw new \Exception('Valor líquido inválido para transferência.');
+        }
+
+        // Create transfer to connected account
+        $transfer = \Stripe\Transfer::create([
+            'amount' => $amountInCents,
+            'currency' => 'brl',
+            'destination' => $creator->stripe_account_id,
+            'metadata' => [
+                'withdrawal_id' => (string) $this->id,
+                'creator_id' => (string) $this->creator_id,
+                'gross_amount' => (string) $this->amount,
+                'fixed_fee' => '5.00',
+            ],
+        ]);
+
+        // Store transfer id in transaction_id (generic field)
+        $this->update([
+            'transaction_id' => $transfer->id,
+        ]);
     }
 
     private function processPagarMeWithdrawal(): void
