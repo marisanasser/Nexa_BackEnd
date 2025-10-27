@@ -22,7 +22,6 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
-        'token',
         'password',
         'role',
         'whatsapp',
@@ -113,7 +112,6 @@ class User extends Authenticatable
     ];
 
     // Relationships
-    public function emailTokens(){ return $this->hasMany(EmailToken::class); }
 
     public function campaigns(): HasMany
     {
@@ -337,6 +335,11 @@ class User extends Authenticatable
      */
     public function isPremium(): bool
     {
+        // Admins always have premium
+        if ($this->isAdmin()) {
+            return true;
+        }
+        
         return $this->has_premium && 
                ($this->premium_expires_at === null || $this->premium_expires_at->isFuture());
     }
@@ -368,6 +371,11 @@ class User extends Authenticatable
      */
     public function hasPremiumAccess(): bool
     {
+        // Admins always have premium access
+        if ($this->isAdmin()) {
+            return true;
+        }
+        
         // For students, prioritize premium over trial access
         if ($this->isStudent()) {
             return $this->isPremium() || $this->isOnTrial();
@@ -532,5 +540,31 @@ class User extends Authenticatable
         ]);
 
         return true;
+    }
+
+    /**
+     * Get the has_premium attribute - always true for admins
+     */
+    public function getHasPremiumAttribute($value)
+    {
+        // Admins always have premium
+        if ($this->role === 'admin') {
+            return true;
+        }
+        
+        return $value ?? false;
+    }
+
+    /**
+     * Get the premium_expires_at attribute - set far future for admins
+     */
+    public function getPremiumExpiresAtAttribute($value)
+    {
+        // Admins have premium forever (year 2099)
+        if ($this->role === 'admin') {
+            return now()->addYears(100);
+        }
+        
+        return $value;
     }
 }

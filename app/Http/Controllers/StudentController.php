@@ -37,15 +37,41 @@ class StudentController extends Controller
             }
 
             $request->validate([
-                'purchase_email' => 'nullable|email',
+                'purchase_email' => 'required|email',
                 'course_name' => 'nullable|string|max:255',
                 'evidence' => 'nullable|array',
             ]);
 
+            $purchaseEmail = strtolower(trim($request->purchase_email));
+            $userEmail = strtolower(trim($user->email));
+
             DB::beginTransaction();
 
             try {
-                // Create a pending verification request
+                // Check if purchase_email matches user's registered email (auto-verify)
+                $autoVerified = ($purchaseEmail === $userEmail);
+                
+                if ($autoVerified) {
+                    // Auto-verify the student since purchase_email matches registered email
+                    $user->update([
+                        'student_verified' => true,
+                        'student_expires_at' => now()->addMonths(12),
+                        'role' => 'student',
+                        'free_trial_expires_at' => now()->addMonths(12),
+                    ]);
+
+                    DB::commit();
+
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Verificação aprovada automaticamente! E-mail correspondente confirmado.',
+                        'student_verified' => true,
+                        'student_expires_at' => $user->student_expires_at,
+                        'free_trial_expires_at' => $user->free_trial_expires_at,
+                    ]);
+                }
+
+                // Create a pending verification request if emails don't match
                 $svr = \App\Models\StudentVerificationRequest::create([
                     'user_id' => $user->id,
                     'purchase_email' => $request->purchase_email,
@@ -65,7 +91,7 @@ class StudentController extends Controller
 
                 return response()->json([
                     'success' => true,
-                    'message' => 'Solicitação registrada. Aguarde a aprovação do admin.',
+                    'message' => 'Solicitação registrada. O e-mail fornecido não corresponde ao e-mail registrado. Aguarde a aprovação do admin.',
                     'request_id' => $svr->id,
                 ]);
             } catch (\Exception $e) {

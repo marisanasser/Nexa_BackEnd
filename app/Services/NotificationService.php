@@ -107,6 +107,30 @@ class NotificationService
     }
 
     /**
+     * Send email notification to brand about successful campaign creation
+     */
+    public static function notifyBrandOfCampaignCreated(Campaign $campaign): void
+    {
+        try {
+            $campaign->load(['brand']);
+            
+            // Send email notification via AWS SES
+            Mail::to($campaign->brand->email)->send(new \App\Mail\CampaignCreated($campaign));
+            
+            Log::info('Campaign creation email sent successfully', [
+                'campaign_id' => $campaign->id,
+                'brand_email' => $campaign->brand->email
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to send campaign creation email', [
+                'campaign_id' => $campaign->id,
+                'brand_email' => $campaign->brand->email,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
      * Send notification to admin about new campaign application
      */
     public static function notifyAdminOfNewApplication(CampaignApplication $application): void
@@ -135,6 +159,34 @@ class NotificationService
         } catch (\Exception $e) {
             Log::error('Failed to notify admin of new application', [
                 'application_id' => $application->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Send email notification to brand about new application received
+     */
+    public static function notifyBrandOfNewApplication(CampaignApplication $application): void
+    {
+        try {
+            $application->load(['campaign', 'campaign.brand', 'creator']);
+            
+            // Send email notification via AWS SES to the brand
+            Mail::to($application->campaign->brand->email)->send(new \App\Mail\ApplicationReceived($application));
+            
+            Log::info('Application received email sent successfully to brand', [
+                'application_id' => $application->id,
+                'campaign_id' => $application->campaign_id,
+                'creator_id' => $application->creator_id,
+                'creator_name' => $application->creator->name,
+                'brand_email' => $application->campaign->brand->email
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to send application received email to brand', [
+                'application_id' => $application->id,
+                'campaign_id' => $application->campaign_id,
+                'brand_email' => $application->campaign->brand->email ?? 'unknown',
                 'error' => $e->getMessage()
             ]);
         }

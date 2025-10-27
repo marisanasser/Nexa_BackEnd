@@ -26,11 +26,7 @@ class StripeBillingController extends Controller
      */
     public function createSubscription(Request $request): JsonResponse
     {
-        $request->validate([
-            'subscription_plan_id' => 'required|integer|exists:subscription_plans,id',
-            'payment_method_id' => 'required|string',
-        ]);
-
+        
         $user = auth()->user();
         if (!$user) {
             return response()->json(['success' => false, 'message' => 'User not authenticated'], 401);
@@ -108,6 +104,11 @@ class StripeBillingController extends Controller
             ]);
 
             DB::commit();
+            Log::info('Stripe createSubscription success', [
+                'userId' => $user->id,
+                'subscriptionId' => $localSub->id,
+                'stripeSubscriptionId' => $stripeSub->id,
+            ]);
 
             $pi = $stripeSub->latest_invoice->payment_intent ?? null;
             if ($pi && $pi->status === 'requires_action') {

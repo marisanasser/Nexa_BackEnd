@@ -18,6 +18,12 @@ class PremiumAccessMiddleware
     {
         $user = auth()->user();
         
+        // If not authenticated, let the auth middleware handle it
+        if (!$user) {
+            Log::warning('PremiumAccessMiddleware: No authenticated user found');
+            return $next($request);
+        }
+
         // Debug logging
         Log::info('PremiumAccessMiddleware Debug', [
             'path' => $request->path(),
@@ -31,9 +37,16 @@ class PremiumAccessMiddleware
             'authorizationHeader' => $request->header('Authorization') ? 'present' : 'missing'
         ]);
 
-        // If not authenticated, let the auth middleware handle it
-        if (!$user) {
-            Log::warning('PremiumAccessMiddleware: No authenticated user found');
+        // Admins bypass all premium checks - CRITICAL: Must be first check
+        if (($user->role === 'admin') || $user->isAdmin()) {
+            Log::info('PremiumAccessMiddleware: Admin user bypassing all premium checks', [
+                'userId' => $user->id,
+                'role' => $user->role,
+                'roleDirectCheck' => ($user->role === 'admin'),
+                'isAdminMethodCheck' => $user->isAdmin(),
+                'path' => $request->path(),
+                'method' => $request->method()
+            ]);
             return $next($request);
         }
 
