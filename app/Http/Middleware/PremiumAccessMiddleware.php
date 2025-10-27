@@ -47,15 +47,12 @@ class PremiumAccessMiddleware
         }
 
         // For creators and students, check if they have premium access for restricted features
-        // Students can access campaign applications without premium
-        // Creators need premium for campaign applications
-        
         // Get the current path
         $currentPath = $request->path();
+        $method = $request->method();
         
-        // Define paths that require premium for creators
+        // Define paths that require premium for creators (only for POST/PATCH operations)
         $premiumRequiredPaths = [
-            'api/campaigns', // Campaign applications
             'api/connections', // Connection requests
             'api/direct-chat', // Direct messaging
             // Note: Portfolio management is now allowed for all creators
@@ -70,18 +67,43 @@ class PremiumAccessMiddleware
             }
         }
         
+        // For campaigns, only require premium for premium actions (not viewing)
+        if (str_starts_with($currentPath, 'api/campaigns')) {
+            // Allow GET requests (viewing campaigns) for all users
+            if ($method === 'GET') {
+                Log::info('PremiumAccessMiddleware: Allowing campaign viewing without premium', [
+                    'path' => $currentPath,
+                    'method' => $method,
+                    'userId' => $user->id
+                ]);
+                return $next($request);
+            }
+            
+            // Check if this is a premium-required campaign action
+            $premiumCampaignPaths = [
+                'api/campaigns/{campaign}/applications', // Apply to campaign
+                'api/campaigns/{campaign}/bids',        // Create bid
+            ];
+            
+            $isPremiumAction = false;
+            foreach ($premiumCampaignPaths as $premiumPath) {
+                // Remove {campaign} pattern for matching
+                $pattern = str_replace('{campaign}', '[^/]+', $premiumPath);
+                if (preg_match('#' . $pattern . '#', $currentPath)) {
+                    $isPremiumAction = true;
+                    break;
+                }
+            }
+            
+            // If it's a premium action, check premium access
+            if ($isPremiumAction) {
+                $requiresPremium = true;
+            }
+        }
+        
         // If path doesn't require premium, allow access
         if (!$requiresPremium) {
             Log::info('PremiumAccessMiddleware: Path does not require premium, allowing access', [
-                'path' => $currentPath,
-                'userId' => $user->id
-            ]);
-            return $next($request);
-        }
-        
-        // For students, allow access to campaign applications without premium
-        if ($user->isStudent() && str_starts_with($currentPath, 'api/campaigns')) {
-            Log::info('PremiumAccessMiddleware: Student accessing campaign applications, allowing without premium', [
                 'path' => $currentPath,
                 'userId' => $user->id
             ]);

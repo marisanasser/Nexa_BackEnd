@@ -22,6 +22,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'token',
         'password',
         'role',
         'whatsapp',
@@ -112,6 +113,7 @@ class User extends Authenticatable
     ];
 
     // Relationships
+    public function emailTokens(){ return $this->hasMany(EmailToken::class); }
 
     public function campaigns(): HasMany
     {

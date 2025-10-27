@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Aws\Sns\SnsClient;
+use Aws\Exception\AwsException;
 use Stripe\Stripe;
 use Stripe\Account;
 use Stripe\PaymentMethod;
@@ -21,9 +23,18 @@ use Stripe\Exception\ApiErrorException;
 
 class StripeController extends Controller
 {
+    protected $sns;
     public function __construct()
     {
         Stripe::setApiKey(config('services.stripe.secret'));
+        $this->sns = new SnsClient([
+            'version' => 'latest',
+            'region'  => env('AWS_DEFAULT_REGION', 'sa-east-1'),
+            'credentials' => [
+                'key'    => env('AWS_ACCESS_KEY_ID'),
+                'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            ],
+        ]);
     }
 
     /**

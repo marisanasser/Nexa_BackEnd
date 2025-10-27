@@ -480,3 +480,6 @@ Route::post('/account/checked', [AccountController::class, 'checkAccount']);
 // Stripe webhook (public)
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
 
+// AWs api route
+Route::get('/magic-login', [AuthController::class, 'magicLogin']); // called by React when clicking link
+
