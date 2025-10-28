@@ -452,17 +452,16 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::get('/payouts/{id}/verify', [AdminPayoutController::class, 'verifyWithdrawal'])->where('id', '[0-9]+');
 
     // Guide Management
-    Route::get('/guides', [GuideController::class, 'index']);                 // Get all guides
-    Route::post('/guides', [GuideController::class, 'store']);                // Create a new guide
-    Route::get('/guides/{guide}', [GuideController::class, 'show'])->where('guide', '[0-9]+');          // Get a single guide by ID (route model binding)
-    Route::put('/guides/{guide}', [GuideController::class, 'update'])->where('guide', '[0-9]+');        // Update a guide by ID
-    Route::delete('/guides/{guide}', [GuideController::class, 'destroy'])->where('guide', '[0-9]+');    // Delete a guide by ID
     
     // Brand Rankings
     Route::get('/brand-rankings', [BrandRankingController::class, 'getBrandRankings']);
     Route::get('/brand-rankings/comprehensive', [BrandRankingController::class, 'getComprehensiveRankings']);
 });
-
+    Route::get('/guides', [GuideController::class, 'index']);                 // Get all guides
+    Route::post('/guides', [GuideController::class, 'store']);                // Create a new guide
+    Route::get('/guides/{guide}', [GuideController::class, 'show'])->where('guide', '[0-9]+');          // Get a single guide by ID (route model binding)
+    Route::put('/guides/{guide}', [GuideController::class, 'update'])->where('guide', '[0-9]+');        // Update a guide by ID
+    Route::delete('/guides/{guide}', [GuideController::class, 'destroy'])->where('guide', '[0-9]+');    // Delete a guide by ID
 // Google OAuth routes
 Route::get('/google/redirect', [GoogleController::class, 'redirectToGoogle'])
     ->name('google.redirect');
