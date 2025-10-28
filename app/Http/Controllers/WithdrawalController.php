@@ -11,9 +11,60 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use App\Services\NotificationService;
+use Stripe\Stripe;
+use Stripe\Account;
 
 class WithdrawalController extends Controller
 {
+    public function __construct()
+    {
+        Stripe::setApiKey(config('services.stripe.secret'));
+    }
+
+    /**
+     * Check if user's Stripe account has payouts enabled
+     */
+    private function checkStripePayoutsEnabled(User $user): array
+    {
+        try {
+            if (!$user->stripe_account_id) {
+                return [
+                    'enabled' => false,
+                    'message' => 'Você precisa configurar sua conta Stripe antes de solicitar saques. Acesse as configurações do Stripe para completar o cadastro.',
+                    'action_required' => 'stripe_setup'
+                ];
+            }
+
+            $stripeAccount = Account::retrieve($user->stripe_account_id);
+            
+            if (!$stripeAccount->payouts_enabled) {
+                return [
+                    'enabled' => false,
+                    'message' => 'Sua conta Stripe ainda não está habilitada para receber pagamentos. Complete o processo de verificação no Stripe para ativar os saques.',
+                    'action_required' => 'stripe_verification'
+                ];
+            }
+
+            return [
+                'enabled' => true,
+                'message' => 'Conta Stripe configurada corretamente'
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Error checking Stripe payouts status', [
+                'user_id' => $user->id,
+                'stripe_account_id' => $user->stripe_account_id,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'enabled' => false,
+                'message' => 'Erro ao verificar status da conta Stripe. Tente novamente mais tarde.',
+                'action_required' => 'retry'
+            ];
+        }
+    }
+
     /**
      * Create a withdrawal request
      */
@@ -26,6 +77,17 @@ class WithdrawalController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Only creators and students can request withdrawals',
+            ], 403);
+        }
+
+        // Check Stripe payouts status before allowing withdrawal
+        $payoutsStatus = $this->checkStripePayoutsEnabled($user);
+        if (!$payoutsStatus['enabled']) {
+            return response()->json([
+                'success' => false,
+                'message' => $payoutsStatus['message'],
+                'action_required' => $payoutsStatus['action_required'],
+                'blocked' => true
             ], 403);
         }
 

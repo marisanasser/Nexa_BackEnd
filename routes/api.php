@@ -132,7 +132,7 @@ Route::middleware(['auth:sanctum', 'user.status'])->group(function () {
         
         // Generic campaign routes (must come after specific routes)
         Route::get('/{campaign}', [CampaignController::class, 'show'])->where('campaign', '[0-9]+'); // View campaign
-        Route::put('/{campaign}', [CampaignController::class, 'update'])->where('campaign', '[0-9]+'); // Update campaign (Brand only)
+        Route::patch('/{campaign}', [CampaignController::class, 'update'])->where('campaign', '[0-9]+'); // Update campaign (Brand only)
         Route::delete('/{campaign}', [CampaignController::class, 'destroy'])->where('campaign', '[0-9]+'); // Delete campaign (Brand only)
     });
     
@@ -418,9 +418,10 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     
     // Campaign management
     Route::get('/campaigns', [AdminController::class, 'getCampaigns']);
-    Route::get('/campaigns/{id}', [AdminController::class, 'getCampaign'])->where('id', '[0-9]+');
     Route::patch('/campaigns/{id}/approve', [AdminController::class, 'approveCampaign'])->where('id', '[0-9]+');
     Route::patch('/campaigns/{id}/reject', [AdminController::class, 'rejectCampaign'])->where('id', '[0-9]+');
+    Route::get('/campaigns/{id}', [AdminController::class, 'getCampaign'])->where('id', '[0-9]+');
+    Route::patch('/campaigns/{id}', [AdminController::class, 'updateCampaign'])->where('id', '[0-9]+');
     Route::delete('/campaigns/{id}', [AdminController::class, 'deleteCampaign'])->where('id', '[0-9]+');
     
     // User management
@@ -451,17 +452,16 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::get('/payouts/{id}/verify', [AdminPayoutController::class, 'verifyWithdrawal'])->where('id', '[0-9]+');
 
     // Guide Management
-    Route::get('/guides', [GuideController::class, 'index']);                 // Get all guides
-    Route::post('/guides', [GuideController::class, 'store']);                // Create a new guide
-    Route::get('/guides/{guide}', [GuideController::class, 'show'])->where('guide', '[0-9]+');          // Get a single guide by ID (route model binding)
-    Route::put('/guides/{guide}', [GuideController::class, 'update'])->where('guide', '[0-9]+');        // Update a guide by ID
-    Route::delete('/guides/{guide}', [GuideController::class, 'destroy'])->where('guide', '[0-9]+');    // Delete a guide by ID
     
     // Brand Rankings
     Route::get('/brand-rankings', [BrandRankingController::class, 'getBrandRankings']);
     Route::get('/brand-rankings/comprehensive', [BrandRankingController::class, 'getComprehensiveRankings']);
 });
-
+    Route::get('/guides', [GuideController::class, 'index']);                 // Get all guides
+    Route::post('/guides', [GuideController::class, 'store']);                // Create a new guide
+    Route::get('/guides/{guide}', [GuideController::class, 'show'])->where('guide', '[0-9]+');          // Get a single guide by ID (route model binding)
+    Route::put('/guides/{guide}', [GuideController::class, 'update'])->where('guide', '[0-9]+');        // Update a guide by ID
+    Route::delete('/guides/{guide}', [GuideController::class, 'destroy'])->where('guide', '[0-9]+');    // Delete a guide by ID
 // Google OAuth routes
 Route::get('/google/redirect', [GoogleController::class, 'redirectToGoogle'])
     ->name('google.redirect');

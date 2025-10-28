@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Mail\SignupMail;  
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\Rule;
@@ -230,12 +232,16 @@ class RegisteredUserController extends Controller
         
         // Generate token for immediate login
         $token = $user->createToken('auth_token')->plainTextToken;
-        
+
+        $frontend = config('app.frontend_url', env('APP_FRONTEND_URL', 'http://localhost:5000'));
+        $link = "{$frontend}/magic-login?token={$token}";
+        // Send email (queued if you prefer)
+        Mail::to($user->email)->send(new SignupMail($user, $link));
         \Log::info('User registration completed successfully', ['user_id' => $user->id, 'email' => $user->email]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Registration successful! Your account has been created and you are now logged in.',
+            'message' => 'Registration successful! Your account has been created and Check your email.',
             'token' => $token,
             'token_type' => 'Bearer',
             'user' => [
@@ -260,7 +266,33 @@ class RegisteredUserController extends Controller
             ]
         ], 201);
     }
+    //AWS Send Email
+     public function magicLogin(Request $request)
+    {
+        $tokenParam = $request->query('token');
+        if (!$tokenParam) {
+            return response()->json(['error' => 'Token missing'], 400);
+        }
 
+        $record = EmailToken::where('token', $tokenParam)->first();
+
+        if (!$record) return response()->json(['error' => 'Invalid token'], 400);
+        if ($record->used) return response()->json(['error' => 'Token already used'], 400);
+        if ($record->expires_at->isPast()) return response()->json(['error' => 'Token expired'], 400);
+
+        // mark used
+        $record->update(['used' => true]);
+
+        $user = $record->user;
+        // return token for frontend auth - example using Sanctum personal token
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Logged in',
+            'token' => $token,
+            'user' => $user
+        ]);
+    }
     /**
      * Upload avatar image and return the URL
      */

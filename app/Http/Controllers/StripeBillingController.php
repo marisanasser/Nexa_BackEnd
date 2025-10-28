@@ -53,7 +53,7 @@ class StripeBillingController extends Controller
                 'plan_id' => $plan?->id,
             ], 409);
         }
-
+        Log::info('Creating subscription for plan: ' . $plan->id);
         DB::beginTransaction();
         try {
             // Ensure Stripe customer exists
@@ -149,6 +149,9 @@ class StripeBillingController extends Controller
             'free_trial_expires_at' => $user->free_trial_expires_at?->format('Y-m-d H:i:s'),
             'is_premium_active' => $user->hasPremiumAccess(),
             'is_on_trial' => $user->isOnTrial(),
+            'student_verified' => $user->student_verified,
+            'student_expires_at' => $user->student_expires_at?->format('Y-m-d H:i:s'),
+            'is_student' => $user->isStudent(),
             'subscription' => $active ? [
                 'id' => $active->id,
                 'status' => $active->status,

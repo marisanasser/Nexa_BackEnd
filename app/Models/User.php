@@ -60,12 +60,16 @@ class User extends Authenticatable
         'agencia_dv',
         'conta',
         'conta_dv',
-        'cpf',
+        'cvc',
         'bank_account_name',
         'suspended_until',
         'suspension_reason',
         'total_reviews',
-        'average_rating'
+        'average_rating',
+        'stripe_account_id',
+        'stripe_payment_method_id',
+        'stripe_verification_status',
+        'stripe_customer_id'
     ];
 
     /**
@@ -331,6 +335,11 @@ class User extends Authenticatable
      */
     public function isPremium(): bool
     {
+        // Admins always have premium
+        if ($this->isAdmin()) {
+            return true;
+        }
+        
         return $this->has_premium && 
                ($this->premium_expires_at === null || $this->premium_expires_at->isFuture());
     }
@@ -362,6 +371,11 @@ class User extends Authenticatable
      */
     public function hasPremiumAccess(): bool
     {
+        // Admins always have premium access
+        if ($this->isAdmin()) {
+            return true;
+        }
+        
         // For students, prioritize premium over trial access
         if ($this->isStudent()) {
             return $this->isPremium() || $this->isOnTrial();
@@ -526,5 +540,31 @@ class User extends Authenticatable
         ]);
 
         return true;
+    }
+
+    /**
+     * Get the has_premium attribute - always true for admins
+     */
+    public function getHasPremiumAttribute($value)
+    {
+        // Admins always have premium
+        if ($this->role === 'admin') {
+            return true;
+        }
+        
+        return $value ?? false;
+    }
+
+    /**
+     * Get the premium_expires_at attribute - set far future for admins
+     */
+    public function getPremiumExpiresAtAttribute($value)
+    {
+        // Admins have premium forever (year 2099)
+        if ($this->role === 'admin') {
+            return now()->addYears(100);
+        }
+        
+        return $value;
     }
 }

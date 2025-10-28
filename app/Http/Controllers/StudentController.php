@@ -37,19 +37,22 @@ class StudentController extends Controller
             }
 
             $request->validate([
-                'purchase_email' => 'nullable|email',
+                'purchase_email' => 'required|email',
                 'course_name' => 'nullable|string|max:255',
                 'evidence' => 'nullable|array',
             ]);
 
+            $purchaseEmail = strtolower(trim($request->purchase_email));
+            $userEmail = strtolower(trim($user->email));
+
             DB::beginTransaction();
 
             try {
-                // Create a pending verification request
+                // Always create a pending verification request - ALL requests require admin approval
                 $svr = \App\Models\StudentVerificationRequest::create([
                     'user_id' => $user->id,
                     'purchase_email' => $request->purchase_email,
-                    'course_name' => $request->course_name,
+                    'course_name' => $request->course_name ?? 'Build Creators',
                     'evidence' => $request->evidence ?? [],
                     'status' => 'pending',
                 ]);
@@ -57,7 +60,7 @@ class StudentController extends Controller
                 // Notify admin of new request
                 \App\Services\NotificationService::notifyAdminOfNewStudentVerification($user, [
                     'purchase_email' => $request->purchase_email,
-                    'course_name' => $request->course_name,
+                    'course_name' => $request->course_name ?? 'Build Creators',
                     'request_id' => $svr->id,
                 ]);
 
@@ -65,8 +68,9 @@ class StudentController extends Controller
 
                 return response()->json([
                     'success' => true,
-                    'message' => 'Solicitação registrada. Aguarde a aprovação do admin.',
+                    'message' => 'Solicitação registrada com sucesso! Aguarde a aprovação do administrador.',
                     'request_id' => $svr->id,
+                    'student_verified' => false,
                 ]);
             } catch (\Exception $e) {
                 DB::rollBack();

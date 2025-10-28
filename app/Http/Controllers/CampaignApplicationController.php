@@ -109,6 +109,9 @@ class CampaignApplicationController extends Controller
         // Notify admin of new application
         \App\Services\NotificationService::notifyAdminOfNewApplication($application);
 
+        // Send email notification to brand about new application received
+        \App\Services\NotificationService::notifyBrandOfNewApplication($application);
+
         return response()->json([
             'success' => true,
             'message' => 'Application submitted successfully',
