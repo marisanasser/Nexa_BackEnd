@@ -48,34 +48,11 @@ class StudentController extends Controller
             DB::beginTransaction();
 
             try {
-                // Check if purchase_email matches user's registered email (auto-verify)
-                $autoVerified = ($purchaseEmail === $userEmail);
-                
-                if ($autoVerified) {
-                    // Auto-verify the student since purchase_email matches registered email
-                    $user->update([
-                        'student_verified' => true,
-                        'student_expires_at' => now()->addMonths(12),
-                        'role' => 'student',
-                        'free_trial_expires_at' => now()->addMonths(12),
-                    ]);
-
-                    DB::commit();
-
-                    return response()->json([
-                        'success' => true,
-                        'message' => 'Verificação aprovada automaticamente! E-mail correspondente confirmado.',
-                        'student_verified' => true,
-                        'student_expires_at' => $user->student_expires_at,
-                        'free_trial_expires_at' => $user->free_trial_expires_at,
-                    ]);
-                }
-
-                // Create a pending verification request if emails don't match
+                // Always create a pending verification request - ALL requests require admin approval
                 $svr = \App\Models\StudentVerificationRequest::create([
                     'user_id' => $user->id,
                     'purchase_email' => $request->purchase_email,
-                    'course_name' => $request->course_name,
+                    'course_name' => $request->course_name ?? 'Build Creators',
                     'evidence' => $request->evidence ?? [],
                     'status' => 'pending',
                 ]);
@@ -83,7 +60,7 @@ class StudentController extends Controller
                 // Notify admin of new request
                 \App\Services\NotificationService::notifyAdminOfNewStudentVerification($user, [
                     'purchase_email' => $request->purchase_email,
-                    'course_name' => $request->course_name,
+                    'course_name' => $request->course_name ?? 'Build Creators',
                     'request_id' => $svr->id,
                 ]);
 
@@ -91,8 +68,9 @@ class StudentController extends Controller
 
                 return response()->json([
                     'success' => true,
-                    'message' => 'Solicitação registrada. O e-mail fornecido não corresponde ao e-mail registrado. Aguarde a aprovação do admin.',
+                    'message' => 'Solicitação registrada com sucesso! Aguarde a aprovação do administrador.',
                     'request_id' => $svr->id,
+                    'student_verified' => false,
                 ]);
             } catch (\Exception $e) {
                 DB::rollBack();

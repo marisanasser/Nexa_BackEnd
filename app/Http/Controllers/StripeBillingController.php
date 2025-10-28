@@ -26,7 +26,11 @@ class StripeBillingController extends Controller
      */
     public function createSubscription(Request $request): JsonResponse
     {
-        
+        $request->validate([
+            'subscription_plan_id' => 'required|integer|exists:subscription_plans,id',
+            'payment_method_id' => 'required|string',
+        ]);
+
         $user = auth()->user();
         if (!$user) {
             return response()->json(['success' => false, 'message' => 'User not authenticated'], 401);
@@ -49,7 +53,7 @@ class StripeBillingController extends Controller
                 'plan_id' => $plan?->id,
             ], 409);
         }
-
+        Log::info('Creating subscription for plan: ' . $plan->id);
         DB::beginTransaction();
         try {
             // Ensure Stripe customer exists
@@ -104,11 +108,6 @@ class StripeBillingController extends Controller
             ]);
 
             DB::commit();
-            Log::info('Stripe createSubscription success', [
-                'userId' => $user->id,
-                'subscriptionId' => $localSub->id,
-                'stripeSubscriptionId' => $stripeSub->id,
-            ]);
 
             $pi = $stripeSub->latest_invoice->payment_intent ?? null;
             if ($pi && $pi->status === 'requires_action') {
@@ -150,6 +149,9 @@ class StripeBillingController extends Controller
             'free_trial_expires_at' => $user->free_trial_expires_at?->format('Y-m-d H:i:s'),
             'is_premium_active' => $user->hasPremiumAccess(),
             'is_on_trial' => $user->isOnTrial(),
+            'student_verified' => $user->student_verified,
+            'student_expires_at' => $user->student_expires_at?->format('Y-m-d H:i:s'),
+            'is_student' => $user->isStudent(),
             'subscription' => $active ? [
                 'id' => $active->id,
                 'status' => $active->status,
