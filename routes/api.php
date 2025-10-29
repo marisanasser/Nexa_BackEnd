@@ -16,6 +16,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PortfolioController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\StripeBillingController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\OfferController;
 use App\Http\Controllers\ContractController;
@@ -33,6 +34,8 @@ use App\Http\Controllers\Admin\BrandRankingController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\StripeController;
+use App\Http\Controllers\StripeWebhookController;
 
 
 // Health check endpoint
@@ -129,7 +132,7 @@ Route::middleware(['auth:sanctum', 'user.status'])->group(function () {
         
         // Generic campaign routes (must come after specific routes)
         Route::get('/{campaign}', [CampaignController::class, 'show'])->where('campaign', '[0-9]+'); // View campaign
-        Route::put('/{campaign}', [CampaignController::class, 'update'])->where('campaign', '[0-9]+'); // Update campaign (Brand only)
+        Route::patch('/{campaign}', [CampaignController::class, 'update'])->where('campaign', '[0-9]+'); // Update campaign (Brand only)
         Route::delete('/{campaign}', [CampaignController::class, 'destroy'])->where('campaign', '[0-9]+'); // Delete campaign (Brand only)
     });
     
@@ -249,9 +252,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     
     // Subscription routes
     Route::middleware(['throttle:payment'])->group(function () {
-        Route::post('/payment/subscription', [PaymentController::class, 'processSubscription']);
-        Route::get('/payment/subscription-status', [PaymentController::class, 'getSubscriptionStatus']);
-        Route::get('/payment/debug-subscription', [PaymentController::class, 'debugSubscriptionValidation']);
+        Route::post('/payment/subscription', [StripeBillingController::class, 'createSubscription']);
+        Route::get('/payment/subscription-status', [StripeBillingController::class, 'getSubscriptionStatus']);
     });
     
     // Debug routes (temporary)
@@ -297,6 +299,15 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/methods', [BrandPaymentController::class, 'getPaymentMethods']);
         Route::post('/set-default', [BrandPaymentController::class, 'setDefaultPaymentMethod']);
         Route::delete('/methods', [BrandPaymentController::class, 'deletePaymentMethod']);
+    });
+
+    // Stripe Connect and setup
+    Route::prefix('stripe')->group(function () {
+        Route::post('/connect/create-or-link', [StripeController::class, 'createAccount']);
+        Route::post('/connect/account-link', [StripeController::class, 'createAccountLink']);
+        Route::get('/connect/status', [StripeController::class, 'getAccountStatus']);
+        Route::post('/setup-intent', [StripeController::class, 'setupIntent']);
+        Route::get('/check', [StripeController::class, 'checkConfiguration']);
     });
 
     // Contract payment processing
@@ -407,9 +418,10 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     
     // Campaign management
     Route::get('/campaigns', [AdminController::class, 'getCampaigns']);
-    Route::get('/campaigns/{id}', [AdminController::class, 'getCampaign'])->where('id', '[0-9]+');
     Route::patch('/campaigns/{id}/approve', [AdminController::class, 'approveCampaign'])->where('id', '[0-9]+');
     Route::patch('/campaigns/{id}/reject', [AdminController::class, 'rejectCampaign'])->where('id', '[0-9]+');
+    Route::get('/campaigns/{id}', [AdminController::class, 'getCampaign'])->where('id', '[0-9]+');
+    Route::patch('/campaigns/{id}', [AdminController::class, 'updateCampaign'])->where('id', '[0-9]+');
     Route::delete('/campaigns/{id}', [AdminController::class, 'deleteCampaign'])->where('id', '[0-9]+');
     
     // User management
@@ -423,6 +435,11 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::get('/students', [AdminController::class, 'getStudents']);
     Route::patch('/students/{student}/trial', [AdminController::class, 'updateStudentTrial'])->where('student', '[0-9]+');
     Route::patch('/students/{student}/status', [AdminController::class, 'updateStudentStatus'])->where('student', '[0-9]+');
+
+    // Student verification requests
+    Route::get('/student-requests', [AdminController::class, 'getStudentVerificationRequests']);
+    Route::patch('/student-requests/{id}/approve', [AdminController::class, 'approveStudentVerification'])->where('id', '[0-9]+');
+    Route::patch('/student-requests/{id}/reject', [AdminController::class, 'rejectStudentVerification'])->where('id', '[0-9]+');
     
     // Withdrawal methods management
     Route::apiResource('withdrawal-methods', \App\Http\Controllers\Admin\WithdrawalMethodController::class);
@@ -435,17 +452,16 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::get('/payouts/{id}/verify', [AdminPayoutController::class, 'verifyWithdrawal'])->where('id', '[0-9]+');
 
     // Guide Management
-    Route::get('/guides', [GuideController::class, 'index']);                 // Get all guides
-    Route::post('/guides', [GuideController::class, 'store']);                // Create a new guide
-    Route::get('/guides/{guide}', [GuideController::class, 'show'])->where('guide', '[0-9]+');          // Get a single guide by ID (route model binding)
-    Route::put('/guides/{guide}', [GuideController::class, 'update'])->where('guide', '[0-9]+');        // Update a guide by ID
-    Route::delete('/guides/{guide}', [GuideController::class, 'destroy'])->where('guide', '[0-9]+');    // Delete a guide by ID
     
     // Brand Rankings
     Route::get('/brand-rankings', [BrandRankingController::class, 'getBrandRankings']);
     Route::get('/brand-rankings/comprehensive', [BrandRankingController::class, 'getComprehensiveRankings']);
 });
-
+    Route::get('/guides', [GuideController::class, 'index']);                 // Get all guides
+    Route::post('/guides', [GuideController::class, 'store']);                // Create a new guide
+    Route::get('/guides/{guide}', [GuideController::class, 'show'])->where('guide', '[0-9]+');          // Get a single guide by ID (route model binding)
+    Route::put('/guides/{guide}', [GuideController::class, 'update'])->where('guide', '[0-9]+');        // Update a guide by ID
+    Route::delete('/guides/{guide}', [GuideController::class, 'destroy'])->where('guide', '[0-9]+');    // Delete a guide by ID
 // Google OAuth routes
 Route::get('/google/redirect', [GoogleController::class, 'redirectToGoogle'])
     ->name('google.redirect');
@@ -460,4 +476,7 @@ Route::post('/google/auth', [GoogleController::class, 'handleGoogleWithRole'])
 
 
 Route::post('/account/checked', [AccountController::class, 'checkAccount']);
+
+// Stripe webhook (public)
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
 

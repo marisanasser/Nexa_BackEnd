@@ -30,7 +30,7 @@ return [
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),
-        'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+        'region' => env('AWS_DEFAULT_REGION', 'sa-east-1'),
     ],
 
     'google' => [
@@ -39,14 +39,10 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
-    'pagarme' => [
-        'api_key' => env('PAGARME_API_KEY'),
-        'secret_key' => env('PAGARME_SECRET_KEY'),
-        'encryption_key' => env('PAGARME_ENCRYPTION_KEY'),
-        'webhook_secret' => env('PAGARME_WEBHOOK_SECRET'),
-        'environment' => env('PAGARME_ENVIRONMENT', 'sandbox'), // sandbox or production
-        'account_id' => env('PAGARME_ACCOUNT_ID'),
-        'simulation_mode' => env('PAGARME_SIMULATION_MODE', false), // Enable payment simulation
+    'stripe' => [
+        'secret' => env('STRIPE_SECRET_KEY'),
+        'publishable_key' => env('STRIPE_PUBLISHABLE_KEY'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
 ];

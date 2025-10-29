@@ -3,9 +3,14 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Mail\PasswordReset;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class PasswordResetLinkController extends Controller
@@ -17,23 +22,47 @@ class PasswordResetLinkController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        // Validate the email input
         $request->validate([
-            'email' => ['required', 'email'],
+            'email' => ['required', 'email', 'max:255'],
         ]);
 
-        // We will send the password reset link to this user. Once we have attempted
-        // to send the link, we will examine the response then see the message we
-        // need to show to the user. Finally, we'll send out a proper response.
-        $status = Password::sendResetLink(
-            $request->only('email')
-        );
-        dd($status);
-        if ($status != Password::RESET_LINK_SENT) {
-            throw ValidationException::withMessages([
-                'email' => [__($status)],
+        // Check if user exists
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            // Return success even if user doesn't exist for security reasons
+            // This prevents email enumeration attacks
+            return response()->json([
+                'success' => true,
+                'message' => 'Se o email existe em nosso sistema, você receberá um link para redefinir sua senha.'
             ]);
         }
 
-        return response()->json(['status' => __($status)]);
+        // Generate password reset token using Laravel's Password facade
+        // This creates and stores the token in password_reset_tokens table
+        $token = Password::createToken($user);
+
+        // Send password reset email via AWS SES using custom mailable
+        try {
+            Mail::to($user->email)->send(new PasswordReset($token, $user->email));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Se o email existe em nosso sistema, você receberá um link para redefinir sua senha.'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to send password reset email', [
+                'email' => $user->email,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            // Return success even if email fails to prevent email enumeration
+            return response()->json([
+                'success' => true,
+                'message' => 'Se o email existe em nosso sistema, você receberá um link para redefinir sua senha.'
+            ]);
+        }
     }
 }

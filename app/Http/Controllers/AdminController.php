@@ -8,6 +8,8 @@ use App\Models\CampaignApplication;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
 
 class AdminController extends Controller
@@ -341,6 +343,70 @@ class AdminController extends Controller
     }
 
     /**
+     * Update a campaign (Admin can update any campaign)
+     */
+    public function updateCampaign(Request $request, int $id): JsonResponse
+    {
+        try {
+            $campaign = Campaign::findOrFail($id);
+            
+            $request->validate([
+                'title' => 'sometimes|string|max:255',
+                'description' => 'sometimes|string|max:5000',
+                'budget' => 'sometimes|numeric|min:1|max:999999.99',
+                'requirements' => 'sometimes|nullable|string|max:5000',
+                'target_states' => 'sometimes|nullable|array',
+                'target_states.*' => 'string|max:255',
+                'category' => 'sometimes|nullable|string|max:255',
+                'campaign_type' => 'sometimes|nullable|string|max:255',
+                'deadline' => 'sometimes|date|after:today',
+                'status' => 'sometimes|in:pending,approved,rejected,archived',
+            ]);
+
+            $data = $request->only([
+                'title', 'description', 'budget', 'requirements', 
+                'target_states', 'category', 'campaign_type', 'deadline', 'status'
+            ]);
+
+            // Handle file uploads
+            if ($request->hasFile('image')) {
+                if ($campaign->image_url) {
+                    $this->deleteFile($campaign->image_url);
+                }
+                $data['image_url'] = $this->uploadFile($request->file('image'), 'campaigns/images');
+            }
+
+            if ($request->hasFile('logo')) {
+                if ($campaign->logo) {
+                    $this->deleteFile($campaign->logo);
+                }
+                $data['logo'] = $this->uploadFile($request->file('logo'), 'campaigns/logos');
+            }
+
+            if ($request->hasFile('attach_file')) {
+                if ($campaign->attach_file) {
+                    $this->deleteFile($campaign->attach_file);
+                }
+                $data['attach_file'] = $this->uploadFile($request->file('attach_file'), 'campaigns/attachments');
+            }
+
+            $campaign->update($data);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Campaign updated successfully',
+                'data' => $campaign->load(['brand', 'bids'])
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to update campaign: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update campaign'
+            ], 500);
+        }
+    }
+
+    /**
      * Approve a campaign
      */
     public function approveCampaign(int $id): JsonResponse
@@ -421,6 +487,18 @@ class AdminController extends Controller
     {
         try {
             $campaign = Campaign::findOrFail($id);
+            
+            // Delete associated files
+            if ($campaign->image_url) {
+                $this->deleteFile($campaign->image_url);
+            }
+            if ($campaign->logo) {
+                $this->deleteFile($campaign->logo);
+            }
+            if ($campaign->attach_file) {
+                $this->deleteFile($campaign->attach_file);
+            }
+            
             $campaign->delete();
 
             return response()->json([
@@ -428,10 +506,32 @@ class AdminController extends Controller
                 'message' => 'Campaign deleted successfully'
             ]);
         } catch (\Exception $e) {
+            Log::error('Failed to delete campaign: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to delete campaign'
             ], 500);
+        }
+    }
+    
+    private function uploadFile($file, string $path): string
+    {
+        $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+        $filePath = $file->storeAs($path, $fileName, 'public');
+        return \Illuminate\Support\Facades\Storage::url($filePath);
+    }
+
+    private function deleteFile(?string $fileUrl): void
+    {
+        if (!$fileUrl) return;
+
+        try {
+            $path = str_replace('/storage/', '', $fileUrl);
+            if (Storage::disk('public')->exists($path)) {
+                Storage::disk('public')->delete($path);
+            }
+        } catch (\Exception $e) {
+            Log::warning('Failed to delete file: ' . $fileUrl . ' - ' . $e->getMessage());
         }
     }
 
@@ -679,6 +779,88 @@ class AdminController extends Controller
                 'to' => $students->lastItem(),
             ]
         ]);
+    }
+
+    /**
+     * List student verification requests
+     */
+    public function getStudentVerificationRequests(Request $request): JsonResponse
+    {
+        $request->validate([
+            'status' => 'nullable|in:pending,approved,rejected',
+            'per_page' => 'nullable|integer|min:1|max:100',
+        ]);
+
+        $query = \App\Models\StudentVerificationRequest::query()->with('user');
+        if ($request->status) {
+            $query->where('status', $request->status);
+        }
+
+        $requests = $query->orderBy('created_at', 'desc')->paginate($request->per_page ?? 10);
+        return response()->json([
+            'success' => true,
+            'data' => $requests,
+        ]);
+    }
+
+    /**
+     * Approve a student verification request
+     */
+    public function approveStudentVerification(int $id, Request $request): JsonResponse
+    {
+        $request->validate([
+            'duration_months' => 'nullable|integer|min:1|max:24',
+        ]);
+        $svr = \App\Models\StudentVerificationRequest::findOrFail($id);
+        if ($svr->status !== 'pending') {
+            return response()->json(['success' => false, 'message' => 'Request not pending'], 422);
+        }
+
+        $duration = $request->input('duration_months', 12);
+        $user = $svr->user;
+
+        DB::beginTransaction();
+        try {
+            $svr->update([
+                'status' => 'approved',
+                'reviewed_by' => auth()->id(),
+                'reviewed_at' => now(),
+                'review_notes' => $request->review_notes,
+            ]);
+
+            $user->update([
+                'student_verified' => true,
+                'student_expires_at' => now()->addMonths($duration),
+                'role' => 'student',
+                'free_trial_expires_at' => now()->addMonths($duration),
+            ]);
+
+            DB::commit();
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json(['success' => false, 'message' => 'Approval failed'], 500);
+        }
+    }
+
+    /**
+     * Reject a student verification request
+     */
+    public function rejectStudentVerification(int $id, Request $request): JsonResponse
+    {
+        $svr = \App\Models\StudentVerificationRequest::findOrFail($id);
+        if ($svr->status !== 'pending') {
+            return response()->json(['success' => false, 'message' => 'Request not pending'], 422);
+        }
+
+        $svr->update([
+            'status' => 'rejected',
+            'reviewed_by' => auth()->id(),
+            'reviewed_at' => now(),
+            'review_notes' => $request->review_notes,
+        ]);
+
+        return response()->json(['success' => true]);
     }
 
     /**

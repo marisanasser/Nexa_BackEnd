@@ -36,61 +36,45 @@ class StudentController extends Controller
                 ], 422);
             }
 
-            // Check if user already has a free trial (but allow student verification to extend it)
-            // This check is removed to allow students to verify even if they have an active trial
+            $request->validate([
+                'purchase_email' => 'required|email',
+                'course_name' => 'nullable|string|max:255',
+                'evidence' => 'nullable|array',
+            ]);
+
+            $purchaseEmail = strtolower(trim($request->purchase_email));
+            $userEmail = strtolower(trim($user->email));
 
             DB::beginTransaction();
 
             try {
-                // Set student verification to true and update role
-                $user->student_verified = true;
-                $user->student_expires_at = now()->addYear(); // Student status valid for 1 year
-                $user->role = 'student'; // Update role to student
-                
-                // Grant free trial for 1 year
-                $user->free_trial_expires_at = now()->addYear();
-                
-                $user->save();
-
-                // Log the student verification
-                Log::info('Student verification completed', [
+                // Always create a pending verification request - ALL requests require admin approval
+                $svr = \App\Models\StudentVerificationRequest::create([
                     'user_id' => $user->id,
-                    'user_email' => $user->email,
                     'purchase_email' => $request->purchase_email,
-                    'course_name' => $request->course_name,
-                    'student_expires_at' => $user->student_expires_at,
-                    'free_trial_expires_at' => $user->free_trial_expires_at,
+                    'course_name' => $request->course_name ?? 'Build Creators',
+                    'evidence' => $request->evidence ?? [],
+                    'status' => 'pending',
                 ]);
 
-                // Notify admin of new student verification
+                // Notify admin of new request
                 \App\Services\NotificationService::notifyAdminOfNewStudentVerification($user, [
                     'purchase_email' => $request->purchase_email,
-                    'course_name' => $request->course_name,
+                    'course_name' => $request->course_name ?? 'Build Creators',
+                    'request_id' => $svr->id,
                 ]);
 
                 DB::commit();
 
                 return response()->json([
                     'success' => true,
-                    'message' => 'Student verification completed successfully! You now have verified student status and free access.',
-                    'student_verified' => true,
-                    'student_expires_at' => $user->student_expires_at->toISOString(),
-                    'free_trial_expires_at' => $user->free_trial_expires_at->toISOString(),
-                    'user' => [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'email' => $user->email,
-                        'role' => $user->role,
-                        'student_verified' => $user->student_verified,
-                        'student_expires_at' => $user->student_expires_at,
-                        'free_trial_expires_at' => $user->free_trial_expires_at,
-                        'has_premium' => $user->has_premium,
-                    ]
+                    'message' => 'Solicitação registrada com sucesso! Aguarde a aprovação do administrador.',
+                    'request_id' => $svr->id,
+                    'student_verified' => false,
                 ]);
-
             } catch (\Exception $e) {
                 DB::rollBack();
-                Log::error('Student verification failed', [
+                Log::error('Student verification request failed', [
                     'user_id' => $user->id,
                     'error' => $e->getMessage(),
                     'trace' => $e->getTraceAsString()
@@ -98,7 +82,7 @@ class StudentController extends Controller
                 
                 return response()->json([
                     'success' => false,
-                    'message' => 'Failed to complete student verification'
+                    'message' => 'Failed to create student verification request'
                 ], 500);
             }
 

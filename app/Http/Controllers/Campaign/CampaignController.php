@@ -539,6 +539,9 @@ class CampaignController extends Controller
             // Notify admin of new campaign creation
             \App\Services\NotificationService::notifyAdminOfNewCampaign($campaign);
 
+            // Send email notification to brand about successful campaign creation
+            \App\Services\NotificationService::notifyBrandOfCampaignCreated($campaign);
+
             // Note: Creators will be notified when admin approves the campaign
             // This prevents confusion where creators get notifications for campaigns they can't see
 
@@ -604,8 +607,8 @@ class CampaignController extends Controller
         try {
             $user = auth()->user();
 
-            // Check authorization
-            if (!$user->isBrand() || $campaign->brand_id !== $user->id) {
+            // Check authorization - allow admin or brand owner
+            if (!$user->isAdmin() && (!$user->isBrand() || $campaign->brand_id !== $user->id)) {
                 return response()->json(['error' => 'Unauthorized to update this campaign'], 403);
             }
 
@@ -666,13 +669,13 @@ class CampaignController extends Controller
         try {
             $user = auth()->user();
 
-            // Check authorization
-            if (!$user->isBrand() || $campaign->brand_id !== $user->id) {
+            // Check authorization - allow admin or brand owner
+            if (!$user->isAdmin() && (!$user->isBrand() || $campaign->brand_id !== $user->id)) {
                 return response()->json(['error' => 'Unauthorized to delete this campaign'], 403);
             }
 
-            // Check if campaign can be deleted
-            if ($campaign->isApproved() && $campaign->bids()->count() > 0) {
+            // Check if campaign can be deleted (only for non-admin users)
+            if (!$user->isAdmin() && $campaign->isApproved() && $campaign->bids()->count() > 0) {
                 return response()->json(['error' => 'Cannot delete approved campaigns with bids'], 422);
             }
 

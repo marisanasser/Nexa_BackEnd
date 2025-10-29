@@ -60,12 +60,16 @@ class User extends Authenticatable
         'agencia_dv',
         'conta',
         'conta_dv',
-        'cpf',
+        'cvc',
         'bank_account_name',
         'suspended_until',
         'suspension_reason',
         'total_reviews',
-        'average_rating'
+        'average_rating',
+        'stripe_account_id',
+        'stripe_payment_method_id',
+        'stripe_verification_status',
+        'stripe_customer_id'
     ];
 
     /**

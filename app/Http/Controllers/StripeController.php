@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Aws\Sns\SnsClient;
+use Aws\Exception\AwsException;
 use Stripe\Stripe;
 use Stripe\Account;
 use Stripe\PaymentMethod;
@@ -21,9 +23,18 @@ use Stripe\Exception\ApiErrorException;
 
 class StripeController extends Controller
 {
+    protected $sns;
     public function __construct()
     {
         Stripe::setApiKey(config('services.stripe.secret'));
+        $this->sns = new SnsClient([
+            'version' => 'latest',
+            'region'  => env('AWS_DEFAULT_REGION', 'sa-east-1'),
+            'credentials' => [
+                'key'    => env('AWS_ACCESS_KEY_ID'),
+                'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            ],
+        ]);
     }
 
     /**
@@ -31,19 +42,19 @@ class StripeController extends Controller
      */
     public function createAccount(Request $request): JsonResponse
     {
-        $request->validate([
-            'type' => 'required|string|in:individual,business',
-            'country' => 'required|string|size:2',
-            'email' => 'required|email',
-            'business_type' => 'required|string|in:individual,company',
-            'card' => 'required|array',
-            'card.number' => 'required|string|min:13|max:19',
-            'card.exp_month' => 'required|integer|min:1|max:12',
-            'card.exp_year' => 'required|integer|min:2024|max:2030',
-            'card.cvc' => 'required|string|min:3|max:4',
-            'individual' => 'required_if:type,individual|array',
-            'company' => 'required_if:type,business|array',
-        ]);
+        // $request->validate([
+        //     'type' => 'required|string|in:individual,business',
+        //     'country' => 'required|string|size:2',
+        //     'email' => 'required|email',
+        //     'business_type' => 'required|string|in:individual,company',
+        //     'card' => 'required|array',
+        //     'card.number' => 'required|string|min:13|max:19',
+        //     'card.exp_month' => 'required|integer|min:1|max:12',
+        //     'card.exp_year' => 'required|integer|min:2024|max:2030',
+        //     'card.cvc' => 'required|string|min:3|max:4',
+        //     'individual' => 'required_if:type,individual|array',
+        //     'company' => 'required_if:type,business|array',
+        // ]);
 
         try {
             $user = auth()->user();
@@ -251,9 +262,10 @@ class StripeController extends Controller
 
             if (!$user->stripe_account_id) {
                 return response()->json([
-                    'success' => false,
+                    'success' => true,
+                    'has_account' => false,
                     'message' => 'No Stripe account found'
-                ], 404);
+                ]);
             }
 
             // Retrieve account from Stripe
@@ -261,16 +273,13 @@ class StripeController extends Controller
 
             return response()->json([
                 'success' => true,
-                'account' => [
-                    'id' => $stripeAccount->id,
-                    'type' => $stripeAccount->type,
-                    'country' => $stripeAccount->country,
-                    'email' => $stripeAccount->email,
-                    'charges_enabled' => $stripeAccount->charges_enabled,
-                    'payouts_enabled' => $stripeAccount->payouts_enabled,
-                    'details_submitted' => $stripeAccount->details_submitted,
-                    'requirements' => $stripeAccount->requirements,
-                ]
+                'has_account' => true,
+                'account_id' => $stripeAccount->id,
+                'verification_status' => $stripeAccount->charges_enabled && $stripeAccount->payouts_enabled ? 'enabled' : 'pending',
+                'charges_enabled' => $stripeAccount->charges_enabled,
+                'payouts_enabled' => $stripeAccount->payouts_enabled,
+                'details_submitted' => $stripeAccount->details_submitted,
+                'requirements' => $stripeAccount->requirements,
             ]);
 
         } catch (\Exception $e) {
@@ -370,18 +379,35 @@ class StripeController extends Controller
                 ], 401);
             }
 
+            // If user doesn't have a Stripe account, create one first
             if (!$user->stripe_account_id) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No Stripe account found'
-                ], 404);
+                // Create a Stripe Express account
+                $stripeAccount = Account::create([
+                    'type' => 'express',
+                    'country' => 'BR', // Brazil
+                    'email' => $user->email,
+                    'capabilities' => [
+                        'card_payments' => ['requested' => true],
+                        'transfers' => ['requested' => true],
+                    ],
+                ]);
+
+                // Update user with Stripe account ID
+                $user->update([
+                    'stripe_account_id' => $stripeAccount->id,
+                ]);
+
+                Log::info('Stripe account created for user', [
+                    'user_id' => $user->id,
+                    'stripe_account_id' => $stripeAccount->id,
+                ]);
             }
 
             // Create account link for onboarding
             $accountLink = \Stripe\AccountLink::create([
                 'account' => $user->stripe_account_id,
-                'refresh_url' => config('app.frontend_url') . '/creator/verification?refresh=true',
-                'return_url' => config('app.frontend_url') . '/creator/dashboard',
+                'refresh_url' => config('app.frontend_url') . '/creator/stripe-connect?refresh=true',
+                'return_url' => config('app.frontend_url') . '/creator',
                 'type' => 'account_onboarding',
             ]);
 
