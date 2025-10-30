@@ -1,7 +1,7 @@
 <?php
 
 namespace Database\Seeders;
-
+use Illuminate\Support\Facades\Log;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -16,6 +16,9 @@ class DatabaseSeeder extends Seeder
         $this->call([
             SubscriptionPlanSeeder::class,
             WithdrawalMethodSeeder::class,
+            GuideSeeder::class,
+            ReviewSeeder::class,
+            CampaignSeeder::class,
         ]);
 
         // Create various types of users for testing
@@ -27,7 +30,6 @@ class DatabaseSeeder extends Seeder
             'email' => 'admin@example.com',
             'password' => bcrypt('admin123'),
         ]);
-
         // Create a premium user
         \App\Models\User::factory()->premium()->create([
             'name' => 'Premium User',
