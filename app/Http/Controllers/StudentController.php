@@ -42,10 +42,30 @@ class StudentController extends Controller
                 'evidence' => 'nullable|array',
             ]);
 
-            $purchaseEmail = strtolower(trim($request->purchase_email));
-            $userEmail = strtolower(trim($user->email));
-
             DB::beginTransaction();
+            
+            // Check again inside transaction to prevent race conditions
+            $user->refresh();
+            if ($user->student_verified) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User is already verified as a student'
+                ], 422);
+            }
+
+            // Check if there's already a pending request
+            $existingRequest = \App\Models\StudentVerificationRequest::where('user_id', $user->id)
+                ->where('status', 'pending')
+                ->exists();
+            
+            if ($existingRequest) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You already have a pending verification request. Please wait for admin approval.'
+                ], 422);
+            }
 
             try {
                 // Always create a pending verification request - ALL requests require admin approval

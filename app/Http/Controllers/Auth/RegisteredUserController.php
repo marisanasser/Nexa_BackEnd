@@ -85,9 +85,8 @@ class RegisteredUserController extends Controller
                 Rules\Password::defaults()
             ],
             'role' => [
-                'required',
-                'nullable', 
-                'string', 
+                'sometimes',
+                'string',
                 Rule::in(['creator', 'brand', 'admin']),
                 'max:20'
             ],
@@ -135,10 +134,7 @@ class RegisteredUserController extends Controller
                 'max:10',
                 Rule::in(['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'zh', 'ja', 'ko', 'ar'])
             ],
-            'has_premium' => [
-                'nullable',
-                'boolean'
-            ],
+            // has_premium is intentionally not accepted from client for security reasons
             'isStudent' => [
                 'nullable',
                 'boolean'
@@ -201,7 +197,7 @@ class RegisteredUserController extends Controller
         // Determine if user is a student
         $isStudent = $request->isStudent ?? false;
         
-        // Set free trial only for students (1 month), creators and brands get no free trial
+        // Set free trial only for students (1 year), creators and brands get no free trial
         $freeTrialExpiresAt = $isStudent ? now()->addYear() : null;
         
         $user = User::create([
@@ -218,8 +214,9 @@ class RegisteredUserController extends Controller
             'gender' => $request->gender ?? 'other',
             'birth_date' => $request->birth_date ?? null,
             'state' => $request->state ? trim($request->state) : null,
-            'language' => null,
-            'has_premium' => $request->has_premium ?? false,
+            'language' => 'en',
+            // Never trust client input for premium status at registration
+            'has_premium' => false,
             'premium_expires_at' => null,
             'free_trial_expires_at' => $freeTrialExpiresAt,
             'email_verified_at' => now(), // Automatically mark email as verified
@@ -234,9 +231,13 @@ class RegisteredUserController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         $frontend = config('app.frontend_url', env('APP_FRONTEND_URL', 'http://localhost:5000'));
-        $link = "{$frontend}/magic-login?token={$token}";
+        $link = "{$frontend}/{$user->role}?token={$token}";
         // Send email (queued if you prefer)
-        Mail::to($user->email)->send(new SignupMail($user, $link));
+        try {
+            Mail::to($user->email)->send(new SignupMail($user, $link));
+        } catch (\Exception $e) {
+            \Log::error('Error sending signup email: ' . $e->getMessage());
+        }
         \Log::info('User registration completed successfully', ['user_id' => $user->id, 'email' => $user->email]);
 
         return response()->json([

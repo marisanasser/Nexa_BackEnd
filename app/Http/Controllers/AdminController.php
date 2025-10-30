@@ -791,7 +791,13 @@ class AdminController extends Controller
             'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $query = \App\Models\StudentVerificationRequest::query()->with('user');
+        $query = \App\Models\StudentVerificationRequest::query()
+            ->with(['user' => function ($query) {
+                // Only load users that are not soft-deleted
+                $query->withTrashed();
+            }])
+            ->whereHas('user'); // Filter out requests for deleted users
+        
         if ($request->status) {
             $query->where('status', $request->status);
         }
@@ -810,14 +816,39 @@ class AdminController extends Controller
     {
         $request->validate([
             'duration_months' => 'nullable|integer|min:1|max:24',
+            'review_notes' => 'nullable|string|max:1000',
         ]);
+        
         $svr = \App\Models\StudentVerificationRequest::findOrFail($id);
+        
         if ($svr->status !== 'pending') {
             return response()->json(['success' => false, 'message' => 'Request not pending'], 422);
         }
 
         $duration = $request->input('duration_months', 12);
         $user = $svr->user;
+
+        // Check if user exists (not soft-deleted)
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User associated with this request not found'
+            ], 404);
+        }
+
+        // Check if user is already verified to prevent duplicate approvals
+        if ($user->student_verified) {
+            $svr->update([
+                'status' => 'approved',
+                'reviewed_by' => auth()->id(),
+                'reviewed_at' => now(),
+                'review_notes' => $request->review_notes ?? 'Auto-approved (already verified)',
+            ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'User already verified, request marked as approved'
+            ]);
+        }
 
         DB::beginTransaction();
         try {
@@ -828,18 +859,45 @@ class AdminController extends Controller
                 'review_notes' => $request->review_notes,
             ]);
 
-            $user->update([
+            $expiresAt = now()->addMonths($duration);
+            $updateData = [
                 'student_verified' => true,
-                'student_expires_at' => now()->addMonths($duration),
-                'role' => 'student',
-                'free_trial_expires_at' => now()->addMonths($duration),
-            ]);
+                'student_expires_at' => $expiresAt,
+                'free_trial_expires_at' => $expiresAt,
+            ];
+
+            // Only change role to 'student' if user doesn't have premium subscription
+            // This preserves premium users who want student verification
+            if (!$user->has_premium) {
+                $updateData['role'] = 'student';
+            }
+
+            $user->update($updateData);
 
             DB::commit();
-            return response()->json(['success' => true]);
+            
+            // Notify user of approval
+            \App\Services\NotificationService::notifyUserOfStudentVerificationApproval($user, [
+                'duration_months' => $duration,
+                'expires_at' => $expiresAt,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Student verification approved successfully'
+            ]);
         } catch (\Throwable $e) {
             DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Approval failed'], 500);
+            \Illuminate\Support\Facades\Log::error('Student verification approval failed', [
+                'request_id' => $id,
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Approval failed: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -848,11 +906,17 @@ class AdminController extends Controller
      */
     public function rejectStudentVerification(int $id, Request $request): JsonResponse
     {
+        $request->validate([
+            'review_notes' => 'nullable|string|max:1000',
+        ]);
+        
         $svr = \App\Models\StudentVerificationRequest::findOrFail($id);
         if ($svr->status !== 'pending') {
             return response()->json(['success' => false, 'message' => 'Request not pending'], 422);
         }
 
+        $user = $svr->user;
+        
         $svr->update([
             'status' => 'rejected',
             'reviewed_by' => auth()->id(),
@@ -860,7 +924,25 @@ class AdminController extends Controller
             'review_notes' => $request->review_notes,
         ]);
 
-        return response()->json(['success' => true]);
+        // Notify user of rejection if user exists
+        if ($user) {
+            try {
+                \App\Services\NotificationService::notifyUserOfStudentVerificationRejection($user, [
+                    'rejection_reason' => $request->review_notes,
+                    'rejected_at' => now()->toISOString(),
+                ]);
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('Failed to notify user of rejection', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Student verification request rejected successfully'
+        ]);
     }
 
     /**
@@ -872,10 +954,19 @@ class AdminController extends Controller
             'period' => 'required|in:1month,6months,1year',
         ]);
 
+        // Check if user is a verified student
         if (!$student->student_verified) {
             return response()->json([
                 'success' => false,
                 'message' => 'User is not a verified student'
+            ], 422);
+        }
+
+        // Verify user role is student (unless they have premium, then allow)
+        if (!$student->isStudent() && !$student->has_premium) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User must be a student or have premium subscription'
             ], 422);
         }
 
@@ -888,8 +979,10 @@ class AdminController extends Controller
                 default => now()->addMonth(),
             };
 
+            // Sync both student_expires_at and free_trial_expires_at
             $student->update([
                 'free_trial_expires_at' => $expiresAt,
+                'student_expires_at' => $expiresAt, // Sync both dates
             ]);
 
             // Log the trial update
