@@ -236,7 +236,7 @@ class RegisteredUserController extends Controller
         $frontend = config('app.frontend_url', env('APP_FRONTEND_URL', 'http://localhost:5000'));
         $link = "{$frontend}/magic-login?token={$token}";
         // Send email (queued if you prefer)
-        Mail::to($user->email)->send(new SignupMail($user, $link));
+        // Mail::to($user->email)->send(new SignupMail($user, $link));
         \Log::info('User registration completed successfully', ['user_id' => $user->id, 'email' => $user->email]);
 
         return response()->json([
