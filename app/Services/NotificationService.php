@@ -343,6 +343,51 @@ class NotificationService
     }
 
     /**
+     * Notify user about student verification approval
+     */
+    public static function notifyUserOfStudentVerificationApproval(User $user, array $approvalData = []): void
+    {
+        try {
+            $notification = Notification::createSystemActivity($user->id, array_merge($approvalData, [
+                'activity_type' => 'student_verification_approved',
+                'approved_at' => now()->toISOString(),
+                'duration_months' => $approvalData['duration_months'] ?? 12,
+                'expires_at' => $approvalData['expires_at'] ?? null,
+            ]));
+            
+            // Send real-time notification via Socket.IO
+            self::sendSocketNotification($user->id, $notification);
+        } catch (\Exception $e) {
+            Log::error('Failed to notify user of student verification approval', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Notify user about student verification rejection
+     */
+    public static function notifyUserOfStudentVerificationRejection(User $user, array $rejectionData = []): void
+    {
+        try {
+            $notification = Notification::createSystemActivity($user->id, array_merge($rejectionData, [
+                'activity_type' => 'student_verification_rejected',
+                'rejected_at' => $rejectionData['rejected_at'] ?? now()->toISOString(),
+                'rejection_reason' => $rejectionData['rejection_reason'] ?? null,
+            ]));
+            
+            // Send real-time notification via Socket.IO
+            self::sendSocketNotification($user->id, $notification);
+        } catch (\Exception $e) {
+            Log::error('Failed to notify user of student verification rejection', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
      * Notify creators about new project
      */
     public static function notifyCreatorsOfNewProject(Campaign $campaign): void
