@@ -33,7 +33,7 @@ class PortfolioController extends Controller
         'application/octet-stream' // Fallback for files where MIME type detection fails
     ];
     
-    const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
     const MAX_TOTAL_FILES = 20;
 
     /**

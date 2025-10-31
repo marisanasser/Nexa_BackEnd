@@ -14,6 +14,8 @@ class SubscriptionPlan extends Model
         'name',
         'description',
         'price',
+        'stripe_price_id',
+        'stripe_product_id',
         'duration_months',
         'is_active',
         'features',
