@@ -25,7 +25,6 @@ const io = new Server(httpServer, {
 
 // Add HTTP endpoint for Laravel to emit events
 httpServer.on('request', (req, res) => {
-    if (req.url && req.url.startsWith('/socket.io')) { return; }
     console.log(`📥 HTTP Request: ${req.method} ${req.url}`);
     
     if (req.method === 'POST' && req.url === '/emit') {
@@ -69,7 +68,6 @@ httpServer.on('request', (req, res) => {
             }
         });
     } else {
-        if (res.headersSent) { return; }
         console.log(`❌ HTTP 404: ${req.method} ${req.url}`);
         res.writeHead(404);
         res.end();

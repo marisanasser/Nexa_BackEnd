@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\EmailToken;
 use App\Mail\SignupMail;  
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\Rule;
 
@@ -25,7 +27,7 @@ class RegisteredUserController extends Controller
     public function store(Request $request)
     {
         // Debug: Log all request data
-        \Log::info('Registration request received', [
+        Log::info('Registration request received', [
             'content_type' => $request->header('Content-Type'),
             'has_files' => !empty($request->allFiles()),
             'all_files' => $request->allFiles(),
@@ -170,23 +172,23 @@ class RegisteredUserController extends Controller
         // Additional custom validation logic
         $this->validateCustomRules($request);
         
-        \Log::info('Validation passed successfully');
+        Log::info('Validation passed successfully');
 
         // Handle avatar upload
         $avatarUrl = null;
         if ($request->hasFile('avatar_url')) {
-            \Log::info('Avatar file detected', [
+            Log::info('Avatar file detected', [
                 'filename' => $request->file('avatar_url')->getClientOriginalName(),
                 'size' => $request->file('avatar_url')->getSize(),
                 'mime' => $request->file('avatar_url')->getMimeType()
             ]);
             $avatarUrl = $this->uploadAvatar($request->file('avatar_url'));
-            \Log::info('Avatar URL generated: ' . $avatarUrl);
+            Log::info('Avatar URL generated: ' . $avatarUrl);
         } else {
-            \Log::info('No avatar file in request');
+            Log::info('No avatar file in request');
         }
 
-        \Log::info('About to create user with data', [
+        Log::info('About to create user with data', [
             'name' => trim($request->name),
             'email' => strtolower(trim($request->email)),
             'role' => $request->role ?? 'creator',
@@ -222,7 +224,7 @@ class RegisteredUserController extends Controller
             'email_verified_at' => now(), // Automatically mark email as verified
         ]);
         
-        \Log::info('User created successfully', ['user_id' => $user->id]);
+        Log::info('User created successfully', ['user_id' => $user->id]);
 
         // Notify admin of new user registration
         \App\Services\NotificationService::notifyAdminOfNewRegistration($user);
@@ -236,9 +238,9 @@ class RegisteredUserController extends Controller
         try {
             Mail::to($user->email)->send(new SignupMail($user, $link));
         } catch (\Exception $e) {
-            \Log::error('Error sending signup email: ' . $e->getMessage());
+            Log::error('Error sending signup email: ' . $e->getMessage());
         }
-        \Log::info('User registration completed successfully', ['user_id' => $user->id, 'email' => $user->email]);
+        Log::info('User registration completed successfully', ['user_id' => $user->id, 'email' => $user->email]);
 
         return response()->json([
             'success' => true,
@@ -302,19 +304,19 @@ class RegisteredUserController extends Controller
         try {
             // Generate a unique filename
             $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-            \Log::info('Generated filename: ' . $filename);
+            Log::info('Generated filename: ' . $filename);
             
             // Store the file in the public/avatars directory
             $path = $file->storeAs('avatars', $filename, 'public');
-            \Log::info('File stored at path: ' . $path);
+            Log::info('File stored at path: ' . $path);
             
             // Return the full URL to the uploaded file
             $url = Storage::url($path);
-            \Log::info('Storage URL: ' . $url);
+            Log::info('Storage URL: ' . $url);
             
             return $url;
         } catch (\Exception $e) {
-            \Log::error('Avatar upload failed: ' . $e->getMessage());
+            Log::error('Avatar upload failed: ' . $e->getMessage());
             throw $e;
         }
     }
