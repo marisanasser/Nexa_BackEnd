@@ -19,6 +19,8 @@ class SubscriptionPlanSeeder extends Seeder
             [
                 'name' => 'Plano Mensal',
                 'description' => 'Assinatura de 1 mês do Nexa Premium',
+                'stripe_price_id' => null,
+                'stripe_product_id' => null,
                 'price' => 39.90,
                 'duration_months' => 1,
                 'is_active' => true,
@@ -36,6 +38,8 @@ class SubscriptionPlanSeeder extends Seeder
             [
                 'name' => 'Plano Semestral',
                 'description' => 'Assinatura de 6 meses do Nexa Premium',
+                'stripe_price_id' => null,
+                'stripe_product_id' => null,
                 'price' => 29.90,
                 'duration_months' => 6,
                 'is_active' => true,
@@ -54,6 +58,8 @@ class SubscriptionPlanSeeder extends Seeder
             [
                 'name' => 'Plano Anual',
                 'description' => 'Assinatura de 12 meses do Nexa Premium',
+                'stripe_price_id' => null,
+                'stripe_product_id' => null,
                 'price' => 19.90,
                 'duration_months' => 12,
                 'is_active' => true,

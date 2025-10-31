@@ -12,7 +12,8 @@ class Transaction extends Model
 
     protected $fillable = [
         'user_id',
-        'pagarme_transaction_id',
+        'stripe_payment_intent_id',
+        'stripe_charge_id',
         'status',
         'amount',
         'payment_method',
@@ -22,6 +23,7 @@ class Transaction extends Model
         'payment_data',
         'paid_at',
         'expires_at',
+        'metadata',
     ];
 
     protected $casts = [
