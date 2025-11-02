@@ -33,8 +33,8 @@ class PortfolioController extends Controller
         'application/octet-stream' // Fallback for files where MIME type detection fails
     ];
     
-    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-    const MAX_TOTAL_FILES = 20;
+    const MAX_FILE_SIZE =  200 * 1024 * 1024; // 200MB 
+    const MAX_TOTAL_FILES = 200; // 200 files
 
     /**
      * Get portfolio data
@@ -544,25 +544,65 @@ class PortfolioController extends Controller
         
 
         try {
-            // Get uploaded files
-            $uploadedFiles = $request->file('files', []);
+            // Get uploaded files - handle both 'files' and 'files[]' notation
+            $uploadedFiles = $request->file('files');
+            
+            // If files is null or empty, check allFiles() for 'files' key
+            if (empty($uploadedFiles)) {
+                $allFiles = $request->allFiles();
+                $uploadedFiles = $allFiles['files'] ?? [];
+            }
+            
+            // Ensure it's always an array
+            if ($uploadedFiles && !is_array($uploadedFiles)) {
+                $uploadedFiles = [$uploadedFiles];
+            }
+            
+            // If still empty, check if files were sent with different notation
+            if (empty($uploadedFiles)) {
+                // Try checking for any files in the request
+                $allFiles = $request->allFiles();
+                Log::warning('No files found with standard methods', [
+                    'user_id' => $user->id,
+                    'all_files_keys' => array_keys($allFiles),
+                    'has_files' => $request->hasFile('files'),
+                    'content_type' => $request->header('Content-Type'),
+                ]);
+                
+                if (!empty($allFiles)) {
+                    // If there are files but not under 'files', log them
+                    foreach ($allFiles as $key => $file) {
+                        if (is_array($file)) {
+                            $uploadedFiles = array_merge($uploadedFiles ?? [], $file);
+                        } else {
+                            $uploadedFiles[] = $file;
+                        }
+                    }
+                }
+            }
 
             Log::info('Upload media request', [
                 'user_id' => $user->id,
-                'files_count' => count($uploadedFiles),
-                'files' => array_map(function ($file) {
+                'files_count' => is_array($uploadedFiles) ? count($uploadedFiles) : 0,
+                'has_files' => $request->hasFile('files'),
+                'all_files_keys' => array_keys($request->allFiles() ?? []),
+                'files' => is_array($uploadedFiles) ? array_map(function ($file) {
                     return $file ? [
                         'name' => $file->getClientOriginalName(),
                         'size' => $file->getSize(),
                         'mime' => $file->getMimeType(),
                         'is_valid' => $file->isValid()
                     ] : null;
-                }, $uploadedFiles)
+                }, $uploadedFiles) : []
             ]);
 
             // Basic validation
-            if (empty($uploadedFiles)) {
-                Log::warning('No files uploaded', ['user_id' => $user->id]);
+            if (empty($uploadedFiles) || (is_array($uploadedFiles) && count($uploadedFiles) === 0)) {
+                Log::warning('No files uploaded', [
+                    'user_id' => $user->id,
+                    'all_files' => $request->allFiles(),
+                    'content_type' => $request->header('Content-Type')
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => 'Nenhum arquivo foi enviado',
