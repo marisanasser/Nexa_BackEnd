@@ -346,65 +346,149 @@ class AdminController extends Controller
      * Update a campaign (Admin can update any campaign)
      */
     public function updateCampaign(Request $request, int $id): JsonResponse
-    {
-        try {
-            $campaign = Campaign::findOrFail($id);
-            
-            $request->validate([
-                'title' => 'sometimes|string|max:255',
-                'description' => 'sometimes|string|max:5000',
-                'budget' => 'sometimes|numeric|min:1|max:999999.99',
-                'requirements' => 'sometimes|nullable|string|max:5000',
-                'target_states' => 'sometimes|nullable|array',
-                'target_states.*' => 'string|max:255',
-                'category' => 'sometimes|nullable|string|max:255',
-                'campaign_type' => 'sometimes|nullable|string|max:255',
-                'deadline' => 'sometimes|date|after:today',
-                'status' => 'sometimes|in:pending,approved,rejected,archived',
-            ]);
+{
+    \Log::info('Update campaign request:', [
+        'request' => $request->all(),
+    ]);
+    try {
+        $campaign = Campaign::findOrFail($id);
+        \Log::info('Campaign found:', [
+            'campaign' => $campaign,
+        ]);
+        $request->validate([
+            'title' => 'sometimes|string|max:255',
+            'description' => 'sometimes|string|max:5000',
+            'budget' => 'sometimes|nullable|numeric|min:0|max:999999.99',
+            'requirements' => 'sometimes|nullable|string|max:5000',
+            'remuneration_type' => 'sometimes|nullable|in:paga,permuta',
+            'target_states' => 'sometimes|nullable|array',
+            'target_states.*' => 'string|max:255',
+            'target_genders' => 'sometimes|nullable|array',
+            'target_genders.*' => 'string|max:255',
+            'target_creator_types' => 'sometimes|nullable|array',
+            'target_creator_types.*' => 'string|max:255',
+            'min_age' => 'sometimes|nullable|integer|min:0|max:150',
+            'max_age' => 'sometimes|nullable|integer|min:0|max:150',
+            'category' => 'sometimes|nullable|string|max:255',
+            'campaign_type' => 'sometimes|nullable|string|max:255',
+            'deadline' => 'sometimes|nullable|date',
+            'status' => 'sometimes|in:pending,approved,rejected,archived',
+        ]);
 
-            $data = $request->only([
-                'title', 'description', 'budget', 'requirements', 
-                'target_states', 'category', 'campaign_type', 'deadline', 'status'
-            ]);
-
-            // Handle file uploads
-            if ($request->hasFile('image')) {
-                if ($campaign->image_url) {
-                    $this->deleteFile($campaign->image_url);
-                }
-                $data['image_url'] = $this->uploadFile($request->file('image'), 'campaigns/images');
+        // Handle both FormData and JSON requests
+        // For FormData, Laravel sometimes doesn't populate $request->all() correctly
+        // So we'll manually check each field using input() method
+        $fields = ['title', 'description', 'budget', 'requirements', 'remuneration_type',
+                  'target_states', 'target_genders', 'target_creator_types',
+                  'min_age', 'max_age', 'category', 'campaign_type', 'deadline', 'status'];
+        \Log::info('Fields to process:', [
+            'fields' => $fields,
+        ]);
+        $data = [];
+        foreach ($fields as $field) {
+            // Use input() which works for both FormData and JSON
+            $value = $request->input($field);
+            if ($value !== null) {
+                $data[$field] = $value;
             }
-
-            if ($request->hasFile('logo')) {
-                if ($campaign->logo) {
-                    $this->deleteFile($campaign->logo);
-                }
-                $data['logo'] = $this->uploadFile($request->file('logo'), 'campaigns/logos');
-            }
-
-            if ($request->hasFile('attach_file')) {
-                if ($campaign->attach_file) {
-                    $this->deleteFile($campaign->attach_file);
-                }
-                $data['attach_file'] = $this->uploadFile($request->file('attach_file'), 'campaigns/attachments');
-            }
-
-            $campaign->update($data);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Campaign updated successfully',
-                'data' => $campaign->load(['brand', 'bids'])
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Failed to update campaign: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update campaign'
-            ], 500);
         }
+        
+        $allRequestData = $request->all();
+        if (empty($data) && !empty($allRequestData)) {
+            // Fallback to only() if all() has data but input() didn't
+            $data = $request->only($fields);
+        }
+        
+        \Log::info('Campaign update data:', [
+            'data_from_input' => $data,
+            'all_request' => $allRequestData,
+            'content_type' => $request->header('Content-Type'),
+            'method' => $request->method(),
+            'has_title' => $request->has('title'),
+            'title_value' => $request->input('title'),
+            'has_files' => $request->hasFile('logo') || $request->hasFile('image') || $request->hasFile('attach_file')
+        ]);
+        
+        // Remove nulls to avoid overwriting existing data, but keep empty strings and 0 values
+        $data = array_filter($data, fn($v) => !is_null($v));
+
+        // Note: target_states, target_genders, and target_creator_types are cast as 'array' 
+        // in the Campaign model, so Laravel will automatically handle JSON encoding/decoding
+        // We just need to ensure they are arrays if present
+        
+        // Handle deadline format - ensure it's a proper date format
+        if (isset($data['deadline']) && is_string($data['deadline'])) {
+            try {
+                // Try to parse the date string
+                $deadline = \Carbon\Carbon::parse($data['deadline']);
+                $data['deadline'] = $deadline->format('Y-m-d');
+            } catch (\Exception $e) {
+                \Log::warning('Invalid deadline format', ['deadline' => $data['deadline']]);
+                unset($data['deadline']);
+            }
+        }
+
+        // Handle file uploads safely
+        if ($request->hasFile('image')) {
+            $this->deleteFile($campaign->image_url);
+            $data['image_url'] = $this->uploadFile($request->file('image'), 'campaigns/images');
+        }
+
+        if ($request->hasFile('logo')) {
+            $this->deleteFile($campaign->logo);
+            $data['logo'] = $this->uploadFile($request->file('logo'), 'campaigns/logos');
+        }
+
+        // Handle multiple attachments
+        if ($request->hasFile('attach_file')) {
+            // Delete old attachments if they exist
+            if ($campaign->attach_file) {
+                $oldAttachments = is_array($campaign->attach_file) 
+                    ? $campaign->attach_file 
+                    : [$campaign->attach_file];
+                foreach ($oldAttachments as $oldAttachment) {
+                    $this->deleteFile($oldAttachment);
+                }
+            }
+            
+            $attachmentFiles = $request->file('attach_file');
+            // If single file, convert to array
+            if (!is_array($attachmentFiles)) {
+                $attachmentFiles = [$attachmentFiles];
+            }
+            
+            $attachmentUrls = [];
+            foreach ($attachmentFiles as $file) {
+                $attachmentUrls[] = $this->uploadFile($file, 'campaigns/attachments');
+            }
+            
+            // Store as array - Laravel will auto-encode to JSON due to cast
+            $data['attach_file'] = $attachmentUrls;
+        }
+
+        $campaign->update($data);
+
+        \Log::info('Campaign updated successfully', ['id' => $campaign->id]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Campaign updated successfully',
+            'data' => $campaign->fresh()->load(['brand', 'bids']),
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Failed to update campaign', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to update campaign',
+            'error' => app()->environment('local') ? $e->getMessage() : null,
+        ], 500);
     }
+}
+
 
     /**
      * Approve a campaign
@@ -495,8 +579,14 @@ class AdminController extends Controller
             if ($campaign->logo) {
                 $this->deleteFile($campaign->logo);
             }
+            // Delete all attachments if they exist
             if ($campaign->attach_file) {
-                $this->deleteFile($campaign->attach_file);
+                $attachments = is_array($campaign->attach_file) 
+                    ? $campaign->attach_file 
+                    : [$campaign->attach_file];
+                foreach ($attachments as $attachment) {
+                    $this->deleteFile($attachment);
+                }
             }
             
             $campaign->delete();
