@@ -412,7 +412,7 @@ class Campaign extends Model
     }
 
     /**
-     * Get the approvedAt attribute in camelCase for frontend compatibility
+     * Get the approvedAt a
      */
     public function getApprovedAtAttribute()
     {

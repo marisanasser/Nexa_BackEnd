@@ -107,7 +107,6 @@ class CampaignController extends Controller
                     });
                 }
                 
-                // Filter by social media requirements
                 // Only show campaigns that creators can qualify for based on their social media presence
                 if ($creator->creator_type === 'influencer' || $creator->creator_type === 'both') {
                     // For influencers and both types, they must have Instagram to see campaigns

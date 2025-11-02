@@ -393,7 +393,6 @@ class AdminController extends Controller
             }
         }
         
-        // Also try to get any data from all() if input() didn't work
         $allRequestData = $request->all();
         if (empty($data) && !empty($allRequestData)) {
             // Fallback to only() if all() has data but input() didn't
