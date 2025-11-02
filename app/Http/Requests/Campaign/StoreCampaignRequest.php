@@ -34,7 +34,8 @@ class StoreCampaignRequest extends FormRequest
             'image_url' => ['nullable', 'url', 'max:2048'],
             'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'], // 5MB max
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'], // 5MB max
-            'attach_file' => ['nullable', 'file', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar,jpg,jpeg,png,gif,webp', 'max:10240'], // 10MB max, now allows images too
+            'attach_file' => ['nullable'],
+            'attach_file.*' => ['nullable', 'file', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar,jpg,jpeg,png,gif,webp', 'max:10240'], // 10MB max, now allows images too
             'deadline' => ['required', 'date'],
             'max_bids' => ['nullable', 'integer', 'min:1', 'max:100'],
             'min_age' => ['nullable', 'integer', 'min:18', 'max:100'],

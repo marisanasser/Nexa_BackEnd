@@ -46,6 +46,7 @@ class Campaign extends Model
         'target_states' => 'array',
         'target_genders' => 'array',
         'target_creator_types' => 'array',
+        'attach_file' => 'array',
         'deadline' => 'date',
         'approved_at' => 'datetime',
         'is_active' => 'boolean',
@@ -355,11 +356,43 @@ class Campaign extends Model
     }
 
     /**
+     * Get the logo attribute - ensures it's always included in JSON serialization
+     */
+    public function getLogoAttribute()
+    {
+        return $this->attributes['logo'] ?? null;
+    }
+
+    /**
      * Get the attachFile attribute in camelCase for frontend compatibility
+     * Note: Returns casted array value, not raw database value
+     * This accessor ensures the array cast is properly applied during serialization
      */
     public function getAttachFileAttribute()
     {
-        return $this->attributes['attach_file'] ?? null;
+        // Get the raw attribute value from database
+        $value = $this->attributes['attach_file'] ?? null;
+        
+        if ($value === null) {
+            return null;
+        }
+        
+        // If it's already an array (shouldn't happen, but handle it)
+        if (is_array($value)) {
+            return $value;
+        }
+        
+        // Decode JSON string to array (database stores JSON string due to array cast)
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            // Handle null, array, or single value
+            if ($decoded === null && json_last_error() === JSON_ERROR_NONE) {
+                return null; // Valid JSON null
+            }
+            return is_array($decoded) ? $decoded : ($decoded !== null ? [$decoded] : null);
+        }
+        
+        return null;
     }
 
     /**

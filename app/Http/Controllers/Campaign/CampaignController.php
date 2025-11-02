@@ -530,8 +530,21 @@ class CampaignController extends Controller
                 $data['logo'] = $this->uploadFile($request->file('logo'), 'campaigns/logos');
             }
 
+            // Handle multiple attachments
             if ($request->hasFile('attach_file')) {
-                $data['attach_file'] = $this->uploadFile($request->file('attach_file'), 'campaigns/attachments');
+                $attachmentFiles = $request->file('attach_file');
+                // If single file, convert to array
+                if (!is_array($attachmentFiles)) {
+                    $attachmentFiles = [$attachmentFiles];
+                }
+                
+                $attachmentUrls = [];
+                foreach ($attachmentFiles as $file) {
+                    $attachmentUrls[] = $this->uploadFile($file, 'campaigns/attachments');
+                }
+                
+                // Store as array - Laravel will auto-encode to JSON due to cast
+                $data['attach_file'] = $attachmentUrls;
             }
             
             $campaign = Campaign::create($data);
@@ -636,12 +649,31 @@ class CampaignController extends Controller
                 $data['logo'] = $this->uploadFile($request->file('logo'), 'campaigns/logos');
             }
 
+            // Handle multiple attachments
             if ($request->hasFile('attach_file')) {
-                // Delete old attachment if exists
+                // Delete old attachments if they exist
                 if ($campaign->attach_file) {
-                    $this->deleteFile($campaign->attach_file);
+                    $oldAttachments = is_array($campaign->attach_file) 
+                        ? $campaign->attach_file 
+                        : [$campaign->attach_file];
+                    foreach ($oldAttachments as $oldAttachment) {
+                        $this->deleteFile($oldAttachment);
+                    }
                 }
-                $data['attach_file'] = $this->uploadFile($request->file('attach_file'), 'campaigns/attachments');
+                
+                $attachmentFiles = $request->file('attach_file');
+                // If single file, convert to array
+                if (!is_array($attachmentFiles)) {
+                    $attachmentFiles = [$attachmentFiles];
+                }
+                
+                $attachmentUrls = [];
+                foreach ($attachmentFiles as $file) {
+                    $attachmentUrls[] = $this->uploadFile($file, 'campaigns/attachments');
+                }
+                
+                // Store as array - Laravel will auto-encode to JSON due to cast
+                $data['attach_file'] = $attachmentUrls;
             }
 
             $campaign->update($data);
@@ -686,8 +718,14 @@ class CampaignController extends Controller
             if ($campaign->logo) {
                 $this->deleteFile($campaign->logo);
             }
+            // Delete all attachments if they exist
             if ($campaign->attach_file) {
-                $this->deleteFile($campaign->attach_file);
+                $attachments = is_array($campaign->attach_file) 
+                    ? $campaign->attach_file 
+                    : [$campaign->attach_file];
+                foreach ($attachments as $attachment) {
+                    $this->deleteFile($attachment);
+                }
             }
 
             $campaign->delete();
