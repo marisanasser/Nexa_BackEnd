@@ -18,7 +18,13 @@ class StripeBillingController extends Controller
 {
     public function __construct()
     {
-        Stripe::setApiKey(config('services.stripe.secret'));
+        $stripeSecret = config('services.stripe.secret');
+        Stripe::setApiKey($stripeSecret);
+        
+        Log::info('StripeBillingController initialized', [
+            'has_stripe_secret' => !empty($stripeSecret),
+            'stripe_secret_length' => $stripeSecret ? strlen($stripeSecret) : 0,
+        ]);
     }
 
     /**
@@ -50,25 +56,61 @@ class StripeBillingController extends Controller
                 'plan_id' => $plan?->id,
             ], 409);
         }
+        Log::info('Stripe subscription creation started', [
+            'user_id' => $user->id,
+            'plan_id' => $plan->id,
+            'stripe_price_id' => $plan->stripe_price_id,
+            'payment_method_id' => $request->payment_method_id,
+            'plan_price' => $plan->price,
+        ]);
+        
         DB::beginTransaction();
         try {
             // Ensure Stripe customer exists
             if (!$user->stripe_customer_id) {
+                Log::info('Creating new Stripe customer for subscription', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                ]);
+                
                 $customer = Customer::create([
                     'email' => $user->email,
                     'metadata' => [ 'user_id' => $user->id, 'name' => $user->name ],
                 ]);
                 $user->update(['stripe_customer_id' => $customer->id]);
+                
+                Log::info('Stripe customer created for subscription', [
+                    'user_id' => $user->id,
+                    'customer_id' => $customer->id,
+                ]);
             } else {
+                Log::info('Retrieving existing Stripe customer for subscription', [
+                    'user_id' => $user->id,
+                    'customer_id' => $user->stripe_customer_id,
+                ]);
+                
                 $customer = Customer::retrieve($user->stripe_customer_id);
             }
 
+            Log::info('Attaching payment method to customer', [
+                'user_id' => $user->id,
+                'customer_id' => $customer->id,
+                'payment_method_id' => $request->payment_method_id,
+            ]);
+            
             // Attach and set default payment method
             $pm = StripePaymentMethod::retrieve($request->payment_method_id);
             $pm->attach(['customer' => $customer->id]);
             Customer::update($customer->id, [
                 'invoice_settings' => ['default_payment_method' => $pm->id],
             ]);
+            
+            Log::info('Creating Stripe subscription', [
+                'user_id' => $user->id,
+                'customer_id' => $customer->id,
+                'stripe_price_id' => $plan->stripe_price_id,
+            ]);
+            
             // Create subscription
             $stripeSub = StripeSubscription::create([
                 'customer' => $customer->id,
@@ -77,6 +119,13 @@ class StripeBillingController extends Controller
                 ],
                 'payment_behavior' => 'default_incomplete',
                 'expand' => ['latest_invoice.payment_intent'],
+            ]);
+            
+            Log::info('Stripe subscription created', [
+                'user_id' => $user->id,
+                'subscription_id' => $stripeSub->id,
+                'status' => $stripeSub->status ?? 'unknown',
+                'latest_invoice' => $stripeSub->latest_invoice->id ?? 'no_invoice',
             ]);
             // Safely extract invoice and payment intent IDs from initial subscription creation
             $initialInvoiceId = null;
@@ -122,10 +171,29 @@ class StripeBillingController extends Controller
             ]);
 
             DB::commit();
+            
+            Log::info('Local subscription and transaction records created', [
+                'user_id' => $user->id,
+                'local_subscription_id' => $localSub->id,
+                'transaction_id' => $localTx->id,
+                'stripe_subscription_id' => $stripeSub->id,
+            ]);
 
+            Log::info('Refreshing subscription from Stripe to get latest status', [
+                'user_id' => $user->id,
+                'stripe_subscription_id' => $stripeSub->id,
+            ]);
+            
             // Refresh subscription from Stripe to get latest status
             $stripeSub = StripeSubscription::retrieve($stripeSub->id, [
                 'expand' => ['latest_invoice.payment_intent']
+            ]);
+            
+            Log::info('Stripe subscription refreshed', [
+                'user_id' => $user->id,
+                'subscription_id' => $stripeSub->id,
+                'status' => $stripeSub->status ?? 'unknown',
+                'has_latest_invoice' => isset($stripeSub->latest_invoice),
             ]);
 
             // Safely extract invoice and payment intent
@@ -151,6 +219,13 @@ class StripeBillingController extends Controller
             
             // Handle 3D Secure authentication
             if ($pi && is_object($pi) && isset($pi->status) && $pi->status === 'requires_action') {
+                Log::info('Payment requires 3D Secure authentication', [
+                    'user_id' => $user->id,
+                    'subscription_id' => $localSub->id,
+                    'payment_intent_id' => $pi->id ?? 'no_id',
+                    'payment_intent_status' => $pi->status,
+                ]);
+                
                 return response()->json([
                     'success' => true,
                     'requires_action' => true,
@@ -159,6 +234,14 @@ class StripeBillingController extends Controller
                 ]);
             }
 
+            Log::info('Checking if payment succeeded immediately', [
+                'user_id' => $user->id,
+                'subscription_id' => $localSub->id,
+                'invoice_status' => $invoice && is_object($invoice) ? ($invoice->status ?? 'unknown') : 'no_invoice',
+                'payment_intent_status' => $pi && is_object($pi) ? ($pi->status ?? 'unknown') : 'no_pi',
+                'subscription_status' => $stripeSub->status ?? 'unknown',
+            ]);
+            
             // Check if payment succeeded immediately
             $paymentSucceeded = false;
             if ($invoice && is_object($invoice) && isset($invoice->status) && $invoice->status === 'paid') {
@@ -171,6 +254,11 @@ class StripeBillingController extends Controller
 
             // If payment succeeded immediately, activate subscription now
             if ($paymentSucceeded) {
+                Log::info('Payment succeeded immediately, activating subscription', [
+                    'user_id' => $user->id,
+                    'subscription_id' => $localSub->id,
+                ]);
+                
                 DB::beginTransaction();
                 try {
                     $currentPeriodEnd = isset($stripeSub->current_period_end) 
@@ -216,6 +304,13 @@ class StripeBillingController extends Controller
                     ]);
 
                     DB::commit();
+                    
+                    Log::info('Subscription activated successfully', [
+                        'user_id' => $user->id,
+                        'subscription_id' => $localSub->id,
+                        'transaction_id' => $localTx->id,
+                        'premium_expires_at' => $currentPeriodEnd?->toISOString(),
+                    ]);
 
                     return response()->json([
                         'success' => true,
@@ -227,12 +322,19 @@ class StripeBillingController extends Controller
                 } catch (\Throwable $e) {
                     DB::rollBack();
                     Log::error('Failed to activate subscription immediately', [
+                        'user_id' => $user->id,
                         'subscription_id' => $localSub->id,
                         'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
                     ]);
                 }
             }
 
+            Log::info('Payment is still processing, subscription remains pending', [
+                'user_id' => $user->id,
+                'subscription_id' => $localSub->id,
+            ]);
+            
             // Payment is still processing, return pending status
             return response()->json([
                 'success' => true,
@@ -244,7 +346,13 @@ class StripeBillingController extends Controller
 
         } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error('Stripe createSubscription error', [ 'error' => $e->getMessage(), 'trace' => $e->getTraceAsString() ]);
+            Log::error('Stripe createSubscription error', [
+                'user_id' => $user->id ?? 'unknown',
+                'plan_id' => $plan->id ?? 'unknown',
+                'payment_method_id' => $request->payment_method_id ?? 'unknown',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return response()->json(['success' => false, 'message' => 'Subscription creation failed'], 500);
         }
     }
