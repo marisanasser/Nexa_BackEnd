@@ -9,13 +9,25 @@ class UpdateCampaignRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
+     * Allow admin or brand owner of the campaign.
      */
     public function authorize(): bool
     {
         $user = auth()->user();
         $campaign = $this->route('campaign');
         
-        return $user && $user->isBrand() && $campaign && $campaign->brand_id === $user->id;
+        // Allow admin or brand owner
+        if (!$user || !$campaign) {
+            return false;
+        }
+        
+        // Admins can update any campaign
+        if ($user->isAdmin()) {
+            return true;
+        }
+        
+        // Brands can only update their own campaigns
+        return $user->isBrand() && $campaign->brand_id === $user->id;
     }
 
     /**
@@ -97,12 +109,6 @@ class UpdateCampaignRequest extends FormRequest
     public function withValidator($validator)
     {
         $validator->after(function ($validator) {
-            // Check if campaign can be updated
-            $campaign = $this->route('campaign');
-            if ($campaign && $campaign->isApproved()) {
-                $validator->errors()->add('campaign', 'Cannot update approved campaigns.');
-            }
-
             // Ensure only one of image_url or image is provided
             if ($this->filled('image_url') && $this->hasFile('image')) {
                 $validator->errors()->add('image', 'Please provide either an image URL or upload an image file, not both.');

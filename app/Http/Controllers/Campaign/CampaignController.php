@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 use function Laravel\Prompts\error;
@@ -619,63 +620,269 @@ class CampaignController extends Controller
         try {
             $user = auth()->user();
 
+            Log::info('Campaign update request initiated', [
+                'campaign_id' => $campaign->id,
+                'campaign_title' => $campaign->title,
+                'user_id' => $user->id,
+                'user_role' => $user->role,
+                'request_method' => $request->method(),
+                'has_files' => $request->hasFile('image') || $request->hasFile('logo') || $request->hasFile('attach_file'),
+            ]);
+
             // Check authorization - allow admin or brand owner
             if (!$user->isAdmin() && (!$user->isBrand() || $campaign->brand_id !== $user->id)) {
+                Log::warning('Unauthorized campaign update attempt', [
+                    'campaign_id' => $campaign->id,
+                    'user_id' => $user->id,
+                    'user_role' => $user->role,
+                    'campaign_brand_id' => $campaign->brand_id,
+                ]);
                 return response()->json(['error' => 'Unauthorized to update this campaign'], 403);
             }
 
-            // Check if campaign can be updated
-            if ($campaign->isApproved()) {
-                return response()->json(['error' => 'Cannot update approved campaigns'], 422);
+            // Both brands and admins can update campaigns (including approved ones)
+            // No need to check campaign status here
+
+            // Handle multipart form data parsing issue
+            // Laravel sometimes doesn't parse multipart/form-data correctly for PATCH requests
+            $contentType = $request->header('Content-Type');
+            $isMultipart = strpos($contentType, 'multipart/form-data') !== false;
+            
+            if ($isMultipart && empty($request->all()) && !empty($request->getContent())) {
+                Log::info('Multipart request detected but empty, attempting manual parsing', [
+                    'campaign_id' => $campaign->id,
+                ]);
+                $parsedData = $this->parseMultipartData($request);
+                Log::info('Manually parsed data:', [
+                    'campaign_id' => $campaign->id,
+                    'fields_count' => count($parsedData),
+                    'fields' => array_keys($parsedData),
+                ]);
+                
+                // Merge manually parsed data with request (except files which are handled separately)
+                foreach ($parsedData as $key => $value) {
+                    // Skip file fields - they need special handling
+                    if (!($value instanceof \Illuminate\Http\UploadedFile)) {
+                        $request->merge([$key => $value]);
+                    }
+                }
+                
+                // Handle files separately
+                foreach ($parsedData as $key => $value) {
+                    if ($value instanceof \Illuminate\Http\UploadedFile || is_array($value)) {
+                        // Handle both single files and file arrays
+                        if (is_array($value)) {
+                            foreach ($value as $file) {
+                                if ($file instanceof \Illuminate\Http\UploadedFile) {
+                                    $request->files->set($key, $value);
+                                    break; // Set the array once
+                                }
+                            }
+                        } else {
+                            $request->files->set($key, $value);
+                        }
+                    }
+                }
+                
+                Log::info('After manual parsing:', [
+                    'campaign_id' => $campaign->id,
+                    'request_all_count' => count($request->all()),
+                    'has_title' => $request->has('title'),
+                    'title_value' => $request->input('title'),
+                    'has_files' => $request->hasFile('logo') || $request->hasFile('image') || $request->hasFile('attach_file'),
+                ]);
             }
 
             $data = $request->validated();
 
-            // Handle file uploads
-            if ($request->hasFile('image')) {
-                // Delete old image if exists
-                if ($campaign->image_url) {
-                    $this->deleteFile($campaign->image_url);
-                }
-                $data['image_url'] = $this->uploadFile($request->file('image'), 'campaigns/images');
-            }
+            Log::info('Campaign update data validated', [
+                'campaign_id' => $campaign->id,
+                'updated_fields' => array_keys($data),
+                'data' => $data,
+            ]);
 
-            if ($request->hasFile('logo')) {
-                // Delete old logo if exists
-                if ($campaign->logo) {
-                    $this->deleteFile($campaign->logo);
-                }
-                $data['logo'] = $this->uploadFile($request->file('logo'), 'campaigns/logos');
-            }
+            // Track uploaded files for rollback in case of transaction failure
+            $uploadedFiles = [
+                'image' => null,
+                'logo' => null,
+                'attachments' => [],
+            ];
 
-            // Handle multiple attachments
-            if ($request->hasFile('attach_file')) {
-                // Delete old attachments if they exist
-                if ($campaign->attach_file) {
-                    $oldAttachments = is_array($campaign->attach_file) 
-                        ? $campaign->attach_file 
-                        : [$campaign->attach_file];
-                    foreach ($oldAttachments as $oldAttachment) {
-                        $this->deleteFile($oldAttachment);
+            // Store old file URLs before deletion (for cleanup outside transaction)
+            $oldFilesToDelete = [
+                'image' => null,
+                'logo' => null,
+                'attachments' => [],
+            ];
+
+            // Use transaction to ensure atomicity of database and file operations
+            DB::beginTransaction();
+            try {
+                // Handle file uploads - upload first, then delete old files to prevent data loss
+                if ($request->hasFile('image')) {
+                    Log::info('Updating campaign image', [
+                        'campaign_id' => $campaign->id,
+                        'old_image_url' => $campaign->image_url,
+                    ]);
+                    // Upload new image first
+                    $newImageUrl = $this->uploadFile($request->file('image'), 'campaigns/images');
+                    if ($newImageUrl) {
+                        $uploadedFiles['image'] = $newImageUrl;
+                        $oldFilesToDelete['image'] = $campaign->image_url;
+                        $data['image_url'] = $newImageUrl;
+                        Log::info('Campaign image uploaded', [
+                            'campaign_id' => $campaign->id,
+                            'new_image_url' => $data['image_url'],
+                        ]);
+                    } else {
+                        throw new \Exception('Failed to upload campaign image');
                     }
                 }
-                
-                $attachmentFiles = $request->file('attach_file');
-                // If single file, convert to array
-                if (!is_array($attachmentFiles)) {
-                    $attachmentFiles = [$attachmentFiles];
+
+                if ($request->hasFile('logo')) {
+                    Log::info('Updating campaign logo', [
+                        'campaign_id' => $campaign->id,
+                        'old_logo' => $campaign->logo,
+                    ]);
+                    // Upload new logo first
+                    $newLogo = $this->uploadFile($request->file('logo'), 'campaigns/logos');
+                    if ($newLogo) {
+                        $uploadedFiles['logo'] = $newLogo;
+                        $oldFilesToDelete['logo'] = $campaign->logo;
+                        $data['logo'] = $newLogo;
+                        Log::info('Campaign logo uploaded', [
+                            'campaign_id' => $campaign->id,
+                            'new_logo' => $data['logo'],
+                        ]);
+                    } else {
+                        throw new \Exception('Failed to upload campaign logo');
+                    }
                 }
-                
-                $attachmentUrls = [];
-                foreach ($attachmentFiles as $file) {
-                    $attachmentUrls[] = $this->uploadFile($file, 'campaigns/attachments');
+
+                // Handle multiple attachments
+                if ($request->hasFile('attach_file')) {
+                    Log::info('Updating campaign attachments', [
+                        'campaign_id' => $campaign->id,
+                        'old_attachments_count' => is_array($campaign->attach_file) ? count($campaign->attach_file) : ($campaign->attach_file ? 1 : 0),
+                    ]);
+                    
+                    $attachmentFiles = $request->file('attach_file');
+                    // If single file, convert to array
+                    if (!is_array($attachmentFiles)) {
+                        $attachmentFiles = [$attachmentFiles];
+                    }
+                    
+                    // Upload all new attachments first
+                    $attachmentUrls = [];
+                    foreach ($attachmentFiles as $file) {
+                        $uploadedUrl = $this->uploadFile($file, 'campaigns/attachments');
+                        if ($uploadedUrl) {
+                            $attachmentUrls[] = $uploadedUrl;
+                            $uploadedFiles['attachments'][] = $uploadedUrl;
+                        } else {
+                            // If any upload fails, rollback transaction and clean up uploaded files
+                            DB::rollBack();
+                            foreach ($attachmentUrls as $uploadedUrl) {
+                                $this->deleteFile($uploadedUrl);
+                            }
+                            throw new \Exception('Failed to upload campaign attachments');
+                        }
+                    }
+                    
+                    // Store old attachments for deletion after successful transaction
+                    if ($campaign->attach_file && !empty($attachmentUrls)) {
+                        $oldAttachments = is_array($campaign->attach_file) 
+                            ? $campaign->attach_file 
+                            : [$campaign->attach_file];
+                        $oldFilesToDelete['attachments'] = $oldAttachments;
+                    }
+                    
+                    // Store as array - Laravel will auto-encode to JSON due to cast
+                    $data['attach_file'] = $attachmentUrls;
+                    Log::info('Campaign attachments uploaded', [
+                        'campaign_id' => $campaign->id,
+                        'new_attachments_count' => count($attachmentUrls),
+                    ]);
                 }
+
+                // Update campaign within transaction
+                $campaign->update($data);
+
+                // Commit transaction - all operations succeeded
+                DB::commit();
+
+                Log::info('Campaign database update committed', [
+                    'campaign_id' => $campaign->id,
+                ]);
+
+            } catch (\Exception $e) {
+                // Rollback transaction on any error
+                DB::rollBack();
                 
-                // Store as array - Laravel will auto-encode to JSON due to cast
-                $data['attach_file'] = $attachmentUrls;
+                Log::error('Campaign update transaction rolled back', [
+                    'campaign_id' => $campaign->id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                // Clean up uploaded files that were created before the rollback
+                if ($uploadedFiles['image']) {
+                    $this->deleteFile($uploadedFiles['image']);
+                    Log::info('Rolled back: deleted uploaded image', [
+                        'file' => $uploadedFiles['image'],
+                    ]);
+                }
+                if ($uploadedFiles['logo']) {
+                    $this->deleteFile($uploadedFiles['logo']);
+                    Log::info('Rolled back: deleted uploaded logo', [
+                        'file' => $uploadedFiles['logo'],
+                    ]);
+                }
+                foreach ($uploadedFiles['attachments'] as $uploadedAttachment) {
+                    $this->deleteFile($uploadedAttachment);
+                }
+                if (!empty($uploadedFiles['attachments'])) {
+                    Log::info('Rolled back: deleted uploaded attachments', [
+                        'count' => count($uploadedFiles['attachments']),
+                    ]);
+                }
+
+                // Re-throw the exception to be caught by outer catch block
+                throw $e;
             }
 
-            $campaign->update($data);
+            // Delete old files only after successful transaction commit
+            // This happens outside the transaction since file operations aren't transactional
+            if ($oldFilesToDelete['image']) {
+                $this->deleteFile($oldFilesToDelete['image']);
+                Log::info('Deleted old campaign image after successful update', [
+                    'campaign_id' => $campaign->id,
+                    'old_image_url' => $oldFilesToDelete['image'],
+                ]);
+            }
+            if ($oldFilesToDelete['logo']) {
+                $this->deleteFile($oldFilesToDelete['logo']);
+                Log::info('Deleted old campaign logo after successful update', [
+                    'campaign_id' => $campaign->id,
+                    'old_logo' => $oldFilesToDelete['logo'],
+                ]);
+            }
+            foreach ($oldFilesToDelete['attachments'] as $oldAttachment) {
+                $this->deleteFile($oldAttachment);
+            }
+            if (!empty($oldFilesToDelete['attachments'])) {
+                Log::info('Deleted old campaign attachments after successful update', [
+                    'campaign_id' => $campaign->id,
+                    'old_attachments_count' => count($oldFilesToDelete['attachments']),
+                ]);
+            }
+
+            Log::info('Campaign updated successfully', [
+                'campaign_id' => $campaign->id,
+                'campaign_title' => $campaign->title,
+                'updated_by' => $user->id,
+                'updated_by_role' => $user->role,
+                'updated_fields' => array_keys($data),
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -683,7 +890,12 @@ class CampaignController extends Controller
                 'data' => $campaign->load(['brand', 'bids'])
             ]);
         } catch (\Exception $e) {
-            Log::error('Failed to update campaign: ' . $e->getMessage());
+            Log::error('Failed to update campaign', [
+                'campaign_id' => $campaign->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => auth()->user()->id ?? null,
+            ]);
             return response()->json([
                 'success' => false,
                 'error' => 'Failed to update campaign',
@@ -1126,5 +1338,112 @@ class CampaignController extends Controller
         } catch (\Exception $e) {
             Log::warning('Failed to delete file: ' . $fileUrl . ' - ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Parse multipart form data manually
+     * Workaround for Laravel's issue with parsing multipart/form-data for PATCH requests
+     */
+    private function parseMultipartData(Request $request): array
+    {
+        $rawContent = $request->getContent();
+        $contentType = $request->header('Content-Type');
+        
+        // Extract boundary
+        if (!preg_match('/boundary=(.+)$/', $contentType, $matches)) {
+            return [];
+        }
+        
+        $boundary = '--' . trim($matches[1]);
+        $parts = explode($boundary, $rawContent);
+        $parsedData = [];
+        
+        foreach ($parts as $part) {
+            if (empty(trim($part)) || $part === '--') {
+                continue;
+            }
+            
+            // Parse headers
+            $headerEnd = strpos($part, "\r\n\r\n");
+            if ($headerEnd === false) {
+                // Try with just \n\n as fallback
+                $headerEnd = strpos($part, "\n\n");
+                if ($headerEnd === false) {
+                    continue;
+                }
+                $content = substr($part, $headerEnd + 2);
+            } else {
+                $content = substr($part, $headerEnd + 4);
+            }
+            
+            $headers = substr($part, 0, $headerEnd);
+            $content = rtrim($content, "\r\n-");
+            
+            // Extract field name
+            if (preg_match('/name="([^"]+)"/', $headers, $matches)) {
+                $originalFieldName = $matches[1];
+                
+                // Check if it's a file
+                if (preg_match('/filename="([^"]+)"/', $headers, $fileMatches)) {
+                    $filename = $fileMatches[1];
+                    
+                    // Extract base field name (remove array notation for files)
+                    $fieldName = preg_replace('/\[\d*\]$/', '', $originalFieldName);
+                    $fieldName = str_replace('[]', '', $fieldName);
+                    
+                    if (!empty($content)) {
+                        // Create temporary file
+                        $tempPath = tempnam(sys_get_temp_dir(), 'upload_');
+                        file_put_contents($tempPath, $content);
+                        
+                        // Create UploadedFile object
+                        // Handle array file fields
+                        if (strpos($originalFieldName, '[]') !== false || preg_match('/\[\d+\]$/', $originalFieldName)) {
+                            if (!isset($parsedData[$fieldName])) {
+                                $parsedData[$fieldName] = [];
+                            }
+                            $parsedData[$fieldName][] = new \Illuminate\Http\UploadedFile(
+                                $tempPath,
+                                $filename,
+                                mime_content_type($tempPath) ?: 'application/octet-stream',
+                                null,
+                                true
+                            );
+                        } else {
+                            $parsedData[$fieldName] = new \Illuminate\Http\UploadedFile(
+                                $tempPath,
+                                $filename,
+                                mime_content_type($tempPath) ?: 'application/octet-stream',
+                                null,
+                                true
+                            );
+                        }
+                    }
+                } else {
+                    // Regular field - handle array notation (e.g., target_states[], target_genders[])
+                    if (strpos($originalFieldName, '[]') !== false) {
+                        // Array field like target_states[]
+                        $baseFieldName = str_replace('[]', '', $originalFieldName);
+                        if (!isset($parsedData[$baseFieldName])) {
+                            $parsedData[$baseFieldName] = [];
+                        }
+                        $parsedData[$baseFieldName][] = $content;
+                    } elseif (preg_match('/\[(\d+)\]$/', $originalFieldName, $arrayMatches)) {
+                        // Indexed array field like target_states[0]
+                        $baseFieldName = preg_replace('/\[\d+\]$/', '', $originalFieldName);
+                        if (!isset($parsedData[$baseFieldName])) {
+                            $parsedData[$baseFieldName] = [];
+                        }
+                        $index = (int)$arrayMatches[1];
+                        $parsedData[$baseFieldName][$index] = $content;
+                    } else {
+                        // Regular single field
+                        $parsedData[$originalFieldName] = $content;
+                    }
+                }
+            }
+        }
+        
+        return $parsedData;
     }
 }
