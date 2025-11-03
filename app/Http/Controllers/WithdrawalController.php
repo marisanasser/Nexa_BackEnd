@@ -27,24 +27,54 @@ class WithdrawalController extends Controller
     private function checkStripePayoutsEnabled(User $user): array
     {
         try {
+            Log::info('Checking Stripe payouts enabled status', [
+                'user_id' => $user->id,
+                'has_stripe_account_id' => !empty($user->stripe_account_id),
+            ]);
+            
             if (!$user->stripe_account_id) {
+                Log::info('Stripe account not found for user', [
+                    'user_id' => $user->id,
+                ]);
                 return [
                     'enabled' => false,
                     'message' => 'Você precisa configurar sua conta Stripe antes de solicitar saques. Acesse as configurações do Stripe para completar o cadastro.',
                     'action_required' => 'stripe_setup'
                 ];
             }
-
+            
+            Log::info('Retrieving Stripe account from API', [
+                'user_id' => $user->id,
+                'stripe_account_id' => $user->stripe_account_id,
+            ]);
+            
             $stripeAccount = Account::retrieve($user->stripe_account_id);
             
+            Log::info('Stripe account retrieved', [
+                'user_id' => $user->id,
+                'account_id' => $stripeAccount->id,
+                'payouts_enabled' => $stripeAccount->payouts_enabled ?? false,
+                'charges_enabled' => $stripeAccount->charges_enabled ?? false,
+                'details_submitted' => $stripeAccount->details_submitted ?? false,
+            ]);
+            
             if (!$stripeAccount->payouts_enabled) {
+                Log::warning('Stripe payouts not enabled for user', [
+                    'user_id' => $user->id,
+                    'account_id' => $stripeAccount->id,
+                ]);
                 return [
                     'enabled' => false,
                     'message' => 'Sua conta Stripe ainda não está habilitada para receber pagamentos. Complete o processo de verificação no Stripe para ativar os saques.',
                     'action_required' => 'stripe_verification'
                 ];
             }
-
+            
+            Log::info('Stripe payouts enabled for user', [
+                'user_id' => $user->id,
+                'account_id' => $stripeAccount->id,
+            ]);
+            
             return [
                 'enabled' => true,
                 'message' => 'Conta Stripe configurada corretamente'
@@ -54,7 +84,8 @@ class WithdrawalController extends Controller
             Log::error('Error checking Stripe payouts status', [
                 'user_id' => $user->id,
                 'stripe_account_id' => $user->stripe_account_id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return [
@@ -71,18 +102,36 @@ class WithdrawalController extends Controller
     public function store(Request $request): JsonResponse
     {
         $user = Auth::user();
-
+        
+        Log::info('Withdrawal request initiated', [
+            'user_id' => $user?->id,
+            'has_user' => !is_null($user),
+            'requested_amount' => $request->amount ?? 'not_provided',
+            'withdrawal_method' => $request->withdrawal_method ?? 'not_provided',
+        ]);
         // Check if user is a creator or student
         if (!$user->isCreator() && !$user->isStudent()) {
+            Log::warning('Withdrawal request denied: User is not creator or student', [
+                'user_id' => $user->id,
+                'user_role' => $user->role ?? 'unknown',
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Only creators and students can request withdrawals',
             ], 403);
         }
-
+        
+        Log::info('Checking Stripe payouts status for withdrawal', [
+            'user_id' => $user->id,
+        ]);
+        
         // Check Stripe payouts status before allowing withdrawal
         $payoutsStatus = $this->checkStripePayoutsEnabled($user);
         if (!$payoutsStatus['enabled']) {
+            Log::warning('Withdrawal request blocked: Stripe payouts not enabled', [
+                'user_id' => $user->id,
+                'action_required' => $payoutsStatus['action_required'],
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => $payoutsStatus['message'],
@@ -90,23 +139,30 @@ class WithdrawalController extends Controller
                 'blocked' => true
             ], 403);
         }
-
+        
+        Log::info('Stripe payouts enabled, proceeding with withdrawal', [
+            'user_id' => $user->id,
+        ]);
+        
         // Get the withdrawal method from database
         $withdrawalMethod = \App\Models\WithdrawalMethod::findByCode($request->withdrawal_method);
-        
         if (!$withdrawalMethod) {
             Log::error('Invalid withdrawal method requested', [
                 'user_id' => $user->id,
                 'requested_method' => $request->withdrawal_method,
                 'available_methods' => \App\Models\WithdrawalMethod::getActiveMethods()->pluck('code')->toArray()
             ]);
-            
             return response()->json([
                 'success' => false,
                 'message' => 'Invalid withdrawal method: ' . $request->withdrawal_method,
             ], 400);
         }
-
+        
+        Log::info('Withdrawal method validated', [
+            'user_id' => $user->id,
+            'method_code' => $withdrawalMethod->code,
+            'method_name' => $withdrawalMethod->name,
+        ]);
         // Check if user has registered bank account for Pagar.me withdrawals
         if ($withdrawalMethod->code === 'pagarme_bank_transfer') {
             $bankAccount = \App\Models\BankAccount::where('user_id', $user->id)->first();
@@ -118,13 +174,13 @@ class WithdrawalController extends Controller
                 ], 400);
             }
         }
-
+\Log::info('Create withdrawal request', ['bankAccount' => $bankAccount]);
         // Build dynamic validation rules
         $validationRules = [
             'amount' => 'required|numeric|min:0.01',
             'withdrawal_method' => 'required|string',
         ];
-
+\Log::info('Create withdrawal request', ['validationRules' => $validationRules]);
         // For Pagar.me, withdrawal_details is optional
         if ($withdrawalMethod->code === 'pagarme_bank_transfer') {
             $validationRules['withdrawal_details'] = 'nullable|array';
@@ -133,14 +189,14 @@ class WithdrawalController extends Controller
         }
 
         $validator = Validator::make($request->all(), $validationRules);
-
+\Log::info('Create withdrawal request', ['validator' => $validator]);
         if ($validator->fails()) {
             Log::error('Withdrawal validation failed', [
                 'user_id' => $user->id,
                 'errors' => $validator->errors(),
                 'request_data' => $request->all()
             ]);
-            
+\Log::info('Create withdrawal request', ['error' => 'Withdrawal validation failed']);
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',

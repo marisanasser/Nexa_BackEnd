@@ -17,7 +17,7 @@ class SubscriptionController extends Controller
     {
         try {
             $plans = SubscriptionPlan::getActivePlans();
-            
+     \Log::info('Subscription plans', ['plans' => $plans]);       
             return response()->json([
                 'success' => true,
                 'data' => $plans->map(function ($plan) {
@@ -54,7 +54,7 @@ class SubscriptionController extends Controller
     {
         try {
             $user = auth()->user();
-            
+        \Log::info('Subscription history', ['user' => $user]);
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -79,7 +79,7 @@ class SubscriptionController extends Controller
                         'cancelled_at' => $subscription->cancelled_at?->format('Y-m-d H:i:s'),
                     ];
                 });
-
+            \Log::info('Subscription history', ['subscriptions' => $subscriptions]);
             return response()->json([
                 'success' => true,
                 'data' => $subscriptions
@@ -105,23 +105,23 @@ class SubscriptionController extends Controller
     {
         try {
             $user = auth()->user();
-            
+        \Log::info('Cancel subscription', ['user' => $user]);
             if (!$user) {
                 return response()->json([
                     'success' => false,
                     'message' => 'User not authenticated',
                 ], 401);
             }
-
+        \Log::info('Cancel subscription', ['activeSubscription' => $activeSubscription]);
             $activeSubscription = $user->activeSubscription;
-            
+        \Log::info('Cancel subscription', ['activeSubscription' => $activeSubscription]);
             if (!$activeSubscription) {
                 return response()->json([
                     'success' => false,
                     'message' => 'No active subscription found',
                 ], 404);
             }
-
+        \Log::info('Cancel subscription', ['activeSubscription' => $activeSubscription]);
             $activeSubscription->update([
                 'status' => Subscription::STATUS_CANCELLED,
                 'cancelled_at' => now(),

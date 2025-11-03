@@ -26,7 +26,15 @@ class StripeController extends Controller
     protected $sns;
     public function __construct()
     {
-        Stripe::setApiKey(config('services.stripe.secret'));
+        $stripeSecret = config('services.stripe.secret');
+        Stripe::setApiKey($stripeSecret);
+        
+        Log::info('StripeController initialized', [
+            'has_stripe_secret' => !empty($stripeSecret),
+            'stripe_secret_length' => $stripeSecret ? strlen($stripeSecret) : 0,
+            'stripe_secret_prefix' => $stripeSecret ? substr($stripeSecret, 0, 7) : 'missing',
+        ]);
+        
         $this->sns = new SnsClient([
             'version' => 'latest',
             'region'  => env('AWS_DEFAULT_REGION', 'sa-east-1'),
@@ -59,7 +67,15 @@ class StripeController extends Controller
         try {
             $user = auth()->user();
             
+            Log::info('Stripe account creation request started', [
+                'user_id' => $user?->id,
+                'has_user' => !is_null($user),
+                'request_type' => $request->type ?? 'not_provided',
+                'request_country' => $request->country ?? 'not_provided',
+            ]);
+            
             if (!$user) {
+                Log::warning('Stripe account creation failed: User not authenticated');
                 return response()->json([
                     'success' => false,
                     'message' => 'User not authenticated'
@@ -68,6 +84,10 @@ class StripeController extends Controller
 
             // Check if user already has a Stripe account
             if ($user->stripe_account_id) {
+                Log::warning('Stripe account creation failed: User already has account', [
+                    'user_id' => $user->id,
+                    'existing_stripe_account_id' => $user->stripe_account_id,
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => 'User already has a Stripe account'
@@ -77,6 +97,13 @@ class StripeController extends Controller
             DB::beginTransaction();
 
             try {
+                Log::info('Creating Stripe payment method for account creation', [
+                    'user_id' => $user->id,
+                    'card_exp_month' => $request->card['exp_month'] ?? 'not_provided',
+                    'card_exp_year' => $request->card['exp_year'] ?? 'not_provided',
+                    'card_last4_expected' => substr($request->card['number'] ?? '', -4),
+                ]);
+                
                 // First, create a payment method to verify the card
                 $paymentMethod = PaymentMethod::create([
                     'type' => 'card',
@@ -86,6 +113,13 @@ class StripeController extends Controller
                         'exp_year' => $request->card['exp_year'],
                         'cvc' => $request->card['cvc'],
                     ],
+                ]);
+                
+                Log::info('Stripe payment method created successfully', [
+                    'user_id' => $user->id,
+                    'payment_method_id' => $paymentMethod->id,
+                    'card_brand' => $paymentMethod->card->brand ?? 'unknown',
+                    'card_last4' => $paymentMethod->card->last4 ?? 'unknown',
                 ]);
 
                 // Prepare account creation data
@@ -117,8 +151,24 @@ class StripeController extends Controller
                     ];
                 }
 
+                Log::info('Creating Stripe Connect account', [
+                    'user_id' => $user->id,
+                    'account_type' => $accountData['type'],
+                    'country' => $accountData['country'],
+                    'email' => $accountData['email'],
+                    'business_type' => $accountData['business_type'],
+                ]);
+                
                 // Create Stripe account
                 $stripeAccount = Account::create($accountData);
+                
+                Log::info('Stripe Connect account created successfully', [
+                    'user_id' => $user->id,
+                    'stripe_account_id' => $stripeAccount->id,
+                    'account_type' => $stripeAccount->type,
+                    'charges_enabled' => $stripeAccount->charges_enabled ?? false,
+                    'payouts_enabled' => $stripeAccount->payouts_enabled ?? false,
+                ]);
 
                 // Update user with Stripe account ID and payment method ID
                 $user->update([
@@ -253,7 +303,14 @@ class StripeController extends Controller
         try {
             $user = auth()->user();
             
+            Log::info('Stripe account status check requested', [
+                'user_id' => $user?->id,
+                'has_user' => !is_null($user),
+                'has_stripe_account_id' => !is_null($user?->stripe_account_id),
+            ]);
+            
             if (!$user) {
+                Log::warning('Stripe account status check failed: User not authenticated');
                 return response()->json([
                     'success' => false,
                     'message' => 'User not authenticated'
@@ -261,6 +318,9 @@ class StripeController extends Controller
             }
 
             if (!$user->stripe_account_id) {
+                Log::info('Stripe account status: No account found', [
+                    'user_id' => $user->id,
+                ]);
                 return response()->json([
                     'success' => true,
                     'has_account' => false,
@@ -268,8 +328,22 @@ class StripeController extends Controller
                 ]);
             }
 
+            Log::info('Retrieving Stripe account status from Stripe API', [
+                'user_id' => $user->id,
+                'stripe_account_id' => $user->stripe_account_id,
+            ]);
+            
             // Retrieve account from Stripe
             $stripeAccount = Account::retrieve($user->stripe_account_id);
+            
+            Log::info('Stripe account status retrieved', [
+                'user_id' => $user->id,
+                'stripe_account_id' => $stripeAccount->id,
+                'charges_enabled' => $stripeAccount->charges_enabled ?? false,
+                'payouts_enabled' => $stripeAccount->payouts_enabled ?? false,
+                'details_submitted' => $stripeAccount->details_submitted ?? false,
+                'verification_status' => $stripeAccount->charges_enabled && $stripeAccount->payouts_enabled ? 'enabled' : 'pending',
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -307,15 +381,34 @@ class StripeController extends Controller
         try {
             $user = auth()->user();
             
+            Log::info('Payment method verification requested', [
+                'user_id' => $user?->id,
+                'payment_method_id' => $request->payment_method_id,
+            ]);
+            
             if (!$user) {
+                Log::warning('Payment method verification failed: User not authenticated');
                 return response()->json([
                     'success' => false,
                     'message' => 'User not authenticated'
                 ], 401);
             }
 
+            Log::info('Retrieving payment method from Stripe', [
+                'user_id' => $user->id,
+                'payment_method_id' => $request->payment_method_id,
+            ]);
+            
             // Retrieve payment method from Stripe
             $paymentMethod = PaymentMethod::retrieve($request->payment_method_id);
+            
+            Log::info('Payment method retrieved from Stripe', [
+                'user_id' => $user->id,
+                'payment_method_id' => $paymentMethod->id,
+                'type' => $paymentMethod->type ?? 'unknown',
+                'card_brand' => $paymentMethod->card->brand ?? 'unknown',
+                'card_last4' => $paymentMethod->card->last4 ?? 'unknown',
+            ]);
 
             // Check if payment method belongs to user or is valid
             if (!$paymentMethod) {
@@ -372,7 +465,14 @@ class StripeController extends Controller
         try {
             $user = auth()->user();
             
+            Log::info('Stripe account link creation requested', [
+                'user_id' => $user?->id,
+                'has_user' => !is_null($user),
+                'has_stripe_account_id' => !is_null($user?->stripe_account_id),
+            ]);
+            
             if (!$user) {
+                Log::warning('Stripe account link creation failed: User not authenticated');
                 return response()->json([
                     'success' => false,
                     'message' => 'User not authenticated'
@@ -381,6 +481,11 @@ class StripeController extends Controller
 
             // If user doesn't have a Stripe account, create one first
             if (!$user->stripe_account_id) {
+                Log::info('Creating new Stripe Express account for onboarding', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                ]);
+                
                 // Create a Stripe Express account
                 $stripeAccount = Account::create([
                     'type' => 'express',
@@ -397,18 +502,32 @@ class StripeController extends Controller
                     'stripe_account_id' => $stripeAccount->id,
                 ]);
 
-                Log::info('Stripe account created for user', [
+                Log::info('Stripe Express account created for user', [
                     'user_id' => $user->id,
                     'stripe_account_id' => $stripeAccount->id,
+                    'account_type' => $stripeAccount->type,
                 ]);
             }
 
+            Log::info('Creating Stripe account link for onboarding', [
+                'user_id' => $user->id,
+                'stripe_account_id' => $user->stripe_account_id,
+                'refresh_url' => config('app.frontend_url') . '/creator/stripe-connect?refresh=true',
+                'return_url' => config('app.frontend_url') . '/creator',
+            ]);
+            
             // Create account link for onboarding
             $accountLink = \Stripe\AccountLink::create([
                 'account' => $user->stripe_account_id,
                 'refresh_url' => config('app.frontend_url') . '/creator/stripe-connect?refresh=true',
                 'return_url' => config('app.frontend_url') . '/creator',
                 'type' => 'account_onboarding',
+            ]);
+            
+            Log::info('Stripe account link created successfully', [
+                'user_id' => $user->id,
+                'stripe_account_id' => $user->stripe_account_id,
+                'link_expires_at' => $accountLink->expires_at ?? 'not_provided',
             ]);
 
             return response()->json([
@@ -513,11 +632,30 @@ class StripeController extends Controller
                 // Check if user already has a Stripe customer ID
                 $customer = null;
                 if ($user->stripe_customer_id) {
+                    Log::info('Retrieving existing Stripe customer', [
+                        'user_id' => $user->id,
+                        'stripe_customer_id' => $user->stripe_customer_id,
+                    ]);
+                    
                     // Retrieve existing customer
                     $customer = Customer::retrieve($user->stripe_customer_id);
                     
+                    Log::info('Existing Stripe customer retrieved', [
+                        'user_id' => $user->id,
+                        'customer_id' => $customer->id,
+                        'customer_email' => $customer->email,
+                        'request_email' => $request->email,
+                    ]);
+                    
                     // Update customer email if it has changed
                     if ($customer->email !== $request->email) {
+                        Log::info('Updating Stripe customer email', [
+                            'user_id' => $user->id,
+                            'customer_id' => $customer->id,
+                            'old_email' => $customer->email,
+                            'new_email' => $request->email,
+                        ]);
+                        
                         $customer = Customer::update($user->stripe_customer_id, [
                             'email' => $request->email,
                             'metadata' => [
@@ -527,6 +665,12 @@ class StripeController extends Controller
                         ]);
                     }
                 } else {
+                    Log::info('Creating new Stripe customer', [
+                        'user_id' => $user->id,
+                        'email' => $request->email,
+                        'username' => $request->username,
+                    ]);
+                    
                     // Create new Stripe customer
                     $customer = Customer::create([
                         'email' => $request->email,
@@ -540,13 +684,31 @@ class StripeController extends Controller
                     $user->update([
                         'stripe_customer_id' => $customer->id,
                     ]);
+                    
+                    Log::info('New Stripe customer created and linked to user', [
+                        'user_id' => $user->id,
+                        'customer_id' => $customer->id,
+                    ]);
                 }
 
+                Log::info('Creating Stripe SetupIntent', [
+                    'user_id' => $user->id,
+                    'customer_id' => $customer->id,
+                    'usage' => 'off_session',
+                ]);
+                
                 // Create SetupIntent
                 $setupIntent = SetupIntent::create([
                     'customer' => $customer->id,
                     'payment_method_types' => ['card'],
                     'usage' => 'off_session', // For future payments
+                ]);
+                
+                Log::info('Stripe SetupIntent created successfully', [
+                    'user_id' => $user->id,
+                    'setup_intent_id' => $setupIntent->id,
+                    'status' => $setupIntent->status ?? 'unknown',
+                    'client_secret_exists' => !empty($setupIntent->client_secret),
                 ]);
 
                 DB::commit();

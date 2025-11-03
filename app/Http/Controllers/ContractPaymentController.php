@@ -194,7 +194,10 @@ class ContractPaymentController extends Controller
 
         // Use Stripe for real processing
         if (!$this->stripeKey) {
-            Log::error('Stripe secret not configured');
+            Log::error('Stripe secret not configured for contract payment', [
+                'contract_id' => $contract->id,
+                'brand_id' => $user->id,
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Payment gateway not configured. Please contact support.',
@@ -202,23 +205,61 @@ class ContractPaymentController extends Controller
         }
 
         try {
+            Log::info('Processing contract payment with Stripe', [
+                'contract_id' => $contract->id,
+                'brand_id' => $user->id,
+                'creator_id' => $contract->creator_id,
+                'amount' => $contract->budget,
+                'payment_method_id' => $request->stripe_payment_method_id,
+            ]);
+            
             DB::beginTransaction();
             \Stripe\Stripe::setApiKey($this->stripeKey);
 
             // Ensure Stripe customer for brand
             if (!$user->stripe_customer_id) {
+                Log::info('Creating Stripe customer for brand', [
+                    'brand_id' => $user->id,
+                    'email' => $user->email,
+                ]);
+                
                 $customer = \Stripe\Customer::create([
                     'email' => $user->email,
                     'metadata' => [ 'user_id' => $user->id, 'role' => 'brand' ],
                 ]);
                 $user->update(['stripe_customer_id' => $customer->id]);
+                
+                Log::info('Stripe customer created for brand', [
+                    'brand_id' => $user->id,
+                    'customer_id' => $customer->id,
+                ]);
             } else {
+                Log::info('Retrieving existing Stripe customer for brand', [
+                    'brand_id' => $user->id,
+                    'customer_id' => $user->stripe_customer_id,
+                ]);
+                
                 $customer = \Stripe\Customer::retrieve($user->stripe_customer_id);
             }
 
             // Attach PM if needed and set as default for invoices
             $pmId = $request->string('stripe_payment_method_id')->toString();
+            
+            Log::info('Attaching payment method to customer', [
+                'customer_id' => $customer->id,
+                'payment_method_id' => $pmId,
+            ]);
+            
             \Stripe\PaymentMethod::attach($pmId, ['customer' => $customer->id]);
+
+            Log::info('Creating Stripe PaymentIntent for contract', [
+                'contract_id' => $contract->id,
+                'customer_id' => $customer->id,
+                'payment_method_id' => $pmId,
+                'amount_cents' => (int) round($contract->budget * 100),
+                'amount_decimal' => $contract->budget,
+                'currency' => 'brl',
+            ]);
 
             // Create PaymentIntent and confirm
             $intent = \Stripe\PaymentIntent::create([
@@ -235,8 +276,24 @@ class ContractPaymentController extends Controller
                     'creator_id' => (string) $contract->creator_id,
                 ],
             ]);
+            
+            Log::info('Stripe PaymentIntent created', [
+                'payment_intent_id' => $intent->id,
+                'status' => $intent->status ?? 'unknown',
+                'amount' => $intent->amount ?? 0,
+                'currency' => $intent->currency ?? 'unknown',
+                'contract_id' => $contract->id,
+            ]);
 
             if (!in_array($intent->status, ['succeeded', 'requires_action', 'processing'])) {
+                Log::error('Stripe PaymentIntent failed', [
+                    'contract_id' => $contract->id,
+                    'payment_intent_id' => $intent->id,
+                    'status' => $intent->status,
+                    'failure_code' => $intent->last_payment_error->code ?? 'unknown',
+                    'failure_message' => $intent->last_payment_error->message ?? 'unknown',
+                ]);
+                
                 DB::rollBack();
                 return response()->json([
                     'success' => false,
@@ -244,6 +301,12 @@ class ContractPaymentController extends Controller
                     'stripe_status' => $intent->status,
                 ], 400);
             }
+            
+            Log::info('Stripe PaymentIntent status acceptable', [
+                'contract_id' => $contract->id,
+                'payment_intent_id' => $intent->id,
+                'status' => $intent->status,
+            ]);
 
             // Create transaction record
             $transaction = Transaction::create([
