@@ -132,6 +132,10 @@ class CampaignController extends Controller
             // Sorting - Featured campaigns first, then by specified sort
             $sortBy = $request->get('sort_by', 'created_at');
             $sortOrder = $request->get('sort_order', 'desc');
+            
+            // Eager load relationships to prevent N+1 queries
+            $query->with(['brand:id,name,avatar_url']);
+            
             $query->orderBy('is_featured', 'desc') // Featured campaigns first
                   ->orderBy($sortBy, $sortOrder);
 

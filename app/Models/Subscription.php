@@ -20,7 +20,10 @@ class Subscription extends Model
         'payment_method',
         'transaction_id',
         'auto_renew',
-        'cancelled_at'
+        'cancelled_at',
+        'stripe_subscription_id',
+        'stripe_latest_invoice_id',
+        'stripe_status',
     ];
 
     protected $casts = [
