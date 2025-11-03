@@ -39,7 +39,7 @@ class Offer extends Model
         'accepted_at' => 'datetime',
         'rejected_at' => 'datetime',
         'is_barter' => 'boolean',
-    ];>
+    ];
 
     // Relationships
     public function brand(): BelongsTo
