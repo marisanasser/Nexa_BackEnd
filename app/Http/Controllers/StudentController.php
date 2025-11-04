@@ -134,25 +134,47 @@ class StudentController extends Controller
                 ], 401);
             }
 
+            // Refresh user to ensure proper casting
+            $user->refresh();
+
+            // Helper function to safely format date (handles both Carbon and string)
+            $formatDate = function($date) {
+                if (!$date) {
+                    return null;
+                }
+                if (is_string($date)) {
+                    try {
+                        return \Carbon\Carbon::parse($date)->format('Y-m-d H:i:s');
+                    } catch (\Exception $e) {
+                        return $date;
+                    }
+                }
+                if ($date instanceof \Carbon\Carbon || $date instanceof \DateTime) {
+                    return $date->format('Y-m-d H:i:s');
+                }
+                return null;
+            };
+
             return response()->json([
                 'success' => true,
-                'student_verified' => $user->student_verified,
-                'student_expires_at' => $user->student_expires_at,
-                'free_trial_expires_at' => $user->free_trial_expires_at,
-                'has_premium' => $user->has_premium,
+                'student_verified' => $user->student_verified ?? false,
+                'student_expires_at' => $formatDate($user->student_expires_at),
+                'free_trial_expires_at' => $formatDate($user->free_trial_expires_at),
+                'has_premium' => $user->has_premium ?? false,
                 'is_on_trial' => $user->isOnTrial(),
                 'is_premium' => $user->isPremium(),
             ]);
 
         } catch (\Exception $e) {
             Log::error('Get student status error', [
+                'user_id' => auth()->id(),
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
             
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to get student status'
+                'message' => 'Failed to get student status: ' . $e->getMessage()
             ], 500);
         }
     }

@@ -66,8 +66,8 @@ class PremiumAccessMiddleware
         
         // Define paths that require premium for creators (only for POST/PATCH operations)
         $premiumRequiredPaths = [
-            'api/connections', // Connection requests
-            'api/direct-chat', // Direct messaging
+            'api/connections', // Connection requests (POST/PATCH require premium)
+            'api/direct-chat', // Direct messaging (POST require premium)
             // Note: Portfolio management is now allowed for all creators
         ];
         
@@ -75,6 +75,15 @@ class PremiumAccessMiddleware
         $requiresPremium = false;
         foreach ($premiumRequiredPaths as $premiumPath) {
             if (str_starts_with($currentPath, $premiumPath)) {
+                // For connections and direct-chat, only POST/PATCH require premium
+                if ($method === 'GET') {
+                    Log::info('PremiumAccessMiddleware: Allowing GET request without premium', [
+                        'path' => $currentPath,
+                        'method' => $method,
+                        'userId' => $user->id
+                    ]);
+                    return $next($request);
+                }
                 $requiresPremium = true;
                 break;
             }
@@ -112,6 +121,34 @@ class PremiumAccessMiddleware
             if ($isPremiumAction) {
                 $requiresPremium = true;
             }
+        }
+        
+        // Allow GET requests for applications (viewing) without premium
+        if (str_starts_with($currentPath, 'api/applications')) {
+            if ($method === 'GET') {
+                Log::info('PremiumAccessMiddleware: Allowing application viewing without premium', [
+                    'path' => $currentPath,
+                    'method' => $method,
+                    'userId' => $user->id
+                ]);
+                return $next($request);
+            }
+            // POST/PATCH/DELETE require premium
+            $requiresPremium = true;
+        }
+        
+        // Allow GET requests for bids (viewing) without premium
+        if (str_starts_with($currentPath, 'api/bids')) {
+            if ($method === 'GET') {
+                Log::info('PremiumAccessMiddleware: Allowing bid viewing without premium', [
+                    'path' => $currentPath,
+                    'method' => $method,
+                    'userId' => $user->id
+                ]);
+                return $next($request);
+            }
+            // POST/PATCH/DELETE require premium
+            $requiresPremium = true;
         }
         
         // If path doesn't require premium, allow access
