@@ -816,13 +816,7 @@ class PortfolioController extends Controller
             ], 403);
         }
 
-        // Students can't delete portfolio items, return success with no changes
-        if ($user->isStudent()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Students cannot delete portfolio items'
-            ]);
-        }
+        
 
         // Check if user owns this portfolio item
         if ($item->portfolio->user_id !== $user->id) {
