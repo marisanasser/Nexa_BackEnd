@@ -301,6 +301,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/methods', [BrandPaymentController::class, 'getPaymentMethods']);
         Route::post('/set-default', [BrandPaymentController::class, 'setDefaultPaymentMethod']);
         Route::delete('/methods', [BrandPaymentController::class, 'deletePaymentMethod']);
+        Route::post('/create-checkout-session', [BrandPaymentController::class, 'createCheckoutSession']);
+        Route::post('/handle-checkout-success', [BrandPaymentController::class, 'handleCheckoutSuccess']);
     });
 
     // Stripe Connect and setup
