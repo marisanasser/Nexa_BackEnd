@@ -254,6 +254,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware(['throttle:payment'])->group(function () {
         Route::post('/payment/subscription', [StripeBillingController::class, 'createSubscription']);
         Route::get('/payment/subscription-status', [StripeBillingController::class, 'getSubscriptionStatus']);
+        Route::get('/payment/checkout-url', [StripeBillingController::class, 'getCheckoutUrl']);
+        Route::post('/payment/create-subscription-from-checkout', [StripeBillingController::class, 'createSubscriptionFromCheckout']);
     });
     
     // Debug routes (temporary)
