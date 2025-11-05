@@ -204,6 +204,16 @@ class BrandPaymentController extends Controller
         $paymentMethod = BrandPaymentMethod::find($request->payment_method_id);
         $paymentMethod->setAsDefault();
 
+        // Update user model with the default payment method ID
+        if ($paymentMethod->stripe_payment_method_id) {
+            $user->update(['stripe_payment_method_id' => $paymentMethod->stripe_payment_method_id]);
+            Log::info('Updated user default payment method', [
+                'user_id' => $user->id,
+                'stripe_payment_method_id' => $paymentMethod->stripe_payment_method_id,
+                'payment_method_id' => $paymentMethod->id,
+            ]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Default payment method updated successfully',
@@ -246,7 +256,33 @@ class BrandPaymentController extends Controller
             ], 400);
         }
 
+        $wasDefault = $paymentMethod->is_default;
+        $paymentMethodStripeId = $paymentMethod->stripe_payment_method_id;
+
         $paymentMethod->update(['is_active' => false]);
+
+        // If this was the default payment method, update user model
+        if ($wasDefault && $user->stripe_payment_method_id === $paymentMethodStripeId) {
+            // Find the next active default payment method, or set to null if none exists
+            $nextDefault = $user->brandPaymentMethods()
+                ->where('is_active', true)
+                ->where('is_default', true)
+                ->first();
+            
+            if ($nextDefault && $nextDefault->stripe_payment_method_id) {
+                $user->update(['stripe_payment_method_id' => $nextDefault->stripe_payment_method_id]);
+                Log::info('Updated user default payment method after deletion', [
+                    'user_id' => $user->id,
+                    'new_stripe_payment_method_id' => $nextDefault->stripe_payment_method_id,
+                ]);
+            } else {
+                // No default payment method remains, clear user's payment method ID
+                $user->update(['stripe_payment_method_id' => null]);
+                Log::info('Cleared user payment method ID after deletion', [
+                    'user_id' => $user->id,
+                ]);
+            }
+        }
 
         return response()->json([
             'success' => true,
@@ -402,15 +438,26 @@ class BrandPaymentController extends Controller
                 ], 403);
             }
 
-            $request->validate([
-                'session_id' => 'required|string',
-            ]);
-
-            $sessionId = $request->session_id;
+            // Validate session_id - check both body and query parameters
+            $sessionId = $request->input('session_id') ?? $request->query('session_id');
+            
+            if (!$sessionId) {
+                Log::error('Session ID missing in request', [
+                    'user_id' => $user->id,
+                    'request_body' => $request->all(),
+                    'request_query' => $request->query(),
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Session ID is required',
+                    'error' => 'Session ID is missing',
+                ], 400);
+            }
 
             Log::info('Handling Stripe Checkout Session success', [
                 'user_id' => $user->id,
                 'session_id' => $sessionId,
+                'session_id_type' => gettype($sessionId),
             ]);
 
             // Retrieve the checkout session
@@ -493,7 +540,44 @@ class BrandPaymentController extends Controller
             // Get setup intent
             $setupIntent = $session->setup_intent;
             
-            if (!$setupIntent || $setupIntent->status !== 'succeeded') {
+            Log::info('Setup intent retrieved from session', [
+                'setup_intent_type' => gettype($setupIntent),
+                'setup_intent' => is_string($setupIntent) ? $setupIntent : (is_object($setupIntent) ? $setupIntent->id ?? 'no_id' : 'unknown'),
+            ]);
+            
+            // If setup_intent is a string ID, retrieve it
+            if (is_string($setupIntent)) {
+                $setupIntentId = $setupIntent;
+                Log::info('Retrieving setup intent by ID', ['setup_intent_id' => $setupIntentId]);
+                $setupIntent = SetupIntent::retrieve($setupIntentId, [
+                    'expand' => ['payment_method']
+                ]);
+            } elseif (!is_object($setupIntent)) {
+                Log::error('Setup intent is neither string nor object', [
+                    'type' => gettype($setupIntent),
+                    'value' => $setupIntent,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid setup intent format',
+                ], 400);
+            }
+            
+            if (!$setupIntent || !is_object($setupIntent)) {
+                Log::error('Setup intent is not an object after retrieval', [
+                    'setup_intent' => $setupIntent,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Setup intent not found',
+                ], 400);
+            }
+            
+            if (!isset($setupIntent->status) || $setupIntent->status !== 'succeeded') {
+                Log::warning('Setup intent not succeeded', [
+                    'status' => $setupIntent->status ?? 'no_status',
+                    'setup_intent_id' => $setupIntent->id ?? 'no_id',
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => 'Setup intent not completed',
@@ -501,7 +585,12 @@ class BrandPaymentController extends Controller
             }
 
             // Get payment method from setup intent
-            $paymentMethodId = $setupIntent->payment_method;
+            $paymentMethodId = null;
+            if (is_object($setupIntent->payment_method)) {
+                $paymentMethodId = $setupIntent->payment_method->id ?? null;
+            } elseif (is_string($setupIntent->payment_method)) {
+                $paymentMethodId = $setupIntent->payment_method;
+            }
             
             if (!$paymentMethodId) {
                 return response()->json([
@@ -510,8 +599,12 @@ class BrandPaymentController extends Controller
                 ], 400);
             }
 
-            // Retrieve payment method details
-            $paymentMethod = StripePaymentMethod::retrieve($paymentMethodId);
+            // Retrieve payment method details if not already expanded
+            if (is_object($setupIntent->payment_method)) {
+                $paymentMethod = $setupIntent->payment_method;
+            } else {
+                $paymentMethod = StripePaymentMethod::retrieve($paymentMethodId);
+            }
 
             // Get card details
             $card = $paymentMethod->card ?? null;
@@ -556,9 +649,10 @@ class BrandPaymentController extends Controller
                 $sessionCustomerId = is_object($session->customer) ? $session->customer->id : $session->customer;
                 
                 // Update user's stripe_customer_id if not set or different
+                $userUpdateData = [];
                 if (!$user->stripe_customer_id || $user->stripe_customer_id !== $sessionCustomerId) {
-                    $user->update(['stripe_customer_id' => $sessionCustomerId]);
-                    Log::info('Updated user stripe_customer_id', [
+                    $userUpdateData['stripe_customer_id'] = $sessionCustomerId;
+                    Log::info('Updating user stripe_customer_id', [
                         'user_id' => $user->id,
                         'stripe_customer_id' => $sessionCustomerId,
                     ]);
@@ -584,7 +678,27 @@ class BrandPaymentController extends Controller
                         ->update(['is_default' => false]);
                 }
 
-                // Refresh user to get updated stripe_customer_id
+                // Store payment method ID in user model if this is the default payment method
+                // or if user doesn't have a payment method stored yet
+                if ($paymentMethodRecord->is_default || !$user->stripe_payment_method_id) {
+                    $userUpdateData['stripe_payment_method_id'] = $paymentMethodId;
+                    Log::info('Updating user stripe_payment_method_id', [
+                        'user_id' => $user->id,
+                        'stripe_payment_method_id' => $paymentMethodId,
+                        'is_default' => $paymentMethodRecord->is_default,
+                    ]);
+                }
+
+                // Update user model with billing method information
+                if (!empty($userUpdateData)) {
+                    $user->update($userUpdateData);
+                    Log::info('Updated user billing method information', [
+                        'user_id' => $user->id,
+                        'updated_fields' => array_keys($userUpdateData),
+                    ]);
+                }
+
+                // Refresh user to get updated fields
                 $user->refresh();
 
                 DB::commit();

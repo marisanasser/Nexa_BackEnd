@@ -201,6 +201,9 @@ class Contract extends Model
         // Notify both parties about termination
         NotificationService::notifyUserOfContractTerminated($this, $reason);
 
+        // Check if campaign should be marked as cancelled
+        $this->checkAndCancelCampaign();
+
         return true;
     }
 
@@ -438,7 +441,135 @@ class Contract extends Model
         // Notify creator that contract is completed and waiting for review
         NotificationService::notifyCreatorOfContractCompleted($this);
 
+        // Check if campaign should be marked as completed
+        $this->checkAndCompleteCampaign();
+
         return true;
+    }
+
+    /**
+     * Check if all contracts for the campaign are completed and mark campaign as completed
+     */
+    private function checkAndCompleteCampaign(): void
+    {
+        // Load offer relationship if not already loaded
+        if (!$this->relationLoaded('offer')) {
+            $this->load('offer');
+        }
+
+        // Get campaign through offer relationship
+        if (!$this->offer || !$this->offer->campaign_id) {
+            return;
+        }
+
+        $campaign = Campaign::find($this->offer->campaign_id);
+        if (!$campaign) {
+            return;
+        }
+
+        // Only check campaigns that are approved and not already completed/cancelled
+        if ($campaign->status !== 'approved' || $campaign->isCompleted() || $campaign->isCancelled()) {
+            return;
+        }
+
+        // Get all contracts for this campaign through offers
+        $allContracts = self::whereHas('offer', function ($query) use ($campaign) {
+            $query->where('campaign_id', $campaign->id);
+        })->get();
+
+        // If no contracts exist, don't mark campaign as completed
+        if ($allContracts->isEmpty()) {
+            return;
+        }
+
+        // Check if all contracts are completed or cancelled (not pending or active)
+        $allCompletedOrCancelled = $allContracts->every(function ($contract) {
+            return in_array($contract->status, ['completed', 'cancelled']);
+        });
+
+        // If all contracts are completed or cancelled, mark campaign as completed
+        if ($allCompletedOrCancelled) {
+            $campaign->complete();
+            
+            // Process payments for all completed contracts and withdraw to creators
+            $this->processCampaignPayments($campaign, $allContracts);
+            
+            \Illuminate\Support\Facades\Log::info('Campaign marked as completed', [
+                'campaign_id' => $campaign->id,
+                'campaign_title' => $campaign->title,
+                'completed_contracts_count' => $allContracts->where('status', 'completed')->count(),
+                'cancelled_contracts_count' => $allContracts->where('status', 'cancelled')->count(),
+                'total_contracts' => $allContracts->count(),
+            ]);
+        }
+    }
+
+    /**
+     * Process payments for all completed contracts and withdraw to creators
+     * Platform fee is 5%, creator gets 95%
+     */
+    private function processCampaignPayments(Campaign $campaign, $allContracts): void
+    {
+        // Get only completed contracts (not cancelled ones)
+        $completedContracts = $allContracts->where('status', 'completed');
+        
+        if ($completedContracts->isEmpty()) {
+            return;
+        }
+
+        foreach ($completedContracts as $contract) {
+            // Get the payment for this contract
+            $payment = JobPayment::where('contract_id', $contract->id)->first();
+            
+            if (!$payment) {
+                \Illuminate\Support\Facades\Log::warning('No payment found for completed contract', [
+                    'contract_id' => $contract->id,
+                    'campaign_id' => $campaign->id,
+                ]);
+                continue;
+            }
+
+            // Process payment if it's still pending
+            if ($payment->isPending()) {
+                try {
+                    // Process the payment to move it from pending to available balance
+                    $payment->process();
+                    
+                    \Illuminate\Support\Facades\Log::info('Payment processed for contract on campaign completion', [
+                        'contract_id' => $contract->id,
+                        'campaign_id' => $campaign->id,
+                        'payment_id' => $payment->id,
+                        'creator_id' => $contract->creator_id,
+                        'creator_amount' => $payment->creator_amount,
+                        'platform_fee' => $payment->platform_fee,
+                    ]);
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Failed to process payment for contract on campaign completion', [
+                        'contract_id' => $contract->id,
+                        'campaign_id' => $campaign->id,
+                        'payment_id' => $payment->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            } elseif ($payment->isCompleted()) {
+                // Payment already completed, ensure balance is updated
+                $balance = CreatorBalance::where('creator_id', $contract->creator_id)->first();
+                if ($balance) {
+                    // Ensure the creator amount is in available balance
+                    // If it's still in pending, move it to available
+                    if ($balance->pending_balance >= $payment->creator_amount) {
+                        $balance->movePendingToAvailable($payment->creator_amount);
+                        
+                        \Illuminate\Support\Facades\Log::info('Moved payment to available balance for contract on campaign completion', [
+                            'contract_id' => $contract->id,
+                            'campaign_id' => $campaign->id,
+                            'creator_id' => $contract->creator_id,
+                            'creator_amount' => $payment->creator_amount,
+                        ]);
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -505,7 +636,64 @@ class Contract extends Model
         // Notify both parties about cancellation
         NotificationService::notifyUserOfContractCancelled($this, $reason);
 
+        // Check if campaign should be marked as cancelled
+        $this->checkAndCancelCampaign();
+
         return true;
+    }
+
+    /**
+     * Check if all contracts for the campaign are cancelled and mark campaign as cancelled
+     */
+    private function checkAndCancelCampaign(): void
+    {
+        // Load offer relationship if not already loaded
+        if (!$this->relationLoaded('offer')) {
+            $this->load('offer');
+        }
+
+        // Get campaign through offer relationship
+        if (!$this->offer || !$this->offer->campaign_id) {
+            return;
+        }
+
+        $campaign = Campaign::find($this->offer->campaign_id);
+        if (!$campaign) {
+            return;
+        }
+
+        // Only check campaigns that are approved and not already completed/cancelled
+        if ($campaign->status !== 'approved' || $campaign->isCompleted() || $campaign->isCancelled()) {
+            return;
+        }
+
+        // Get all contracts for this campaign through offers
+        $allContracts = self::whereHas('offer', function ($query) use ($campaign) {
+            $query->where('campaign_id', $campaign->id);
+        })->get();
+
+        // If no contracts exist, don't mark campaign as cancelled
+        if ($allContracts->isEmpty()) {
+            return;
+        }
+
+        // Check if all contracts are cancelled or terminated (not pending or active)
+        $allCancelledOrTerminated = $allContracts->every(function ($contract) {
+            return in_array($contract->status, ['cancelled', 'terminated']);
+        });
+
+        // If all contracts are cancelled or terminated, mark campaign as cancelled
+        if ($allCancelledOrTerminated) {
+            $campaign->cancel();
+            
+            \Illuminate\Support\Facades\Log::info('Campaign marked as cancelled', [
+                'campaign_id' => $campaign->id,
+                'campaign_title' => $campaign->title,
+                'cancelled_contracts_count' => $allContracts->where('status', 'cancelled')->count(),
+                'terminated_contracts_count' => $allContracts->where('status', 'terminated')->count(),
+                'total_contracts' => $allContracts->count(),
+            ]);
+        }
     }
 
     public function dispute(string $reason = null): bool

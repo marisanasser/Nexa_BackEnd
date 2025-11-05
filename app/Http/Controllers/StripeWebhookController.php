@@ -79,11 +79,16 @@ class StripeWebhookController extends Controller
                         'customer_id' => $session->customer ?? 'no_customer',
                         'subscription_id' => $session->subscription ?? null,
                         'mode' => $session->mode ?? 'unknown',
+                        'metadata' => $session->metadata ?? null,
                     ]);
                     
                     // Handle subscription checkout
                     if ($session->mode === 'subscription' && $session->subscription) {
                         $this->handleCheckoutSessionCompleted($session);
+                    }
+                    // Handle contract funding checkout (payment mode)
+                    elseif ($session->mode === 'payment') {
+                        $this->handleContractFundingCheckout($session);
                     }
                     break;
                     
@@ -773,6 +778,174 @@ class StripeWebhookController extends Controller
             Log::error('Failed to mark subscription payment failed', [
                 'stripe_subscription_id' => $stripeSubscriptionId,
                 'latest_invoice_id' => $latestInvoiceId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+    }
+
+    /**
+     * Handle contract funding checkout session completion
+     */
+    private function handleContractFundingCheckout($session): void
+    {
+        try {
+            Log::info('Handling contract funding checkout session completed', [
+                'session_id' => $session->id,
+                'customer_id' => $session->customer,
+                'mode' => $session->mode,
+                'payment_status' => $session->payment_status ?? 'unknown',
+                'metadata' => $session->metadata ?? null,
+            ]);
+
+            // Check if this is a contract funding checkout
+            $metadata = $session->metadata ?? null;
+            $contractId = null;
+            $type = null;
+
+            if (is_array($metadata)) {
+                $contractId = $metadata['contract_id'] ?? null;
+                $type = $metadata['type'] ?? null;
+            } elseif (is_object($metadata)) {
+                $contractId = $metadata->contract_id ?? null;
+                $type = $metadata->type ?? null;
+            }
+
+            if ($type !== 'contract_funding' || !$contractId) {
+                Log::info('Checkout session is not for contract funding, skipping', [
+                    'session_id' => $session->id,
+                    'type' => $type,
+                    'contract_id' => $contractId,
+                ]);
+                return;
+            }
+
+            // Only process if payment was successful
+            if ($session->payment_status !== 'paid') {
+                Log::warning('Contract funding checkout payment not paid', [
+                    'session_id' => $session->id,
+                    'payment_status' => $session->payment_status,
+                    'contract_id' => $contractId,
+                ]);
+                return;
+            }
+
+            // Find the contract
+            $contract = \App\Models\Contract::find($contractId);
+            if (!$contract) {
+                Log::error('Contract not found for funding checkout', [
+                    'session_id' => $session->id,
+                    'contract_id' => $contractId,
+                ]);
+                return;
+            }
+
+            // Check if payment was already processed
+            if ($contract->payment && $contract->payment->status === 'completed') {
+                Log::info('Contract payment already processed', [
+                    'contract_id' => $contract->id,
+                    'session_id' => $session->id,
+                ]);
+                return;
+            }
+
+            \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+            
+            // Retrieve the payment intent to get charge details
+            $paymentIntentId = $session->payment_intent ?? null;
+            if (!$paymentIntentId) {
+                Log::error('No payment intent in checkout session', [
+                    'session_id' => $session->id,
+                    'contract_id' => $contractId,
+                ]);
+                return;
+            }
+
+            $paymentIntent = \Stripe\PaymentIntent::retrieve($paymentIntentId);
+
+            if ($paymentIntent->status !== 'succeeded') {
+                Log::warning('Payment intent not succeeded', [
+                    'payment_intent_id' => $paymentIntentId,
+                    'status' => $paymentIntent->status,
+                    'contract_id' => $contractId,
+                ]);
+                return;
+            }
+
+            DB::beginTransaction();
+
+            // Create transaction record
+            $transaction = \App\Models\Transaction::create([
+                'user_id' => $contract->brand_id,
+                'stripe_payment_intent_id' => $paymentIntent->id,
+                'stripe_charge_id' => $paymentIntent->latest_charge ?? null,
+                'status' => 'paid',
+                'amount' => $contract->budget,
+                'payment_method' => 'stripe',
+                'payment_data' => [
+                    'checkout_session' => $session->id,
+                    'payment_intent' => $paymentIntent->id,
+                    'intent' => $paymentIntent->toArray(),
+                ],
+                'paid_at' => now(),
+                'contract_id' => $contract->id,
+            ]);
+
+            // Calculate payment amounts
+            $platformFee = $contract->budget * 0.05; // 5% platform fee
+            $creatorAmount = $contract->budget * 0.95; // 95% for creator
+
+            // Create job payment record
+            $jobPayment = \App\Models\JobPayment::create([
+                'contract_id' => $contract->id,
+                'brand_id' => $contract->brand_id,
+                'creator_id' => $contract->creator_id,
+                'total_amount' => $contract->budget,
+                'platform_fee' => $platformFee,
+                'creator_amount' => $creatorAmount,
+                'payment_method' => 'stripe_escrow',
+                'status' => 'completed', // Payment is completed via checkout
+                'transaction_id' => $transaction->id,
+            ]);
+
+            // Credit pending balance to creator escrow
+            $balance = \App\Models\CreatorBalance::firstOrCreate(
+                ['creator_id' => $contract->creator_id],
+                [
+                    'available_balance' => 0,
+                    'pending_balance' => 0,
+                    'total_earned' => 0,
+                    'total_withdrawn' => 0,
+                ]
+            );
+            $balance->increment('pending_balance', $jobPayment->creator_amount);
+
+            // Update contract status
+            $contract->update([
+                'status' => 'active',
+                'workflow_status' => 'active',
+                'started_at' => now(),
+            ]);
+
+            DB::commit();
+
+            // Notify both parties
+            \App\Services\NotificationService::notifyCreatorOfContractStarted($contract);
+            \App\Services\NotificationService::notifyBrandOfContractStarted($contract);
+
+            Log::info('Contract funding processed successfully from checkout', [
+                'contract_id' => $contract->id,
+                'session_id' => $session->id,
+                'payment_intent_id' => $paymentIntent->id,
+                'transaction_id' => $transaction->id,
+                'job_payment_id' => $jobPayment->id,
+            ]);
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Failed to handle contract funding checkout', [
+                'session_id' => $session->id ?? 'unknown',
+                'contract_id' => $contractId ?? 'unknown',
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);

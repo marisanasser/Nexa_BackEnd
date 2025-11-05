@@ -981,7 +981,7 @@ class AdminController extends Controller
                 'status' => $status,
                 'statusColor' => $statusColor,
                 'time' => $this->getUserTimeStatus($user),
-                'campaigns' => $user->applied_campaigns . ' aplicadas / ' . $user->approved_campaigns . ' aprovadas',
+                'campaigns' => ($user->applied_campaigns ?? 0) . ' aplicadas / ' . ($user->approved_campaigns ?? 0) . ' aprovadas',
                 'accountStatus' => $this->getAccountStatus($user),
                 'created_at' => $user->created_at,
                 'email_verified_at' => $user->email_verified_at,
@@ -1029,12 +1029,20 @@ class AdminController extends Controller
         }
 
         if ($user->has_premium && $user->premium_expires_at) {
-            $months = $user->premium_expires_at->diffInMonths(now());
+            // Ensure we have a Carbon instance
+            $premiumExpiresAt = $user->premium_expires_at instanceof Carbon 
+                ? $user->premium_expires_at 
+                : Carbon::parse($user->premium_expires_at);
+            $months = $premiumExpiresAt->diffInMonths(now());
             return $months . ' meses';
         }
 
         if ($user->free_trial_expires_at) {
-            $months = $user->free_trial_expires_at->diffInMonths(now());
+            // Ensure we have a Carbon instance
+            $trialExpiresAt = $user->free_trial_expires_at instanceof Carbon 
+                ? $user->free_trial_expires_at 
+                : Carbon::parse($user->free_trial_expires_at);
+            $months = $trialExpiresAt->diffInMonths(now());
             return $months . ' meses';
         }
 
