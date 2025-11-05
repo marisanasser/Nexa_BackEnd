@@ -9,6 +9,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
+use Stripe\Stripe;
+use Stripe\Customer;
+use Stripe\Checkout\Session;
+use Stripe\PaymentMethod as StripePaymentMethod;
+use Stripe\SetupIntent;
 
 class BrandPaymentController extends Controller
 {
@@ -19,6 +25,12 @@ class BrandPaymentController extends Controller
     {
         $this->apiKey = env('PAGARME_API_KEY', '');
         $this->baseUrl = 'https://api.pagar.me/core/v5';
+        
+        // Initialize Stripe
+        $stripeSecret = config('services.stripe.secret');
+        if ($stripeSecret) {
+            Stripe::setApiKey($stripeSecret);
+        }
     }
 
     /**
@@ -44,7 +56,7 @@ class BrandPaymentController extends Controller
         $validator = Validator::make($request->all(), [
             'card_hash' => 'required|string',
             'card_holder_name' => 'required|string|max:255',
-            'cpf' => 'required|string|regex:/^\d{3}\.\d{3}\.\d{3}-\d{2}$/',
+            'cnpj' => 'required|string|regex:/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/',
             'is_default' => 'boolean',
         ]);
 
@@ -192,6 +204,16 @@ class BrandPaymentController extends Controller
         $paymentMethod = BrandPaymentMethod::find($request->payment_method_id);
         $paymentMethod->setAsDefault();
 
+        // Update user model with the default payment method ID
+        if ($paymentMethod->stripe_payment_method_id) {
+            $user->update(['stripe_payment_method_id' => $paymentMethod->stripe_payment_method_id]);
+            Log::info('Updated user default payment method', [
+                'user_id' => $user->id,
+                'stripe_payment_method_id' => $paymentMethod->stripe_payment_method_id,
+                'payment_method_id' => $paymentMethod->id,
+            ]);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Default payment method updated successfully',
@@ -234,12 +256,493 @@ class BrandPaymentController extends Controller
             ], 400);
         }
 
+        $wasDefault = $paymentMethod->is_default;
+        $paymentMethodStripeId = $paymentMethod->stripe_payment_method_id;
+
         $paymentMethod->update(['is_active' => false]);
+
+        // If this was the default payment method, update user model
+        if ($wasDefault && $user->stripe_payment_method_id === $paymentMethodStripeId) {
+            // Find the next active default payment method, or set to null if none exists
+            $nextDefault = $user->brandPaymentMethods()
+                ->where('is_active', true)
+                ->where('is_default', true)
+                ->first();
+            
+            if ($nextDefault && $nextDefault->stripe_payment_method_id) {
+                $user->update(['stripe_payment_method_id' => $nextDefault->stripe_payment_method_id]);
+                Log::info('Updated user default payment method after deletion', [
+                    'user_id' => $user->id,
+                    'new_stripe_payment_method_id' => $nextDefault->stripe_payment_method_id,
+                ]);
+            } else {
+                // No default payment method remains, clear user's payment method ID
+                $user->update(['stripe_payment_method_id' => null]);
+                Log::info('Cleared user payment method ID after deletion', [
+                    'user_id' => $user->id,
+                ]);
+            }
+        }
 
         return response()->json([
             'success' => true,
             'message' => 'Payment method deleted successfully',
         ]);
+    }
+
+    /**
+     * Create Stripe Checkout Session for adding payment method (setup mode)
+     */
+    public function createCheckoutSession(Request $request): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated',
+                ], 401);
+            }
+
+            if (!$user->isBrand()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only brands can add payment methods',
+                ], 403);
+            }
+
+            Log::info('Creating Stripe Checkout Session for payment method setup', [
+                'user_id' => $user->id,
+            ]);
+
+            // Ensure Stripe customer exists for the brand
+            $customerId = $user->stripe_customer_id;
+            
+            if (!$customerId) {
+                Log::info('Creating new Stripe customer for brand', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                ]);
+
+                $customer = Customer::create([
+                    'email' => $user->email,
+                    'name' => $user->name,
+                    'metadata' => [
+                        'user_id' => $user->id,
+                        'role' => 'brand',
+                    ],
+                ]);
+
+                $customerId = $customer->id;
+                $user->update(['stripe_customer_id' => $customerId]);
+
+                Log::info('Stripe customer created for brand', [
+                    'user_id' => $user->id,
+                    'customer_id' => $customerId,
+                ]);
+            } else {
+                // Verify customer exists
+                try {
+                    Customer::retrieve($customerId);
+                } catch (\Exception $e) {
+                    Log::warning('Stripe customer not found, creating new one', [
+                        'user_id' => $user->id,
+                        'old_customer_id' => $customerId,
+                    ]);
+
+                    $customer = Customer::create([
+                        'email' => $user->email,
+                        'name' => $user->name,
+                        'metadata' => [
+                            'user_id' => $user->id,
+                            'role' => 'brand',
+                        ],
+                    ]);
+
+                    $customerId = $customer->id;
+                    $user->update(['stripe_customer_id' => $customerId]);
+                }
+            }
+
+            // Get frontend URL from config
+            $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
+
+            // Create Checkout Session in setup mode
+            $session = Session::create([
+                'customer' => $customerId,
+                'mode' => 'setup',
+                'payment_method_types' => ['card'],
+                'success_url' => $frontendUrl . '/brand/payment-methods?success=true&session_id={CHECKOUT_SESSION_ID}',
+                'cancel_url' => $frontendUrl . '/brand/payment-methods?canceled=true',
+                'metadata' => [
+                    'user_id' => (string) $user->id, // Ensure it's stored as string
+                    'type' => 'payment_method_setup',
+                ],
+            ]);
+            
+            Log::info('Checkout session created with metadata', [
+                'session_id' => $session->id,
+                'user_id' => $user->id,
+                'customer_id' => $customerId,
+                'metadata' => $session->metadata ?? null,
+            ]);
+
+            Log::info('Stripe Checkout Session created', [
+                'user_id' => $user->id,
+                'session_id' => $session->id,
+                'customer_id' => $customerId,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'url' => $session->url,
+                'session_id' => $session->id,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to create Stripe Checkout Session', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create checkout session. Please try again.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Handle successful Stripe Checkout Session completion
+     * This saves the payment method from the setup intent
+     */
+    public function handleCheckoutSuccess(Request $request): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated',
+                ], 401);
+            }
+
+            if (!$user->isBrand()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only brands can add payment methods',
+                ], 403);
+            }
+
+            // Validate session_id - check both body and query parameters
+            $sessionId = $request->input('session_id') ?? $request->query('session_id');
+            
+            if (!$sessionId) {
+                Log::error('Session ID missing in request', [
+                    'user_id' => $user->id,
+                    'request_body' => $request->all(),
+                    'request_query' => $request->query(),
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Session ID is required',
+                    'error' => 'Session ID is missing',
+                ], 400);
+            }
+
+            Log::info('Handling Stripe Checkout Session success', [
+                'user_id' => $user->id,
+                'session_id' => $sessionId,
+                'session_id_type' => gettype($sessionId),
+            ]);
+
+            // Retrieve the checkout session
+            $session = Session::retrieve($sessionId, [
+                'expand' => ['setup_intent', 'setup_intent.payment_method'],
+            ]);
+
+            // Verify session belongs to this user
+            // Check metadata first, then fallback to customer ID
+            $sessionUserId = null;
+            $metadata = $session->metadata ?? null;
+            
+            Log::info('Checking session metadata', [
+                'session_id' => $sessionId,
+                'user_id' => $user->id,
+                'metadata_type' => gettype($metadata),
+                'metadata' => $metadata,
+            ]);
+            
+            if ($metadata) {
+                if (is_object($metadata)) {
+                    // Access as object property
+                    $sessionUserId = $metadata->user_id ?? null;
+                    // Also try array access
+                    if (!$sessionUserId) {
+                        $metadataArray = (array) $metadata;
+                        $sessionUserId = $metadataArray['user_id'] ?? null;
+                    }
+                } elseif (is_array($metadata)) {
+                    $sessionUserId = $metadata['user_id'] ?? null;
+                }
+            }
+            
+            // Get customer ID from session
+            $sessionCustomerId = null;
+            if ($session->customer) {
+                $sessionCustomerId = is_object($session->customer) ? $session->customer->id : $session->customer;
+            }
+            
+            Log::info('Session verification details', [
+                'session_user_id' => $sessionUserId,
+                'authenticated_user_id' => $user->id,
+                'session_customer_id' => $sessionCustomerId,
+                'user_customer_id' => $user->stripe_customer_id,
+            ]);
+            
+            // Verify: Check metadata user_id OR customer ID match
+            $isValid = false;
+            
+            // Check 1: Metadata user_id matches
+            if ($sessionUserId && (string)$sessionUserId === (string)$user->id) {
+                $isValid = true;
+                Log::info('Session verified by metadata user_id');
+            }
+            // Check 2: Customer ID matches (fallback if metadata missing)
+            elseif ($sessionCustomerId && $user->stripe_customer_id && $sessionCustomerId === $user->stripe_customer_id) {
+                $isValid = true;
+                Log::info('Session verified by customer ID');
+            }
+            // Check 3: If no metadata but customer IDs match, allow it
+            elseif (!$sessionUserId && $sessionCustomerId && $user->stripe_customer_id && $sessionCustomerId === $user->stripe_customer_id) {
+                $isValid = true;
+                Log::info('Session verified by customer ID (no metadata)');
+            }
+            
+            if (!$isValid) {
+                Log::warning('Session verification failed', [
+                    'session_user_id' => $sessionUserId,
+                    'authenticated_user_id' => $user->id,
+                    'session_customer_id' => $sessionCustomerId,
+                    'user_customer_id' => $user->stripe_customer_id,
+                    'session_id' => $sessionId,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid session - session does not belong to this user',
+                ], 403);
+            }
+
+            // Get setup intent
+            $setupIntent = $session->setup_intent;
+            
+            Log::info('Setup intent retrieved from session', [
+                'setup_intent_type' => gettype($setupIntent),
+                'setup_intent' => is_string($setupIntent) ? $setupIntent : (is_object($setupIntent) ? $setupIntent->id ?? 'no_id' : 'unknown'),
+            ]);
+            
+            // If setup_intent is a string ID, retrieve it
+            if (is_string($setupIntent)) {
+                $setupIntentId = $setupIntent;
+                Log::info('Retrieving setup intent by ID', ['setup_intent_id' => $setupIntentId]);
+                $setupIntent = SetupIntent::retrieve($setupIntentId, [
+                    'expand' => ['payment_method']
+                ]);
+            } elseif (!is_object($setupIntent)) {
+                Log::error('Setup intent is neither string nor object', [
+                    'type' => gettype($setupIntent),
+                    'value' => $setupIntent,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid setup intent format',
+                ], 400);
+            }
+            
+            if (!$setupIntent || !is_object($setupIntent)) {
+                Log::error('Setup intent is not an object after retrieval', [
+                    'setup_intent' => $setupIntent,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Setup intent not found',
+                ], 400);
+            }
+            
+            if (!isset($setupIntent->status) || $setupIntent->status !== 'succeeded') {
+                Log::warning('Setup intent not succeeded', [
+                    'status' => $setupIntent->status ?? 'no_status',
+                    'setup_intent_id' => $setupIntent->id ?? 'no_id',
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Setup intent not completed',
+                ], 400);
+            }
+
+            // Get payment method from setup intent
+            $paymentMethodId = null;
+            if (is_object($setupIntent->payment_method)) {
+                $paymentMethodId = $setupIntent->payment_method->id ?? null;
+            } elseif (is_string($setupIntent->payment_method)) {
+                $paymentMethodId = $setupIntent->payment_method;
+            }
+            
+            if (!$paymentMethodId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment method not found in setup intent',
+                ], 400);
+            }
+
+            // Retrieve payment method details if not already expanded
+            if (is_object($setupIntent->payment_method)) {
+                $paymentMethod = $setupIntent->payment_method;
+            } else {
+                $paymentMethod = StripePaymentMethod::retrieve($paymentMethodId);
+            }
+
+            // Get card details
+            $card = $paymentMethod->card ?? null;
+            
+            if (!$card) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Card information not found',
+                ], 400);
+            }
+
+            DB::beginTransaction();
+
+            try {
+                // Check if payment method already exists
+                $existingMethod = BrandPaymentMethod::where('user_id', $user->id)
+                    ->where('stripe_payment_method_id', $paymentMethodId)
+                    ->where('is_active', true)
+                    ->first();
+
+                if ($existingMethod) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This payment method already exists',
+                    ], 400);
+                }
+
+                // Map card brand
+                $cardBrand = $card->brand ?? 'unknown';
+                $cardBrandMap = [
+                    'visa' => 'Visa',
+                    'mastercard' => 'Mastercard',
+                    'amex' => 'American Express',
+                    'discover' => 'Discover',
+                    'jcb' => 'JCB',
+                    'diners' => 'Diners Club',
+                ];
+                $cardBrandFormatted = $cardBrandMap[strtolower($cardBrand)] ?? ucfirst($cardBrand);
+
+                // Get customer ID from session
+                $sessionCustomerId = is_object($session->customer) ? $session->customer->id : $session->customer;
+                
+                // Update user's stripe_customer_id if not set or different
+                $userUpdateData = [];
+                if (!$user->stripe_customer_id || $user->stripe_customer_id !== $sessionCustomerId) {
+                    $userUpdateData['stripe_customer_id'] = $sessionCustomerId;
+                    Log::info('Updating user stripe_customer_id', [
+                        'user_id' => $user->id,
+                        'stripe_customer_id' => $sessionCustomerId,
+                    ]);
+                }
+
+                // Create payment method record
+                $paymentMethodRecord = BrandPaymentMethod::create([
+                    'user_id' => $user->id,
+                    'stripe_customer_id' => $sessionCustomerId,
+                    'stripe_payment_method_id' => $paymentMethodId,
+                    'stripe_setup_intent_id' => $setupIntent->id,
+                    'card_brand' => $cardBrandFormatted,
+                    'card_last4' => $card->last4,
+                    'card_holder_name' => $paymentMethod->billing_details->name ?? $user->name,
+                    'is_default' => !$user->hasDefaultPaymentMethod(), // Set as default if no default exists
+                    'is_active' => true,
+                ]);
+
+                // If this is set as default, unset other defaults
+                if ($paymentMethodRecord->is_default) {
+                    BrandPaymentMethod::where('user_id', $user->id)
+                        ->where('id', '!=', $paymentMethodRecord->id)
+                        ->update(['is_default' => false]);
+                }
+
+                // Store payment method ID in user model if this is the default payment method
+                // or if user doesn't have a payment method stored yet
+                if ($paymentMethodRecord->is_default || !$user->stripe_payment_method_id) {
+                    $userUpdateData['stripe_payment_method_id'] = $paymentMethodId;
+                    Log::info('Updating user stripe_payment_method_id', [
+                        'user_id' => $user->id,
+                        'stripe_payment_method_id' => $paymentMethodId,
+                        'is_default' => $paymentMethodRecord->is_default,
+                    ]);
+                }
+
+                // Update user model with billing method information
+                if (!empty($userUpdateData)) {
+                    $user->update($userUpdateData);
+                    Log::info('Updated user billing method information', [
+                        'user_id' => $user->id,
+                        'updated_fields' => array_keys($userUpdateData),
+                    ]);
+                }
+
+                // Refresh user to get updated fields
+                $user->refresh();
+
+                DB::commit();
+
+                Log::info('Payment method saved successfully from Stripe Checkout', [
+                    'user_id' => $user->id,
+                    'payment_method_id' => $paymentMethodRecord->id,
+                    'stripe_payment_method_id' => $paymentMethodId,
+                    'card_brand' => $cardBrandFormatted,
+                    'card_last4' => $card->last4,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Payment method added successfully',
+                    'data' => [
+                        'id' => $paymentMethodRecord->id,
+                        'card_info' => $paymentMethodRecord->formatted_card_info,
+                        'card_brand' => $paymentMethodRecord->card_brand,
+                        'card_last4' => $paymentMethodRecord->card_last4,
+                        'card_holder_name' => $paymentMethodRecord->card_holder_name,
+                        'is_default' => $paymentMethodRecord->is_default,
+                        'created_at' => $paymentMethodRecord->created_at,
+                    ],
+                ]);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Failed to handle checkout success', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to save payment method. Please try again.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

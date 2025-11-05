@@ -331,12 +331,43 @@ class User extends Authenticatable
     }
 
     /**
+     * Helper to safely get Carbon instance from date attribute
+     */
+    private function getCarbonDate($date)
+    {
+        if (!$date) {
+            return null;
+        }
+        if ($date instanceof \Carbon\Carbon) {
+            return $date;
+        }
+        if (is_string($date)) {
+            try {
+                return \Carbon\Carbon::parse($date);
+            } catch (\Exception $e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Check if the user has premium status.
      */
     public function isPremium(): bool
     {
-        return $this->has_premium && 
-               ($this->premium_expires_at === null || $this->premium_expires_at->isFuture());
+        // Admins always have premium
+        if ($this->isAdmin()) {
+            return true;
+        }
+        
+        if (!$this->has_premium) {
+            return false;
+        }
+        
+        $premiumExpiresAt = $this->getCarbonDate($this->premium_expires_at);
+        
+        return $premiumExpiresAt === null || $premiumExpiresAt->isFuture();
     }
 
     /**
@@ -349,8 +380,13 @@ class User extends Authenticatable
             return false;
         }
         
-        return !$this->has_premium && 
-               ($this->free_trial_expires_at !== null && $this->free_trial_expires_at->isFuture());
+        if ($this->has_premium) {
+            return false;
+        }
+        
+        $trialExpiresAt = $this->getCarbonDate($this->free_trial_expires_at);
+        
+        return $trialExpiresAt !== null && $trialExpiresAt->isFuture();
     }
 
     /**
@@ -366,6 +402,11 @@ class User extends Authenticatable
      */
     public function hasPremiumAccess(): bool
     {
+        // Admins always have premium access
+        if ($this->isAdmin()) {
+            return true;
+        }
+        
         // For students, prioritize premium over trial access
         if ($this->isStudent()) {
             return $this->isPremium() || $this->isOnTrial();
@@ -380,8 +421,13 @@ class User extends Authenticatable
      */
     public function isVerifiedStudent(): bool
     {
-        return $this->student_verified && 
-               ($this->student_expires_at === null || $this->student_expires_at->isFuture());
+        if (!$this->student_verified) {
+            return false;
+        }
+        
+        $studentExpiresAt = $this->getCarbonDate($this->student_expires_at);
+        
+        return $studentExpiresAt === null || $studentExpiresAt->isFuture();
     }
 
     /**
@@ -530,5 +576,31 @@ class User extends Authenticatable
         ]);
 
         return true;
+    }
+
+    /**
+     * Get the has_premium attribute - always true for admins
+     */
+    public function getHasPremiumAttribute($value)
+    {
+        // Admins always have premium
+        if ($this->role === 'admin') {
+            return true;
+        }
+        
+        return $value ?? false;
+    }
+
+    /**
+     * Get the premium_expires_at attribute - set far future for admins
+     */
+    public function getPremiumExpiresAtAttribute($value)
+    {
+        // Admins have premium forever (year 2099)
+        if ($this->role === 'admin') {
+            return now()->addYears(100);
+        }
+        
+        return $value;
     }
 }

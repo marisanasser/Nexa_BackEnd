@@ -24,6 +24,7 @@ class Transaction extends Model
         'paid_at',
         'expires_at',
         'metadata',
+        'contract_id',
     ];
 
     protected $casts = [

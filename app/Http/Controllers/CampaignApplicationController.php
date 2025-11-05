@@ -8,6 +8,10 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
+use Stripe\Stripe;
+use Stripe\Checkout\Session;
+use Stripe\Customer;
 
 class CampaignApplicationController extends Controller
 {
@@ -155,6 +159,293 @@ class CampaignApplicationController extends Controller
 
         if (!$application->canBeReviewedBy($user)) {
             return response()->json(['message' => 'Application cannot be approved'], 400);
+        }
+
+        // Check if brand has payment methods configured
+        // This is required before approving applications to ensure payment capability
+        $hasPaymentMethod = false;
+        
+        // Check for Stripe payment method (direct Stripe integration on user model)
+        if ($user->stripe_customer_id && $user->stripe_payment_method_id) {
+            $hasPaymentMethod = true;
+            Log::info('Brand has direct Stripe payment method', [
+                'user_id' => $user->id,
+                'stripe_customer_id' => $user->stripe_customer_id,
+                'stripe_payment_method_id' => $user->stripe_payment_method_id,
+            ]);
+        }
+        
+        // Check for BrandPaymentMethod records (active payment methods)
+        if (!$hasPaymentMethod) {
+            $activePaymentMethods = \App\Models\BrandPaymentMethod::where('user_id', $user->id)
+                ->where('is_active', true)
+                ->count();
+            
+            if ($activePaymentMethods > 0) {
+                $hasPaymentMethod = true;
+                Log::info('Brand has active payment methods in BrandPaymentMethod table', [
+                    'user_id' => $user->id,
+                    'active_methods_count' => $activePaymentMethods,
+                ]);
+            }
+        }
+
+        // If no payment method exists, create Stripe checkout session for payment method setup
+        if (!$hasPaymentMethod) {
+            Log::info('Brand has no payment method, creating checkout session for setup', [
+                'user_id' => $user->id,
+                'application_id' => $application->id,
+                'campaign_id' => $application->campaign_id,
+            ]);
+            try {
+                // Set Stripe API key
+                Stripe::setApiKey(config('services.stripe.secret'));
+
+                // Ensure Stripe customer exists for the brand
+                $customerId = $user->stripe_customer_id;
+                
+                if (!$customerId) {
+                    Log::info('Creating new Stripe customer for brand payment setup', [
+                        'user_id' => $user->id,
+                        'email' => $user->email,
+                    ]);
+
+                    $customer = Customer::create([
+                        'email' => $user->email,
+                        'name' => $user->name,
+                        'metadata' => [
+                            'user_id' => $user->id,
+                            'role' => 'brand',
+                        ],
+                    ]);
+
+                    $customerId = $customer->id;
+                    $user->update(['stripe_customer_id' => $customerId]);
+
+                    Log::info('Stripe customer created for brand', [
+                        'user_id' => $user->id,
+                        'customer_id' => $customerId,
+                    ]);
+                } else {
+                    // Verify customer exists
+                    try {
+                        Customer::retrieve($customerId);
+                    } catch (\Exception $e) {
+                        Log::warning('Stripe customer not found, creating new one', [
+                            'user_id' => $user->id,
+                            'old_customer_id' => $customerId,
+                        ]);
+
+                        $customer = Customer::create([
+                            'email' => $user->email,
+                            'name' => $user->name,
+                            'metadata' => [
+                                'user_id' => $user->id,
+                                'role' => 'brand',
+                            ],
+                        ]);
+
+                        $customerId = $customer->id;
+                        $user->update(['stripe_customer_id' => $customerId]);
+                    }
+                }
+
+                // Get frontend URL from config
+                $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
+
+                // Create Checkout Session in setup mode for payment method configuration
+                // This allows the brand to add a payment method without making an immediate charge
+                $checkoutSession = Session::create([
+                    'customer' => $customerId,
+                    'mode' => 'setup', // Setup mode for payment method collection only
+                    'payment_method_types' => ['card'],
+                    'success_url' => $frontendUrl . '/brand?component=Pagamentos&success=true&session_id={CHECKOUT_SESSION_ID}&application_id=' . $application->id . '&campaign_id=' . $application->campaign_id,
+                    'cancel_url' => $frontendUrl . '/brand?component=Pagamentos&canceled=true&application_id=' . $application->id . '&campaign_id=' . $application->campaign_id,
+                    'metadata' => [
+                        'user_id' => (string) $user->id,
+                        'type' => 'payment_method_setup',
+                        'application_id' => (string) $application->id,
+                        'campaign_id' => (string) $application->campaign_id,
+                        'action' => 'approve_application',
+                    ],
+                ]);
+                
+                Log::info('Checkout session created for application approval funding', [
+                    'session_id' => $checkoutSession->id,
+                    'user_id' => $user->id,
+                    'customer_id' => $customerId,
+                    'application_id' => $application->id,
+                    'metadata' => $checkoutSession->metadata ?? null,
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You need to configure a payment method before approving proposals.',
+                    'requires_funding' => true,
+                    'redirect_url' => $checkoutSession->url,
+                    'checkout_session_id' => $checkoutSession->id,
+                ], 402); // 402 Payment Required
+
+            } catch (\Exception $e) {
+                Log::error('Failed to create Stripe Checkout Session for application approval', [
+                    'user_id' => $user->id,
+                    'application_id' => $application->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+
+                // Fallback to frontend redirect if Stripe fails
+                $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
+                $redirectUrl = $frontendUrl . '/brand?component=Pagamentos';
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You need to configure a payment method before approving proposals. Please set up your payment method and try again.',
+                    'requires_funding' => true,
+                    'redirect_url' => $redirectUrl,
+                ], 402);
+            }
+        }
+
+        // If payment method exists, check if there are contracts that need funding
+        // Check for contracts related to this campaign/creator that are pending payment
+        if ($hasPaymentMethod) {
+            $contractsNeedingFunding = \App\Models\Contract::where('brand_id', $user->id)
+                ->where('status', 'pending')
+                ->where('workflow_status', 'payment_pending')
+                ->where(function ($query) use ($application) {
+                    // Check for contracts related to this campaign via offers
+                    $query->whereHas('offer', function ($q) use ($application) {
+                        $q->where('campaign_id', $application->campaign_id)
+                          ->where('creator_id', $application->creator_id);
+                    })
+                    // Or check for contracts with this creator (might be created directly)
+                    ->orWhere(function ($q) use ($application) {
+                        $q->where('creator_id', $application->creator_id)
+                          ->whereNull('offer_id'); // Contracts without offers
+                    });
+                })
+                ->where(function ($query) {
+                    // Check if payment doesn't exist or is not completed
+                    $query->whereDoesntHave('payment')
+                          ->orWhereHas('payment', function ($q) {
+                              $q->where('status', '!=', 'completed');
+                          });
+                })
+                ->get();
+
+            // If there are contracts needing funding, create checkout session for the first one
+            if ($contractsNeedingFunding->isNotEmpty()) {
+                $contractToFund = $contractsNeedingFunding->first();
+                
+                Log::info('Brand has payment method but contract needs funding, creating checkout session', [
+                    'user_id' => $user->id,
+                    'application_id' => $application->id,
+                    'contract_id' => $contractToFund->id,
+                    'contract_budget' => $contractToFund->budget,
+                ]);
+
+                try {
+                    // Set Stripe API key
+                    Stripe::setApiKey(config('services.stripe.secret'));
+
+                    // Ensure Stripe customer exists
+                    $customerId = $user->stripe_customer_id;
+                    
+                    if (!$customerId) {
+                        $customer = Customer::create([
+                            'email' => $user->email,
+                            'name' => $user->name,
+                            'metadata' => [
+                                'user_id' => $user->id,
+                                'role' => 'brand',
+                            ],
+                        ]);
+                        $customerId = $customer->id;
+                        $user->update(['stripe_customer_id' => $customerId]);
+                    } else {
+                        // Verify customer exists
+                        try {
+                            Customer::retrieve($customerId);
+                        } catch (\Exception $e) {
+                            $customer = Customer::create([
+                                'email' => $user->email,
+                                'name' => $user->name,
+                                'metadata' => [
+                                    'user_id' => $user->id,
+                                    'role' => 'brand',
+                                ],
+                            ]);
+                            $customerId = $customer->id;
+                            $user->update(['stripe_customer_id' => $customerId]);
+                        }
+                    }
+
+                    // Get frontend URL from config
+                    $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
+
+                    // Create Checkout Session in payment mode for contract funding
+                    $checkoutSession = Session::create([
+                        'customer' => $customerId,
+                        'mode' => 'payment', // Payment mode to charge the brand
+                        'payment_method_types' => ['card'],
+                        'line_items' => [[
+                            'price_data' => [
+                                'currency' => 'brl',
+                                'product_data' => [
+                                    'name' => 'Contract Funding: ' . $contractToFund->title,
+                                    'description' => 'Escrow deposit for contract #' . $contractToFund->id,
+                                ],
+                                'unit_amount' => (int) round($contractToFund->budget * 100), // Convert to cents
+                            ],
+                            'quantity' => 1,
+                        ]],
+                        'success_url' => $frontendUrl . '/brand?component=Pagamentos&funding_success=true&session_id={CHECKOUT_SESSION_ID}&contract_id=' . $contractToFund->id . '&application_id=' . $application->id . '&campaign_id=' . $application->campaign_id,
+                        'cancel_url' => $frontendUrl . '/brand?component=Pagamentos&funding_canceled=true&contract_id=' . $contractToFund->id . '&application_id=' . $application->id . '&campaign_id=' . $application->campaign_id,
+                        'metadata' => [
+                            'user_id' => (string) $user->id,
+                            'type' => 'contract_funding',
+                            'contract_id' => (string) $contractToFund->id,
+                            'application_id' => (string) $application->id,
+                            'campaign_id' => (string) $application->campaign_id,
+                            'action' => 'approve_application_funding',
+                        ],
+                    ]);
+
+                    Log::info('Contract funding checkout session created during application approval', [
+                        'session_id' => $checkoutSession->id,
+                        'user_id' => $user->id,
+                        'contract_id' => $contractToFund->id,
+                        'application_id' => $application->id,
+                        'amount' => $contractToFund->budget,
+                    ]);
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Contract needs to be funded before approval can proceed. Please complete the payment.',
+                        'requires_funding' => true,
+                        'redirect_url' => $checkoutSession->url,
+                        'checkout_session_id' => $checkoutSession->id,
+                        'contract_id' => $contractToFund->id,
+                    ], 402); // 402 Payment Required
+
+                } catch (\Exception $e) {
+                    Log::error('Failed to create contract funding checkout session during application approval', [
+                        'user_id' => $user->id,
+                        'application_id' => $application->id,
+                        'contract_id' => $contractToFund->id,
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                    ]);
+
+                    // Continue with approval even if funding checkout creation fails
+                    // The brand can fund the contract later
+                    Log::warning('Proceeding with approval despite funding checkout failure', [
+                        'user_id' => $user->id,
+                        'application_id' => $application->id,
+                    ]);
+                }
+            }
         }
 
         $application->approve($user->id);

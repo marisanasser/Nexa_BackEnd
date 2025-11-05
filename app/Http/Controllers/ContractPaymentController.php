@@ -547,4 +547,241 @@ class ContractPaymentController extends Controller
             ], 400);
         }
     }
+
+    /**
+     * Create Stripe Checkout Session for contract funding (escrow deposit)
+     */
+    public function createContractCheckoutSession(Request $request): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user->isBrand()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only brands can create contract checkout sessions',
+                ], 403);
+            }
+
+            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+                'contract_id' => 'required|exists:contracts,id,brand_id,' . $user->id,
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
+            $contract = Contract::with(['brand', 'creator'])->find($request->contract_id);
+
+            // Check if contract needs payment
+            if ($contract->status !== 'pending' || $contract->workflow_status !== 'payment_pending') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contract is not in a state that requires payment',
+                ], 400);
+            }
+
+            // Check if payment was already processed
+            if ($contract->payment && $contract->payment->status === 'completed') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment for this contract has already been processed',
+                ], 400);
+            }
+
+            if (!$this->stripeKey) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Stripe is not configured',
+                ], 503);
+            }
+
+            // Set Stripe API key
+            \Stripe\Stripe::setApiKey($this->stripeKey);
+
+            // Ensure Stripe customer exists for the brand
+            $customerId = $user->stripe_customer_id;
+            
+            if (!$customerId) {
+                Log::info('Creating new Stripe customer for contract funding', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                ]);
+
+                $customer = \Stripe\Customer::create([
+                    'email' => $user->email,
+                    'name' => $user->name,
+                    'metadata' => [
+                        'user_id' => $user->id,
+                        'role' => 'brand',
+                    ],
+                ]);
+
+                $customerId = $customer->id;
+                $user->update(['stripe_customer_id' => $customerId]);
+
+                Log::info('Stripe customer created for contract funding', [
+                    'user_id' => $user->id,
+                    'customer_id' => $customerId,
+                ]);
+            } else {
+                // Verify customer exists
+                try {
+                    \Stripe\Customer::retrieve($customerId);
+                } catch (\Exception $e) {
+                    Log::warning('Stripe customer not found, creating new one', [
+                        'user_id' => $user->id,
+                        'old_customer_id' => $customerId,
+                    ]);
+
+                    $customer = \Stripe\Customer::create([
+                        'email' => $user->email,
+                        'name' => $user->name,
+                        'metadata' => [
+                            'user_id' => $user->id,
+                            'role' => 'brand',
+                        ],
+                    ]);
+
+                    $customerId = $customer->id;
+                    $user->update(['stripe_customer_id' => $customerId]);
+                }
+            }
+
+            // Get frontend URL from config
+            $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
+
+            // Create Checkout Session in payment mode (not setup mode)
+            $checkoutSession = \Stripe\Checkout\Session::create([
+                'customer' => $customerId,
+                'mode' => 'payment',
+                'payment_method_types' => ['card'],
+                'line_items' => [[
+                    'price_data' => [
+                        'currency' => 'brl',
+                        'product_data' => [
+                            'name' => 'Contract Funding: ' . $contract->title,
+                            'description' => 'Escrow deposit for contract #' . $contract->id,
+                        ],
+                        'unit_amount' => (int) round($contract->budget * 100), // Convert to cents
+                    ],
+                    'quantity' => 1,
+                ]],
+                'success_url' => $frontendUrl . '/brand?component=Pagamentos&funding_success=true&session_id={CHECKOUT_SESSION_ID}&contract_id=' . $contract->id,
+                'cancel_url' => $frontendUrl . '/brand?component=Pagamentos&funding_canceled=true&contract_id=' . $contract->id,
+                'metadata' => [
+                    'user_id' => (string) $user->id,
+                    'type' => 'contract_funding',
+                    'contract_id' => (string) $contract->id,
+                ],
+            ]);
+
+            Log::info('Contract funding checkout session created', [
+                'session_id' => $checkoutSession->id,
+                'user_id' => $user->id,
+                'customer_id' => $customerId,
+                'contract_id' => $contract->id,
+                'amount' => $contract->budget,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'url' => $checkoutSession->url,
+                'session_id' => $checkoutSession->id,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to create contract funding checkout session', [
+                'user_id' => auth()->id(),
+                'contract_id' => $request->contract_id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create checkout session. Please try again.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get transaction history for the authenticated user
+     */
+    public function getTransactionHistory(Request $request): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated',
+                ], 401);
+            }
+
+            $perPage = min($request->get('per_page', 10), 100);
+            $page = $request->get('page', 1);
+
+            $transactions = $user->transactions()
+                ->orderBy('created_at', 'desc')
+                ->paginate($perPage, ['*'], 'page', $page);
+
+            $transactions->getCollection()->transform(function ($transaction) {
+                // Get pagarme_transaction_id from payment_data or use stripe_payment_intent_id as fallback
+                $paymentData = $transaction->payment_data ?? [];
+                $pagarmeTransactionId = $paymentData['pagarme_transaction_id'] 
+                    ?? $paymentData['transaction_id'] 
+                    ?? $transaction->stripe_payment_intent_id 
+                    ?? $transaction->stripe_charge_id 
+                    ?? null;
+
+                return [
+                    'id' => $transaction->id,
+                    'pagarme_transaction_id' => $pagarmeTransactionId ?? '',
+                    'status' => $transaction->status,
+                    'amount' => (string) $transaction->amount, // Ensure it's a string
+                    'payment_method' => $transaction->payment_method ?? '',
+                    'card_brand' => $transaction->card_brand ?? '',
+                    'card_last4' => $transaction->card_last4 ?? '',
+                    'card_holder_name' => $transaction->card_holder_name ?? '',
+                    'payment_data' => $transaction->payment_data ?? [],
+                    'paid_at' => $transaction->paid_at?->format('Y-m-d H:i:s') ?? '',
+                    'expires_at' => $transaction->expires_at?->format('Y-m-d H:i:s') ?? '',
+                    'created_at' => $transaction->created_at->format('Y-m-d H:i:s'),
+                    'updated_at' => $transaction->updated_at->format('Y-m-d H:i:s'),
+                ];
+            });
+
+            return response()->json([
+                'transactions' => $transactions->items(),
+                'pagination' => [
+                    'current_page' => $transactions->currentPage(),
+                    'last_page' => $transactions->lastPage(),
+                    'per_page' => $transactions->perPage(),
+                    'total' => $transactions->total(),
+                    'from' => $transactions->firstItem(),
+                    'to' => $transactions->lastItem(),
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching transaction history', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch transaction history',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
 } 

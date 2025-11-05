@@ -486,27 +486,69 @@ class StripeController extends Controller
                     'email' => $user->email,
                 ]);
                 
-                // Create a Stripe Express account
-                $stripeAccount = Account::create([
-                    'type' => 'express',
-                    'country' => 'BR', // Brazil
-                    'email' => $user->email,
-                    'capabilities' => [
-                        'card_payments' => ['requested' => true],
-                        'transfers' => ['requested' => true],
-                    ],
-                ]);
+                try {
+                    // Create a Stripe Express account
+                    $stripeAccount = Account::create([
+                        'type' => 'express',
+                        'country' => 'BR', // Brazil
+                        'email' => $user->email,
+                        'capabilities' => [
+                            'card_payments' => ['requested' => true],
+                            'transfers' => ['requested' => true],
+                        ],
+                    ]);
 
-                // Update user with Stripe account ID
-                $user->update([
-                    'stripe_account_id' => $stripeAccount->id,
-                ]);
+                    // Update user with Stripe account ID
+                    $user->update([
+                        'stripe_account_id' => $stripeAccount->id,
+                    ]);
 
-                Log::info('Stripe Express account created for user', [
-                    'user_id' => $user->id,
-                    'stripe_account_id' => $stripeAccount->id,
-                    'account_type' => $stripeAccount->type,
-                ]);
+                    Log::info('Stripe Express account created for user', [
+                        'user_id' => $user->id,
+                        'stripe_account_id' => $stripeAccount->id,
+                        'account_type' => $stripeAccount->type,
+                    ]);
+                } catch (InvalidRequestException $e) {
+                    $errorMessage = $e->getMessage();
+                    
+                    // Check if the error is about Connect not being enabled
+                    if (stripos($errorMessage, 'Connect') !== false || stripos($errorMessage, 'connect') !== false) {
+                        Log::error('Stripe Connect not enabled', [
+                            'user_id' => $user->id,
+                            'error' => $errorMessage,
+                        ]);
+                        
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Stripe Connect is not enabled on your Stripe account. Please enable Stripe Connect in your Stripe Dashboard settings to use this feature. Visit https://dashboard.stripe.com/settings/connect to enable it.',
+                            'error' => $errorMessage,
+                            'help_url' => 'https://stripe.com/docs/connect'
+                        ], 400);
+                    }
+                    
+                    // Re-throw if it's a different error
+                    throw $e;
+                } catch (ApiErrorException $e) {
+                    $errorMessage = $e->getMessage();
+                    
+                    // Check if the error is about Connect not being enabled
+                    if (stripos($errorMessage, 'Connect') !== false || stripos($errorMessage, 'connect') !== false) {
+                        Log::error('Stripe Connect not enabled', [
+                            'user_id' => $user->id,
+                            'error' => $errorMessage,
+                        ]);
+                        
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Stripe Connect is not enabled on your Stripe account. Please enable Stripe Connect in your Stripe Dashboard settings to use this feature. Visit https://dashboard.stripe.com/settings/connect to enable it.',
+                            'error' => $errorMessage,
+                            'help_url' => 'https://stripe.com/docs/connect'
+                        ], 400);
+                    }
+                    
+                    // Re-throw if it's a different error
+                    throw $e;
+                }
             }
 
             Log::info('Creating Stripe account link for onboarding', [
@@ -516,35 +558,97 @@ class StripeController extends Controller
                 'return_url' => config('app.frontend_url') . '/creator',
             ]);
             
-            // Create account link for onboarding
-            $accountLink = \Stripe\AccountLink::create([
-                'account' => $user->stripe_account_id,
-                'refresh_url' => config('app.frontend_url') . '/creator/stripe-connect?refresh=true',
-                'return_url' => config('app.frontend_url') . '/creator',
-                'type' => 'account_onboarding',
-            ]);
-            
-            Log::info('Stripe account link created successfully', [
-                'user_id' => $user->id,
-                'stripe_account_id' => $user->stripe_account_id,
-                'link_expires_at' => $accountLink->expires_at ?? 'not_provided',
-            ]);
+            try {
+                // Create account link for onboarding
+                $accountLink = \Stripe\AccountLink::create([
+                    'account' => $user->stripe_account_id,
+                    'refresh_url' => config('app.frontend_url') . '/creator/stripe-connect?refresh=true',
+                    'return_url' => config('app.frontend_url') . '/creator',
+                    'type' => 'account_onboarding',
+                ]);
+                
+                Log::info('Stripe account link created successfully', [
+                    'user_id' => $user->id,
+                    'stripe_account_id' => $user->stripe_account_id,
+                    'link_expires_at' => $accountLink->expires_at ?? 'not_provided',
+                ]);
 
-            return response()->json([
-                'success' => true,
-                'url' => $accountLink->url,
-                'expires_at' => $accountLink->expires_at,
-            ]);
+                return response()->json([
+                    'success' => true,
+                    'url' => $accountLink->url,
+                    'expires_at' => $accountLink->expires_at,
+                ]);
+            } catch (InvalidRequestException $e) {
+                $errorMessage = $e->getMessage();
+                
+                Log::error('Stripe account link creation failed', [
+                    'user_id' => $user->id,
+                    'error' => $errorMessage,
+                ]);
+                
+                // Check if the error is about Connect not being enabled
+                if (stripos($errorMessage, 'Connect') !== false || stripos($errorMessage, 'connect') !== false) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Stripe Connect is not enabled on your Stripe account. Please enable Stripe Connect in your Stripe Dashboard settings to use this feature. Visit https://dashboard.stripe.com/settings/connect to enable it.',
+                        'error' => $errorMessage,
+                        'help_url' => 'https://stripe.com/docs/connect'
+                    ], 400);
+                }
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to create account link: ' . $errorMessage,
+                    'error' => $errorMessage,
+                ], 400);
+            } catch (ApiErrorException $e) {
+                $errorMessage = $e->getMessage();
+                
+                Log::error('Stripe API error during account link creation', [
+                    'user_id' => $user->id,
+                    'error' => $errorMessage,
+                ]);
+                
+                // Check if the error is about Connect not being enabled
+                if (stripos($errorMessage, 'Connect') !== false || stripos($errorMessage, 'connect') !== false) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Stripe Connect is not enabled on your Stripe account. Please enable Stripe Connect in your Stripe Dashboard settings to use this feature. Visit https://dashboard.stripe.com/settings/connect to enable it.',
+                        'error' => $errorMessage,
+                        'help_url' => 'https://stripe.com/docs/connect'
+                    ], 400);
+                }
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment service error: ' . $errorMessage,
+                    'error' => $errorMessage,
+                ], 500);
+            }
 
         } catch (\Exception $e) {
+            $errorMessage = $e->getMessage();
+            
             Log::error('Error creating Stripe account link', [
                 'user_id' => auth()->id(),
-                'error' => $e->getMessage(),
+                'error' => $errorMessage,
+                'trace' => $e->getTraceAsString(),
             ]);
+
+            // Check if the error is about Connect not being enabled
+            if (stripos($errorMessage, 'Connect') !== false || stripos($errorMessage, 'connect') !== false) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Stripe Connect is not enabled on your Stripe account. Please enable Stripe Connect in your Stripe Dashboard settings to use this feature. Visit https://dashboard.stripe.com/settings/connect to enable it.',
+                    'error' => $errorMessage,
+                    'help_url' => 'https://stripe.com/docs/connect'
+                ], 400);
+            }
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create account link'
+                'message' => 'Failed to create account link: ' . $errorMessage,
+                'error' => $errorMessage,
             ], 500);
         }
     }

@@ -276,7 +276,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/subscription/cancel', [SubscriptionController::class, 'cancelSubscription']);
     
     // Payment transaction history (requires authentication)
-    Route::get('/payment/transactions', [PaymentController::class, 'getTransactionHistory'])->middleware(['throttle:dashboard']);
+    Route::get('/payment/transactions', [ContractPaymentController::class, 'getTransactionHistory'])->middleware(['throttle:dashboard']);
     
     // Freelancer payment routes
     Route::prefix('freelancer')->group(function () {
@@ -287,8 +287,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/bank-info', [PaymentController::class, 'deleteBankInfo']); // Delete bank info
         
         // Withdrawal management
-        Route::get('/withdrawals', [PaymentController::class, 'getWithdrawalHistory']); // Get withdrawal history
-        Route::post('/withdrawals', [PaymentController::class, 'requestWithdrawal']); // Request withdrawal
+        Route::get('/withdrawals', [WithdrawalController::class, 'index']); // Get withdrawal history
+        Route::post('/withdrawals', [WithdrawalController::class, 'store']); // Request withdrawal
         
         // Earnings and balance
         Route::get('/earnings', [PaymentController::class, 'getEarnings']); // Get earnings and balance
@@ -301,6 +301,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/methods', [BrandPaymentController::class, 'getPaymentMethods']);
         Route::post('/set-default', [BrandPaymentController::class, 'setDefaultPaymentMethod']);
         Route::delete('/methods', [BrandPaymentController::class, 'deletePaymentMethod']);
+        Route::post('/create-checkout-session', [BrandPaymentController::class, 'createCheckoutSession']);
+        Route::post('/handle-checkout-success', [BrandPaymentController::class, 'handleCheckoutSuccess']);
     });
 
     // Stripe Connect and setup
@@ -318,6 +320,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/status', [ContractPaymentController::class, 'getContractPaymentStatus']);
         Route::get('/methods', [ContractPaymentController::class, 'getAvailablePaymentMethods']);
         Route::post('/retry', [ContractPaymentController::class, 'retryPayment']);
+        Route::post('/checkout-session', [ContractPaymentController::class, 'createContractCheckoutSession']);
     });
     
     // Offer routes
@@ -454,6 +457,8 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::get('/payouts/{id}/verify', [AdminPayoutController::class, 'verifyWithdrawal'])->where('id', '[0-9]+');
 
     // Guide Management
+    Route::get('/guides', [AdminController::class, 'getGuides']);
+    Route::get('/guides/{id}', [AdminController::class, 'getGuide'])->where('id', '[0-9]+');
     
     // Brand Rankings
     Route::get('/brand-rankings', [BrandRankingController::class, 'getBrandRankings']);
