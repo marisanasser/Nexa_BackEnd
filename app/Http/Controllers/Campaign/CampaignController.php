@@ -1136,10 +1136,146 @@ class CampaignController extends Controller
                 return response()->json(['error' => 'Campaign is already archived'], 422);
             }
 
+            // Start database transaction for refund processing
+            \Illuminate\Support\Facades\DB::beginTransaction();
+
+            // Find all contracts related to this campaign through offers
+            $contracts = \App\Models\Contract::whereHas('offer', function ($query) use ($campaign) {
+                $query->where('campaign_id', $campaign->id);
+            })
+            ->whereIn('status', ['pending', 'active']) // Only refund active/pending contracts
+            ->get();
+
+            $refundedAmount = 0;
+            $refundedContracts = [];
+            $refundErrors = [];
+
+            // Process refunds for each contract
+            foreach ($contracts as $contract) {
+                try {
+                    // Find transaction for this contract
+                    // Try direct contract_id first, then fallback to payment_data
+                    $transaction = \App\Models\Transaction::where('contract_id', $contract->id)
+                        ->where('status', 'paid')
+                        ->first();
+                    
+                    // Fallback: check payment_data if contract_id not set
+                    if (!$transaction) {
+                        $transaction = \App\Models\Transaction::where('status', 'paid')
+                            ->whereJsonContains('payment_data->contract_id', (string) $contract->id)
+                            ->first();
+                    }
+
+                    if ($transaction && $transaction->stripe_payment_intent_id) {
+                        // Initialize Stripe
+                        \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+
+                        // Create refund via Stripe
+                        try {
+                            $refund = \Stripe\Refund::create([
+                                'payment_intent' => $transaction->stripe_payment_intent_id,
+                                'reason' => 'requested_by_customer',
+                                'metadata' => [
+                                    'campaign_id' => (string) $campaign->id,
+                                    'contract_id' => (string) $contract->id,
+                                    'reason' => 'Campaign cancelled',
+                                ],
+                            ]);
+
+                            // Update transaction status
+                            $transaction->update([
+                                'status' => 'refunded',
+                                'payment_data' => array_merge(
+                                    $transaction->payment_data ?? [],
+                                    [
+                                        'refund_id' => $refund->id,
+                                        'refunded_at' => now()->toISOString(),
+                                        'refund_amount' => $refund->amount / 100, // Convert from cents
+                                    ]
+                                ),
+                            ]);
+
+                            // Update job payment if exists
+                            $jobPayment = \App\Models\JobPayment::where('contract_id', $contract->id)
+                                ->where('status', '!=', 'refunded')
+                                ->first();
+
+                            if ($jobPayment) {
+                                // Refund creator balance if payment was completed
+                                if ($jobPayment->status === 'completed') {
+                                    $balance = \App\Models\CreatorBalance::where('creator_id', $jobPayment->creator_id)->first();
+                                    if ($balance) {
+                                        // Remove from available balance if it was moved there
+                                        if ($balance->available_balance >= $jobPayment->creator_amount) {
+                                            $balance->decrement('available_balance', $jobPayment->creator_amount);
+                                        }
+                                        // Remove from pending balance
+                                        if ($balance->pending_balance >= $jobPayment->creator_amount) {
+                                            $balance->decrement('pending_balance', $jobPayment->creator_amount);
+                                        }
+                                        $balance->decrement('total_earned', $jobPayment->creator_amount);
+                                    }
+                                }
+
+                                $jobPayment->refund('Campaign cancelled');
+                            }
+
+                            // Cancel the contract
+                            $contract->update([
+                                'status' => 'cancelled',
+                                'cancelled_at' => now(),
+                                'cancellation_reason' => 'Campaign cancelled',
+                            ]);
+
+                            $refundedAmount += $contract->budget;
+                            $refundedContracts[] = $contract->id;
+
+                            Log::info('Contract refunded successfully', [
+                                'contract_id' => $contract->id,
+                                'campaign_id' => $campaign->id,
+                                'refund_id' => $refund->id,
+                                'amount' => $contract->budget,
+                            ]);
+                        } catch (\Stripe\Exception\ApiErrorException $e) {
+                            $refundErrors[] = [
+                                'contract_id' => $contract->id,
+                                'error' => $e->getMessage(),
+                            ];
+                            Log::error('Failed to create Stripe refund', [
+                                'contract_id' => $contract->id,
+                                'payment_intent_id' => $transaction->stripe_payment_intent_id,
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
+                    } else {
+                        // No transaction found or already refunded, just cancel the contract
+                        $contract->update([
+                            'status' => 'cancelled',
+                            'cancelled_at' => now(),
+                            'cancellation_reason' => 'Campaign cancelled',
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    $refundErrors[] = [
+                        'contract_id' => $contract->id,
+                        'error' => $e->getMessage(),
+                    ];
+                    Log::error('Error processing refund for contract', [
+                        'contract_id' => $contract->id,
+                        'campaign_id' => $campaign->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // Update campaign status
             $campaign->update([
                 'is_active' => false,
                 'status' => 'cancelled'
             ]);
+
+            // Commit transaction
+            \Illuminate\Support\Facades\DB::commit();
 
             // Notify admin of campaign archiving
             \App\Services\NotificationService::notifyAdminOfSystemActivity('campaign_archived', [
@@ -1148,15 +1284,68 @@ class CampaignController extends Controller
                 'brand_name' => $campaign->brand->name,
                 'archived_by' => $user->name,
                 'archived_by_role' => $user->role,
+                'refunded_amount' => $refundedAmount,
+                'refunded_contracts_count' => count($refundedContracts),
             ]);
 
-            return response()->json([
+            // Notify brand about refunds if any refunds were processed
+            if ($refundedAmount > 0) {
+                try {
+                    $brand = $campaign->brand;
+                    if ($brand) {
+                        // Create notification for brand about refund
+                        \App\Models\Notification::create([
+                            'user_id' => $brand->id,
+                            'type' => 'campaign_cancelled',
+                            'title' => 'Campanha Cancelada - Reembolso Processado',
+                            'message' => "Sua campanha '{$campaign->title}' foi cancelada. Um reembolso de R$ " . number_format($refundedAmount, 2, ',', '.') . " foi processado para " . count($refundedContracts) . " contrato(s).",
+                            'data' => [
+                                'campaign_id' => $campaign->id,
+                                'campaign_title' => $campaign->title,
+                                'refunded_amount' => $refundedAmount,
+                                'refunded_contracts_count' => count($refundedContracts),
+                            ],
+                        ]);
+                        
+                        Log::info('Brand notified of campaign cancellation and refund', [
+                            'brand_id' => $brand->id,
+                            'campaign_id' => $campaign->id,
+                            'refunded_amount' => $refundedAmount,
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Failed to notify brand of campaign cancellation', [
+                        'campaign_id' => $campaign->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            $response = [
                 'success' => true,
                 'message' => 'Campaign archived successfully',
-                'data' => $campaign->load(['brand'])
-            ]);
+                'data' => $campaign->load(['brand']),
+            ];
+
+            if ($refundedAmount > 0) {
+                $response['refund_info'] = [
+                    'refunded_amount' => $refundedAmount,
+                    'refunded_contracts' => $refundedContracts,
+                ];
+            }
+
+            if (!empty($refundErrors)) {
+                $response['refund_errors'] = $refundErrors;
+                $response['message'] = 'Campaign archived with some refund errors. Please check the refund_errors field.';
+            }
+
+            return response()->json($response);
         } catch (\Exception $e) {
-            Log::error('Failed to archive campaign: ' . $e->getMessage());
+            \Illuminate\Support\Facades\DB::rollBack();
+            Log::error('Failed to archive campaign: ' . $e->getMessage(), [
+                'campaign_id' => $campaign->id ?? null,
+                'trace' => $e->getTraceAsString(),
+            ]);
             return response()->json([
                 'success' => false,
                 'error' => 'Failed to archive campaign',
