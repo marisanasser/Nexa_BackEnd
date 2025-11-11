@@ -96,6 +96,51 @@ class Contract extends Model
         return $this->hasOne(JobPayment::class);
     }
 
+    /**
+     * Check if brand has funded contracts for a specific application
+     * 
+     * @param int $brandId The brand user ID
+     * @param int $campaignId The campaign ID
+     * @param int $creatorId The creator user ID
+     * @return array Returns array with 'has_funded' boolean and 'contracts_needing_funding' collection
+     */
+    public static function checkBrandFundsForApplication(int $brandId, int $campaignId, int $creatorId): array
+    {
+        // Find all contracts related to this application
+        $contracts = self::where('brand_id', $brandId)
+            ->where(function ($query) use ($campaignId, $creatorId) {
+                // Check for contracts related to this campaign via offers
+                $query->whereHas('offer', function ($q) use ($campaignId, $creatorId) {
+                    $q->where('campaign_id', $campaignId)
+                      ->where('creator_id', $creatorId);
+                })
+                // Or check for contracts with this creator (might be created directly)
+                ->orWhere(function ($q) use ($creatorId) {
+                    $q->where('creator_id', $creatorId)
+                      ->whereNull('offer_id');
+                });
+            })
+            ->get();
+
+        // Separate contracts into funded and needing funding
+        $fundedContracts = $contracts->filter(function ($contract) {
+            return $contract->isFunded();
+        });
+
+        $contractsNeedingFunding = $contracts->filter(function ($contract) {
+            return $contract->needsFunding();
+        });
+
+        return [
+            'has_funded' => $fundedContracts->isNotEmpty(),
+            'all_funded' => $contractsNeedingFunding->isEmpty() && $contracts->isNotEmpty(),
+            'has_unfunded' => $contractsNeedingFunding->isNotEmpty(),
+            'contracts' => $contracts,
+            'funded_contracts' => $fundedContracts,
+            'contracts_needing_funding' => $contractsNeedingFunding,
+        ];
+    }
+
     public function messages(): HasMany
     {
         return $this->hasManyThrough(Message::class, Offer::class, 'id', 'chat_room_id', 'offer_id', 'chat_room_id');
@@ -305,7 +350,7 @@ class Contract extends Model
             ]);
         }
 
-        // Move escrow from pending to available balance upon review
+        // Get or create creator balance
         $balance = CreatorBalance::firstOrCreate(
             ['creator_id' => $this->creator_id],
             [
@@ -315,7 +360,57 @@ class Contract extends Model
                 'total_withdrawn' => 0,
             ]
         );
-        $balance->movePendingToAvailable($this->creator_amount);
+
+        // Ensure payment is in pending_balance first (in case it wasn't added during contract funding)
+        // If the amount is not in pending_balance, add it first
+        $balance->refresh(); // Get latest balance from database
+        
+        if ($balance->pending_balance < $this->creator_amount) {
+            // Add the creator amount to pending_balance if it's not already there
+            $amountToAdd = $this->creator_amount - $balance->pending_balance;
+            if ($amountToAdd > 0) {
+                $previousPendingBalance = $balance->pending_balance;
+                $balance->addPendingAmount($amountToAdd);
+                $balance->refresh(); // Refresh to get updated pending_balance
+                
+                \Illuminate\Support\Facades\Log::info('Added payment to pending balance during review processing', [
+                    'contract_id' => $this->id,
+                    'creator_id' => $this->creator_id,
+                    'amount_added' => $amountToAdd,
+                    'creator_amount' => $this->creator_amount,
+                    'previous_pending_balance' => $previousPendingBalance,
+                    'new_pending_balance' => $balance->pending_balance,
+                ]);
+            }
+        }
+
+        // Move escrow from pending to available balance upon review
+        // Only proceed if the move is successful
+        $moveSuccess = $balance->movePendingToAvailable($this->creator_amount);
+        
+        if (!$moveSuccess) {
+            \Illuminate\Support\Facades\Log::error('Failed to move payment from pending to available balance', [
+                'contract_id' => $this->id,
+                'creator_id' => $this->creator_id,
+                'creator_amount' => $this->creator_amount,
+                'pending_balance' => $balance->pending_balance,
+                'available_balance' => $balance->available_balance,
+            ]);
+            
+            // Still try to add the amount directly to available_balance as fallback
+            // This handles the case where payment was never in pending_balance
+            $balance->increment('available_balance', $this->creator_amount);
+            $balance->refresh();
+            
+            \Illuminate\Support\Facades\Log::info('Added payment directly to available balance as fallback', [
+                'contract_id' => $this->id,
+                'creator_id' => $this->creator_id,
+                'creator_amount' => $this->creator_amount,
+                'available_balance_after' => $balance->available_balance,
+            ]);
+        }
+        
+        // Only add to total_earned if we successfully moved or added to available_balance
         $balance->addEarning($this->creator_amount);
 
         // Update workflow status
@@ -326,6 +421,14 @@ class Contract extends Model
         // Notify creator that funds are available
         NotificationService::notifyCreatorOfPaymentAvailable($this);
 
+        \Illuminate\Support\Facades\Log::info('Payment processed after review - moved to available balance', [
+            'contract_id' => $this->id,
+            'creator_id' => $this->creator_id,
+            'creator_amount' => $this->creator_amount,
+            'available_balance' => $balance->available_balance,
+            'pending_balance' => $balance->pending_balance,
+        ]);
+
         return true;
     }
 
@@ -335,6 +438,52 @@ class Contract extends Model
     public function hasPaymentProcessed(): bool
     {
         return $this->payment && $this->payment->status === 'completed';
+    }
+
+    /**
+     * Check if contract is funded (brand has paid for this contract)
+     * A contract is considered funded if:
+     * 1. It has a payment record with status 'completed', OR
+     * 2. It's active (meaning payment was processed and contract started), OR
+     * 3. It's completed (meaning payment was processed and work is done)
+     */
+    public function isFunded(): bool
+    {
+        // Check if payment exists and is completed
+        if ($this->hasPaymentProcessed()) {
+            return true;
+        }
+
+        // If contract is active or completed, it means payment was processed
+        if ($this->isActive() || $this->isCompleted()) {
+            return true;
+        }
+
+        // Check if there's a completed transaction
+        if ($this->payment && in_array($this->payment->status, ['completed', 'processing'])) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if contract needs funding (brand hasn't paid yet)
+     */
+    public function needsFunding(): bool
+    {
+        // If contract is already funded, it doesn't need funding
+        if ($this->isFunded()) {
+            return false;
+        }
+
+        // Contract needs funding if:
+        // 1. Status is pending and workflow is payment_pending, OR
+        // 2. No payment exists, OR
+        // 3. Payment status is pending or failed
+        return ($this->status === 'pending' && $this->workflow_status === 'payment_pending') ||
+               !$this->payment ||
+               ($this->payment && in_array($this->payment->status, ['pending', 'failed']));
     }
 
     /**
@@ -557,14 +706,27 @@ class Contract extends Model
                 if ($balance) {
                     // Ensure the creator amount is in available balance
                     // If it's still in pending, move it to available
-                    if ($balance->pending_balance >= $payment->creator_amount) {
-                        $balance->movePendingToAvailable($payment->creator_amount);
-                        
+                    $balance->refresh(); // Get latest balance
+                    $moveSuccess = $balance->movePendingToAvailable($payment->creator_amount);
+                    
+                    if ($moveSuccess) {
                         \Illuminate\Support\Facades\Log::info('Moved payment to available balance for contract on campaign completion', [
                             'contract_id' => $contract->id,
                             'campaign_id' => $campaign->id,
                             'creator_id' => $contract->creator_id,
                             'creator_amount' => $payment->creator_amount,
+                        ]);
+                    } else {
+                        // If move failed, add directly to available_balance as fallback
+                        $balance->increment('available_balance', $payment->creator_amount);
+                        $balance->refresh();
+                        
+                        \Illuminate\Support\Facades\Log::info('Added payment directly to available balance for contract on campaign completion (fallback)', [
+                            'contract_id' => $contract->id,
+                            'campaign_id' => $campaign->id,
+                            'creator_id' => $contract->creator_id,
+                            'creator_amount' => $payment->creator_amount,
+                            'available_balance_after' => $balance->available_balance,
                         ]);
                     }
                 }

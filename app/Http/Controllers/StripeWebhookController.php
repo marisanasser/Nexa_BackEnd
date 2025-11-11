@@ -90,6 +90,10 @@ class StripeWebhookController extends Controller
                     elseif ($session->mode === 'payment') {
                         $this->handleContractFundingCheckout($session);
                     }
+                    // Handle payment method setup (setup mode)
+                    elseif ($session->mode === 'setup') {
+                        $this->handleSetupModeCheckout($session);
+                    }
                     break;
                     
                 case 'invoice.paid':
@@ -785,12 +789,12 @@ class StripeWebhookController extends Controller
     }
 
     /**
-     * Handle contract funding checkout session completion
+     * Handle contract funding and offer funding checkout session completion
      */
     private function handleContractFundingCheckout($session): void
     {
         try {
-            Log::info('Handling contract funding checkout session completed', [
+            Log::info('Handling payment mode checkout session completed', [
                 'session_id' => $session->id,
                 'customer_id' => $session->customer,
                 'mode' => $session->mode,
@@ -798,21 +802,34 @@ class StripeWebhookController extends Controller
                 'metadata' => $session->metadata ?? null,
             ]);
 
-            // Check if this is a contract funding checkout
+            // Check metadata to determine type
             $metadata = $session->metadata ?? null;
             $contractId = null;
             $type = null;
+            $userId = null;
+            $amount = null;
 
             if (is_array($metadata)) {
                 $contractId = $metadata['contract_id'] ?? null;
                 $type = $metadata['type'] ?? null;
+                $userId = $metadata['user_id'] ?? null;
+                $amount = $metadata['amount'] ?? null;
             } elseif (is_object($metadata)) {
                 $contractId = $metadata->contract_id ?? null;
                 $type = $metadata->type ?? null;
+                $userId = $metadata->user_id ?? null;
+                $amount = $metadata->amount ?? null;
             }
 
+            // Handle offer funding - just create transaction record
+            if ($type === 'offer_funding') {
+                $this->handleOfferFundingCheckout($session, $userId, $amount);
+                return;
+            }
+
+            // Handle contract funding - requires contract ID
             if ($type !== 'contract_funding' || !$contractId) {
-                Log::info('Checkout session is not for contract funding, skipping', [
+                Log::info('Checkout session is not for contract or offer funding, skipping', [
                     'session_id' => $session->id,
                     'type' => $type,
                     'contract_id' => $contractId,
@@ -946,6 +963,302 @@ class StripeWebhookController extends Controller
             Log::error('Failed to handle contract funding checkout', [
                 'session_id' => $session->id ?? 'unknown',
                 'contract_id' => $contractId ?? 'unknown',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+    }
+
+    /**
+     * Handle offer funding checkout session completion
+     * Creates a transaction record directly in the transactions table
+     */
+    private function handleOfferFundingCheckout($session, $userId, $amount): void
+    {
+        try {
+            Log::info('Handling offer funding checkout session completed', [
+                'session_id' => $session->id,
+                'user_id' => $userId,
+                'amount' => $amount,
+                'payment_status' => $session->payment_status ?? 'unknown',
+            ]);
+
+            // Only process if payment was successful
+            if ($session->payment_status !== 'paid') {
+                Log::warning('Offer funding checkout payment not paid', [
+                    'session_id' => $session->id,
+                    'payment_status' => $session->payment_status,
+                ]);
+                return;
+            }
+
+            // Get user from customer ID if user_id not in metadata
+            $user = null;
+            if ($userId) {
+                $user = \App\Models\User::find($userId);
+            }
+
+            if (!$user && $session->customer) {
+                $user = \App\Models\User::where('stripe_customer_id', $session->customer)->first();
+            }
+
+            if (!$user) {
+                Log::error('User not found for offer funding checkout', [
+                    'session_id' => $session->id,
+                    'user_id' => $userId,
+                    'customer_id' => $session->customer,
+                ]);
+                return;
+            }
+
+            \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+            
+            // Retrieve the payment intent to get charge details
+            $paymentIntentId = $session->payment_intent ?? null;
+            if (!$paymentIntentId) {
+                Log::error('No payment intent in offer funding checkout session', [
+                    'session_id' => $session->id,
+                    'user_id' => $user->id,
+                ]);
+                return;
+            }
+
+            $paymentIntent = \Stripe\PaymentIntent::retrieve($paymentIntentId, [
+                'expand' => ['payment_method', 'charges.data.payment_method_details'],
+            ]);
+
+            if ($paymentIntent->status !== 'succeeded') {
+                Log::warning('Payment intent not succeeded for offer funding', [
+                    'payment_intent_id' => $paymentIntentId,
+                    'status' => $paymentIntent->status,
+                    'user_id' => $user->id,
+                ]);
+                return;
+            }
+
+            // Get amount from session or metadata (convert from cents if needed)
+            $transactionAmount = $amount ? (float) $amount : ($session->amount_total / 100);
+
+            // Get campaign_id from metadata to update campaign price
+            $campaignId = null;
+            if (is_array($metadata)) {
+                $campaignId = $metadata['campaign_id'] ?? null;
+            } elseif (is_object($metadata)) {
+                $campaignId = $metadata->campaign_id ?? null;
+            }
+
+            // Update campaign final_price if campaign_id exists
+            if ($campaignId) {
+                try {
+                    $campaign = \App\Models\Campaign::find($campaignId);
+                    if ($campaign) {
+                        // Update final_price with the funding amount (in reais, not cents)
+                        $campaign->update([
+                            'final_price' => $transactionAmount,
+                        ]);
+                        
+                        Log::info('Campaign final_price updated from offer funding', [
+                            'campaign_id' => $campaignId,
+                            'final_price' => $transactionAmount,
+                            'user_id' => $user->id,
+                            'session_id' => $session->id,
+                        ]);
+                    } else {
+                        Log::warning('Campaign not found for offer funding', [
+                            'campaign_id' => $campaignId,
+                            'session_id' => $session->id,
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Failed to update campaign final_price from offer funding', [
+                        'campaign_id' => $campaignId,
+                        'session_id' => $session->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Don't fail the transaction if campaign update fails
+                }
+            }
+
+            // Get payment method details from charge
+            $charge = null;
+            $cardBrand = null;
+            $cardLast4 = null;
+            $cardHolderName = null;
+
+            if (!empty($paymentIntent->charges->data)) {
+                $charge = $paymentIntent->charges->data[0];
+                $paymentMethodDetails = $charge->payment_method_details->card ?? null;
+                if ($paymentMethodDetails) {
+                    $cardBrand = $paymentMethodDetails->brand ?? null;
+                    $cardLast4 = $paymentMethodDetails->last4 ?? null;
+                    $cardHolderName = $paymentMethodDetails->name ?? null;
+                }
+            }
+
+            DB::beginTransaction();
+
+            try {
+                // Check if transaction already exists
+                $existingTransaction = \App\Models\Transaction::where('stripe_payment_intent_id', $paymentIntentId)
+                    ->where('user_id', $user->id)
+                    ->first();
+
+                if ($existingTransaction) {
+                    Log::info('Offer funding transaction already exists', [
+                        'transaction_id' => $existingTransaction->id,
+                        'payment_intent_id' => $paymentIntentId,
+                        'user_id' => $user->id,
+                    ]);
+                    
+                    DB::commit();
+                    return;
+                }
+
+                // Create transaction record
+                $transaction = \App\Models\Transaction::create([
+                    'user_id' => $user->id,
+                    'stripe_payment_intent_id' => $paymentIntent->id,
+                    'stripe_charge_id' => $charge->id ?? null,
+                    'status' => 'paid',
+                    'amount' => $transactionAmount,
+                    'payment_method' => 'stripe',
+                    'card_brand' => $cardBrand,
+                    'card_last4' => $cardLast4,
+                    'card_holder_name' => $cardHolderName,
+                    'payment_data' => [
+                        'checkout_session_id' => $session->id,
+                        'payment_intent' => $paymentIntent->id,
+                        'charge_id' => $charge->id ?? null,
+                        'type' => 'offer_funding',
+                        'metadata' => $session->metadata ?? null,
+                    ],
+                    'paid_at' => now(),
+                ]);
+
+                DB::commit();
+
+                Log::info('Offer funding transaction created successfully', [
+                    'transaction_id' => $transaction->id,
+                    'user_id' => $user->id,
+                    'session_id' => $session->id,
+                    'payment_intent_id' => $paymentIntent->id,
+                    'amount' => $transactionAmount,
+                ]);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Failed to handle offer funding checkout', [
+                'session_id' => $session->id ?? 'unknown',
+                'user_id' => $userId ?? 'unknown',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+    }
+
+    /**
+     * Handle setup mode checkout session (payment method setup)
+     * This ensures the payment method ID is stored in the user model
+     */
+    private function handleSetupModeCheckout($session): void
+    {
+        try {
+            Log::info('Handling setup mode checkout session completed', [
+                'session_id' => $session->id,
+                'customer_id' => $session->customer,
+                'mode' => $session->mode,
+                'setup_intent' => $session->setup_intent ?? null,
+            ]);
+
+            // Get setup intent from session
+            $setupIntentId = $session->setup_intent ?? null;
+            if (!$setupIntentId) {
+                Log::warning('No setup intent in checkout session', [
+                    'session_id' => $session->id,
+                ]);
+                return;
+            }
+
+            // Retrieve setup intent from Stripe
+            \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+            $setupIntent = \Stripe\SetupIntent::retrieve($setupIntentId, [
+                'expand' => ['payment_method']
+            ]);
+
+            if ($setupIntent->status !== 'succeeded') {
+                Log::warning('Setup intent not succeeded', [
+                    'setup_intent_id' => $setupIntentId,
+                    'status' => $setupIntent->status,
+                ]);
+                return;
+            }
+
+            // Get payment method ID from setup intent
+            $paymentMethodId = null;
+            if (is_object($setupIntent->payment_method)) {
+                $paymentMethodId = $setupIntent->payment_method->id ?? null;
+            } elseif (is_string($setupIntent->payment_method)) {
+                $paymentMethodId = $setupIntent->payment_method;
+            }
+
+            if (!$paymentMethodId) {
+                Log::warning('No payment method in setup intent', [
+                    'setup_intent_id' => $setupIntentId,
+                ]);
+                return;
+            }
+
+            // Find user by customer ID
+            $customerId = $session->customer;
+            if (!$customerId) {
+                Log::warning('No customer ID in checkout session', [
+                    'session_id' => $session->id,
+                ]);
+                return;
+            }
+
+            $user = \App\Models\User::where('stripe_customer_id', $customerId)->first();
+            if (!$user) {
+                Log::warning('User not found for Stripe customer', [
+                    'customer_id' => $customerId,
+                    'session_id' => $session->id,
+                ]);
+                return;
+            }
+
+            // Update user's stripe_payment_method_id using direct DB update
+            $updatedRows = DB::table('users')
+                ->where('id', $user->id)
+                ->update(['stripe_payment_method_id' => $paymentMethodId]);
+
+            // Verify the update
+            $actualStoredId = DB::table('users')
+                ->where('id', $user->id)
+                ->value('stripe_payment_method_id');
+
+            if ($actualStoredId !== $paymentMethodId) {
+                // Fallback to Eloquent if direct DB update failed
+                $user->refresh();
+                $user->stripe_payment_method_id = $paymentMethodId;
+                $user->save();
+                $user->refresh();
+            }
+
+            Log::info('Updated user payment method ID from setup mode checkout', [
+                'user_id' => $user->id,
+                'payment_method_id' => $paymentMethodId,
+                'updated_rows' => $updatedRows,
+                'verified' => ($user->stripe_payment_method_id === $paymentMethodId),
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to handle setup mode checkout', [
+                'session_id' => $session->id ?? 'unknown',
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);

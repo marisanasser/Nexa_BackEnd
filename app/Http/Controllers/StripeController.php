@@ -170,11 +170,23 @@ class StripeController extends Controller
                     'payouts_enabled' => $stripeAccount->payouts_enabled ?? false,
                 ]);
 
-                // Update user with Stripe account ID and payment method ID
-                $user->update([
-                    'stripe_account_id' => $stripeAccount->id,
-                    'stripe_payment_method_id' => $paymentMethod->id,
-                    'stripe_verification_status' => 'pending',
+                // Update user with Stripe account ID and payment method ID using direct DB update
+                $updatedRows = DB::table('users')
+                    ->where('id', $user->id)
+                    ->update([
+                        'stripe_account_id' => $stripeAccount->id,
+                        'stripe_payment_method_id' => $paymentMethod->id,
+                        'stripe_verification_status' => 'pending',
+                    ]);
+                
+                // Verify the update and refresh user model
+                $user->refresh();
+                
+                Log::info('Updated user with Stripe account and payment method via direct DB update', [
+                    'user_id' => $user->id,
+                    'updated_rows' => $updatedRows,
+                    'stripe_account_id' => $user->stripe_account_id,
+                    'stripe_payment_method_id' => $user->stripe_payment_method_id,
                 ]);
 
                 DB::commit();
@@ -418,11 +430,29 @@ class StripeController extends Controller
                 ], 404);
             }
 
-            // Update user with verified payment method
-            $user->update([
-                'stripe_payment_method_id' => $paymentMethod->id,
-                'stripe_verification_status' => 'verified',
-            ]);
+            // Update user with verified payment method using direct DB update
+            $updatedRows = DB::table('users')
+                ->where('id', $user->id)
+                ->update([
+                    'stripe_payment_method_id' => $paymentMethod->id,
+                    'stripe_verification_status' => 'verified',
+                ]);
+            
+            // Verify the update
+            $actualStoredId = DB::table('users')
+                ->where('id', $user->id)
+                ->value('stripe_payment_method_id');
+            
+            if ($actualStoredId !== $paymentMethod->id) {
+                // Fallback to Eloquent if direct DB update failed
+                $user->refresh();
+                $user->stripe_payment_method_id = $paymentMethod->id;
+                $user->stripe_verification_status = 'verified';
+                $user->save();
+                $user->refresh();
+            } else {
+                $user->refresh();
+            }
 
             Log::info('Payment method verified successfully', [
                 'user_id' => $user->id,

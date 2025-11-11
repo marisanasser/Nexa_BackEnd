@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use App\Models\CampaignApplication;
 use App\Services\NotificationService;
+use Stripe\Stripe;
+use Stripe\Account;
+use Stripe\Customer;
+use Stripe\Checkout\Session;
 
 class OfferController extends Controller
 {
@@ -46,14 +50,188 @@ class OfferController extends Controller
             ], 403);
         }
 
-        // Check if brand has active payment methods - TEMPORARILY DISABLED due to Pagar.me API issues
-        // if (!$user->hasActivePaymentMethods()) {
-        //     return response()->json([
-        //         'success' => false,
-        //         'message' => 'You must register a payment method before sending offers. Please add a credit card in your payment settings.',
-        //         'error_code' => 'NO_PAYMENT_METHOD',
-        //     ], 400);
-        // }
+        // Step 1: Check if brand has Stripe account configured
+        $hasStripeAccount = false;
+        $stripeAccountStatus = null;
+        
+        if (!empty($user->stripe_account_id)) {
+            try {
+                Stripe::setApiKey(config('services.stripe.secret'));
+                $stripeAccount = Account::retrieve($user->stripe_account_id);
+                $isAccountActive = $stripeAccount->charges_enabled && $stripeAccount->payouts_enabled;
+                
+                $hasStripeAccount = true;
+                $stripeAccountStatus = [
+                    'account_id' => $stripeAccount->id,
+                    'charges_enabled' => $stripeAccount->charges_enabled ?? false,
+                    'payouts_enabled' => $stripeAccount->payouts_enabled ?? false,
+                    'details_submitted' => $stripeAccount->details_submitted ?? false,
+                    'is_active' => $isAccountActive,
+                ];
+                
+                Log::info('Brand has Stripe account when sending offer', [
+                    'user_id' => $user->id,
+                    'stripe_account_id' => $user->stripe_account_id,
+                    'account_status' => $stripeAccountStatus,
+                ]);
+            } catch (\Exception $e) {
+                Log::warning('Brand Stripe account not found or invalid when sending offer', [
+                    'user_id' => $user->id,
+                    'stripe_account_id' => $user->stripe_account_id,
+                    'error' => $e->getMessage(),
+                ]);
+                $hasStripeAccount = false;
+            }
+        } else {
+            Log::info('Brand has no Stripe account ID when sending offer', [
+                'user_id' => $user->id,
+            ]);
+        }
+
+        // Step 2: Check if brand has payment methods configured
+        $hasPaymentMethod = false;
+        
+        // Check for Stripe payment method (direct Stripe integration on user model)
+        if ($user->stripe_customer_id && $user->stripe_payment_method_id) {
+            $hasPaymentMethod = true;
+            Log::info('Brand has direct Stripe payment method when sending offer', [
+                'user_id' => $user->id,
+                'stripe_customer_id' => $user->stripe_customer_id,
+                'stripe_payment_method_id' => $user->stripe_payment_method_id,
+            ]);
+        }
+        
+        // Check for BrandPaymentMethod records (active payment methods)
+        if (!$hasPaymentMethod) {
+            $activePaymentMethods = \App\Models\BrandPaymentMethod::where('user_id', $user->id)
+                ->where('is_active', true)
+                ->count();
+            
+            if ($activePaymentMethods > 0) {
+                $hasPaymentMethod = true;
+                Log::info('Brand has active payment methods when sending offer', [
+                    'user_id' => $user->id,
+                    'active_methods_count' => $activePaymentMethods,
+                ]);
+            }
+        }
+
+        // If no Stripe account exists, redirect to Stripe Connect onboarding
+        if (!$hasStripeAccount) {
+            Log::info('Brand has no Stripe account when sending offer, redirecting to Stripe Connect setup', [
+                'user_id' => $user->id,
+                'creator_id' => $request->creator_id,
+                'chat_room_id' => $request->chat_room_id,
+            ]);
+            
+            $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
+            $redirectUrl = $frontendUrl . '/brand?component=Pagamentos&requires_stripe_account=true&action=send_offer&creator_id=' . $request->creator_id . '&chat_room_id=' . $request->chat_room_id;
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'You need to connect your Stripe account before sending offers. Please set up your Stripe account and try again.',
+                'requires_stripe_account' => true,
+                'requires_funding' => true,
+                'redirect_url' => $redirectUrl,
+            ], 402); // 402 Payment Required
+        }
+
+        // If no payment method exists, create Stripe checkout session for payment method setup
+        if (!$hasPaymentMethod) {
+            Log::info('Brand has no payment method when sending offer, creating checkout session for setup', [
+                'user_id' => $user->id,
+                'creator_id' => $request->creator_id,
+                'chat_room_id' => $request->chat_room_id,
+                'stripe_account_id' => $user->stripe_account_id,
+            ]);
+            
+            try {
+                Stripe::setApiKey(config('services.stripe.secret'));
+
+                // Ensure Stripe customer exists
+                $customerId = $user->stripe_customer_id;
+                
+                if (!$customerId) {
+                    $customer = Customer::create([
+                        'email' => $user->email,
+                        'name' => $user->name,
+                        'metadata' => [
+                            'user_id' => $user->id,
+                            'role' => 'brand',
+                        ],
+                    ]);
+                    $customerId = $customer->id;
+                    $user->update(['stripe_customer_id' => $customerId]);
+                } else {
+                    try {
+                        Customer::retrieve($customerId);
+                    } catch (\Exception $e) {
+                        $customer = Customer::create([
+                            'email' => $user->email,
+                            'name' => $user->name,
+                            'metadata' => [
+                                'user_id' => $user->id,
+                                'role' => 'brand',
+                            ],
+                        ]);
+                        $customerId = $customer->id;
+                        $user->update(['stripe_customer_id' => $customerId]);
+                    }
+                }
+
+                $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
+
+                // Create Checkout Session in setup mode for payment method configuration
+                $checkoutSession = Session::create([
+                    'customer' => $customerId,
+                    'mode' => 'setup',
+                    'payment_method_types' => ['card'],
+                    'success_url' => $frontendUrl . '/brand?component=Pagamentos&success=true&session_id={CHECKOUT_SESSION_ID}&action=send_offer&creator_id=' . $request->creator_id . '&chat_room_id=' . $request->chat_room_id,
+                    'cancel_url' => $frontendUrl . '/brand?component=Pagamentos&canceled=true&action=send_offer&creator_id=' . $request->creator_id . '&chat_room_id=' . $request->chat_room_id,
+                    'metadata' => [
+                        'user_id' => (string) $user->id,
+                        'type' => 'payment_method_setup',
+                        'action' => 'send_offer',
+                        'creator_id' => (string) $request->creator_id,
+                        'chat_room_id' => $request->chat_room_id,
+                    ],
+                ]);
+                
+                Log::info('Checkout session created for offer funding', [
+                    'session_id' => $checkoutSession->id,
+                    'user_id' => $user->id,
+                    'customer_id' => $customerId,
+                    'creator_id' => $request->creator_id,
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You need to configure a payment method before sending offers.',
+                    'requires_funding' => true,
+                    'redirect_url' => $checkoutSession->url,
+                    'checkout_session_id' => $checkoutSession->id,
+                ], 402); // 402 Payment Required
+
+            } catch (\Exception $e) {
+                Log::error('Failed to create Stripe Checkout Session for offer funding', [
+                    'user_id' => $user->id,
+                    'creator_id' => $request->creator_id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+
+                // Fallback to frontend redirect if Stripe fails
+                $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
+                $redirectUrl = $frontendUrl . '/brand?component=Pagamentos&requires_funding=true&action=send_offer';
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You need to configure a payment method before sending offers. Please set up your payment method and try again.',
+                    'requires_funding' => true,
+                    'redirect_url' => $redirectUrl,
+                ], 402);
+            }
+        }
 
         // Check if creator exists and is a creator or student
         $creator = User::find($request->creator_id);

@@ -251,6 +251,35 @@ class ContractPaymentController extends Controller
             ]);
             
             \Stripe\PaymentMethod::attach($pmId, ['customer' => $customer->id]);
+            
+            // Store payment method ID in user model for quick access using direct DB update
+            if ($user->stripe_payment_method_id !== $pmId) {
+                $updatedRows = DB::table('users')
+                    ->where('id', $user->id)
+                    ->update(['stripe_payment_method_id' => $pmId]);
+                
+                // Verify the update
+                $actualStoredId = DB::table('users')
+                    ->where('id', $user->id)
+                    ->value('stripe_payment_method_id');
+                
+                if ($actualStoredId !== $pmId) {
+                    // Fallback to Eloquent if direct DB update failed
+                    $user->refresh();
+                    $user->stripe_payment_method_id = $pmId;
+                    $user->save();
+                    $user->refresh();
+                } else {
+                    $user->refresh();
+                }
+                
+                Log::info('Updated user stripe_payment_method_id after attaching payment method', [
+                    'user_id' => $user->id,
+                    'stripe_payment_method_id' => $pmId,
+                    'updated_rows' => $updatedRows,
+                    'verified' => ($user->stripe_payment_method_id === $pmId),
+                ]);
+            }
 
             Log::info('Creating Stripe PaymentIntent for contract', [
                 'contract_id' => $contract->id,

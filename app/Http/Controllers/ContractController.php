@@ -218,6 +218,7 @@ class ContractController extends Controller
     {
         $user = Auth::user();
         $status = $request->get('status'); // 'active', 'completed', 'cancelled', 'disputed'
+        $workflowStatus = $request->get('workflow_status'); // 'payment_pending', 'active', etc.
 
         try {
             $query = $user->isBrand() 
@@ -228,7 +229,12 @@ class ContractController extends Controller
                 $query->where('status', $status);
             }
 
-            $contracts = $query->with(['brand:id,name,avatar_url', 'creator:id,name,avatar_url', 'offer'])
+            // Filter by workflow_status if provided (useful for filtering contracts needing payment)
+            if ($workflowStatus) {
+                $query->where('workflow_status', $workflowStatus);
+            }
+
+            $contracts = $query->with(['brand:id,name,avatar_url', 'creator:id,name,avatar_url', 'offer', 'payment'])
                 ->orderBy('created_at', 'desc')
                 ->paginate(10);
 
