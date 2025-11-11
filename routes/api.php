@@ -292,7 +292,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
         
         // Earnings and balance
         Route::get('/earnings', [PaymentController::class, 'getEarnings']); // Get earnings and balance
-        Route::get('/withdrawal-methods', [PaymentController::class, 'getWithdrawalMethods']); // Get available withdrawal methods
+        Route::get('/withdrawal-methods', [CreatorBalanceController::class, 'withdrawalMethods']); // Get available withdrawal methods
+        Route::post('/stripe-payment-method-checkout', [CreatorBalanceController::class, 'createStripePaymentMethodCheckout']); // Connect Stripe payment method for withdrawals
     });
 
     // Brand payment methods (for contract payments)
@@ -302,6 +303,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/set-default', [BrandPaymentController::class, 'setDefaultPaymentMethod']);
         Route::delete('/methods', [BrandPaymentController::class, 'deletePaymentMethod']);
         Route::post('/create-checkout-session', [BrandPaymentController::class, 'createCheckoutSession']);
+        Route::post('/create-funding-checkout', [BrandPaymentController::class, 'createFundingCheckout']);
         Route::post('/handle-checkout-success', [BrandPaymentController::class, 'handleCheckoutSuccess']);
     });
 

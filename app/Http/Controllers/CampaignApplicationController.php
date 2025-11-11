@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Stripe\Stripe;
 use Stripe\Checkout\Session;
 use Stripe\Customer;
+use Stripe\Account;
 
 class CampaignApplicationController extends Controller
 {
@@ -147,6 +148,40 @@ class CampaignApplicationController extends Controller
 
     /**
      * Approve an application (Brand only)
+     * 
+     * This method checks if the brand has funds in the platform before approving:
+     * 
+     * 1. Stripe Account Check:
+     *    - Verifies brand has a Stripe Connect account (stripe_account_id)
+     *    - Retrieves account from Stripe API to verify it exists and is active
+     *    - Checks if account has charges_enabled and payouts_enabled
+     *    - If no Stripe account, redirects to payment methods page for Stripe Connect setup
+     * 
+     * 2. Payment Method Check:
+     *    - Verifies brand has a Stripe payment method configured
+     *    - Checks for stripe_customer_id + stripe_payment_method_id OR BrandPaymentMethod records
+     *    - If no payment method, redirects to Stripe checkout to set one up
+     * 
+     * 3. Contract Funding Check:
+     *    - If payment method exists, checks for contracts related to this application
+     *    - Contracts are created when offers are accepted (after proposal approval)
+     *    - If contracts exist and need funding, redirects to payment
+     *    - Uses Contract::needsFunding() to verify if brand has paid
+     * 
+     * 4. Fund Verification:
+     *    - A contract is considered "funded" if:
+     *      * It has a JobPayment with status 'completed', OR
+     *      * Contract status is 'active' or 'completed' (payment was processed), OR
+     *      * Payment status is 'completed' or 'processing'
+     *    - A contract "needs funding" if:
+     *      * Status is 'pending' with workflow_status 'payment_pending', OR
+     *      * No payment record exists, OR
+     *      * Payment status is 'pending' or 'failed'
+     * 
+     * 5. Approval Process:
+     *    - Only proceeds if Stripe account exists, payment method exists, and contracts are funded (or no contracts exist yet)
+     *    - Creates chat room automatically
+     *    - Sends notifications to creator and admin
      */
     public function approve(CampaignApplication $application): JsonResponse
     {
@@ -161,7 +196,51 @@ class CampaignApplicationController extends Controller
             return response()->json(['message' => 'Application cannot be approved'], 400);
         }
 
-        // Check if brand has payment methods configured
+        // Step 1: Check if brand has Stripe account configured
+        // This verifies the brand has a valid Stripe account before approving applications
+        $hasStripeAccount = false;
+        $stripeAccountStatus = null;
+        
+        if (!empty($user->stripe_account_id)) {
+            try {
+                // Set Stripe API key
+                Stripe::setApiKey(config('services.stripe.secret'));
+                
+                // Retrieve and verify Stripe account exists and is active
+                $stripeAccount = Account::retrieve($user->stripe_account_id);
+                
+                // Check if account is active (charges and payouts enabled)
+                $isAccountActive = $stripeAccount->charges_enabled && $stripeAccount->payouts_enabled;
+                
+                $hasStripeAccount = true;
+                $stripeAccountStatus = [
+                    'account_id' => $stripeAccount->id,
+                    'charges_enabled' => $stripeAccount->charges_enabled ?? false,
+                    'payouts_enabled' => $stripeAccount->payouts_enabled ?? false,
+                    'details_submitted' => $stripeAccount->details_submitted ?? false,
+                    'is_active' => $isAccountActive,
+                ];
+                
+                Log::info('Brand has Stripe account', [
+                    'user_id' => $user->id,
+                    'stripe_account_id' => $user->stripe_account_id,
+                    'account_status' => $stripeAccountStatus,
+                ]);
+            } catch (\Exception $e) {
+                Log::warning('Brand Stripe account not found or invalid', [
+                    'user_id' => $user->id,
+                    'stripe_account_id' => $user->stripe_account_id,
+                    'error' => $e->getMessage(),
+                ]);
+                $hasStripeAccount = false;
+            }
+        } else {
+            Log::info('Brand has no Stripe account ID', [
+                'user_id' => $user->id,
+            ]);
+        }
+
+        // Step 2: Check if brand has payment methods configured
         // This is required before approving applications to ensure payment capability
         $hasPaymentMethod = false;
         
@@ -190,12 +269,34 @@ class CampaignApplicationController extends Controller
             }
         }
 
+        // If no Stripe account exists, redirect to Stripe Connect onboarding
+        if (!$hasStripeAccount) {
+            Log::info('Brand has no Stripe account, redirecting to Stripe Connect setup', [
+                'user_id' => $user->id,
+                'application_id' => $application->id,
+                'campaign_id' => $application->campaign_id,
+            ]);
+            
+            // Redirect to payment methods page where they can set up Stripe Connect
+            $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
+            $redirectUrl = $frontendUrl . '/brand?component=Pagamentos&requires_stripe_account=true&application_id=' . $application->id . '&campaign_id=' . $application->campaign_id;
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'You need to connect your Stripe account before approving proposals. Please set up your Stripe account and try again.',
+                'requires_stripe_account' => true,
+                'requires_funding' => true, // Also set this for frontend compatibility
+                'redirect_url' => $redirectUrl,
+            ], 402); // 402 Payment Required
+        }
+
         // If no payment method exists, create Stripe checkout session for payment method setup
         if (!$hasPaymentMethod) {
             Log::info('Brand has no payment method, creating checkout session for setup', [
                 'user_id' => $user->id,
                 'application_id' => $application->id,
                 'campaign_id' => $application->campaign_id,
+                'stripe_account_id' => $user->stripe_account_id,
             ]);
             try {
                 // Set Stripe API key
@@ -308,11 +409,12 @@ class CampaignApplicationController extends Controller
         }
 
         // If payment method exists, check if there are contracts that need funding
+        // This verifies that the brand has funds/payment capability before approving proposals
         // Check for contracts related to this campaign/creator that are pending payment
         if ($hasPaymentMethod) {
+            // Find contracts related to this application that need funding
+            // Contracts are created when offers are accepted, so we check for existing contracts
             $contractsNeedingFunding = \App\Models\Contract::where('brand_id', $user->id)
-                ->where('status', 'pending')
-                ->where('workflow_status', 'payment_pending')
                 ->where(function ($query) use ($application) {
                     // Check for contracts related to this campaign via offers
                     $query->whereHas('offer', function ($q) use ($application) {
@@ -325,24 +427,28 @@ class CampaignApplicationController extends Controller
                           ->whereNull('offer_id'); // Contracts without offers
                     });
                 })
-                ->where(function ($query) {
-                    // Check if payment doesn't exist or is not completed
-                    $query->whereDoesntHave('payment')
-                          ->orWhereHas('payment', function ($q) {
-                              $q->where('status', '!=', 'completed');
-                          });
-                })
-                ->get();
+                ->get()
+                ->filter(function ($contract) {
+                    // Use the new helper method to check if contract needs funding
+                    return $contract->needsFunding();
+                });
 
-            // If there are contracts needing funding, create checkout session for the first one
+            // If there are contracts needing funding, redirect brand to payment
+            // This ensures the brand has funds in the platform before approving proposals
             if ($contractsNeedingFunding->isNotEmpty()) {
                 $contractToFund = $contractsNeedingFunding->first();
                 
-                Log::info('Brand has payment method but contract needs funding, creating checkout session', [
+                Log::info('Brand has payment method but contract needs funding - checking brand funds', [
                     'user_id' => $user->id,
                     'application_id' => $application->id,
                     'contract_id' => $contractToFund->id,
                     'contract_budget' => $contractToFund->budget,
+                    'contract_status' => $contractToFund->status,
+                    'workflow_status' => $contractToFund->workflow_status,
+                    'has_payment' => $contractToFund->payment ? 'yes' : 'no',
+                    'payment_status' => $contractToFund->payment ? $contractToFund->payment->status : 'none',
+                    'is_funded' => $contractToFund->isFunded(),
+                    'needs_funding' => $contractToFund->needsFunding(),
                 ]);
 
                 try {

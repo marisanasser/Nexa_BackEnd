@@ -304,6 +304,11 @@ class User extends Authenticatable
         return $this->hasOne(CreatorBalance::class, 'creator_id');
     }
 
+    public function brandBalance(): HasOne
+    {
+        return $this->hasOne(BrandBalance::class, 'brand_id');
+    }
+
     public function favorites(): HasMany
     {
         return $this->hasMany(CampaignFavorite::class, 'creator_id');
@@ -312,6 +317,81 @@ class User extends Authenticatable
     public function withdrawals(): HasMany
     {
         return $this->hasMany(Withdrawal::class, 'creator_id');
+    }
+
+    /**
+     * Get available withdrawal methods for this user
+     * Returns active withdrawal methods that the user can use
+     * Includes user's Stripe payment method if available
+     */
+    public function getWithdrawalMethods()
+    {
+        $methods = WithdrawalMethod::getActiveMethods()
+            ->map(function ($method) {
+                return [
+                    'id' => $method->code,
+                    'name' => $method->name,
+                    'description' => $method->description,
+                    'min_amount' => (float) $method->min_amount,
+                    'max_amount' => (float) $method->max_amount,
+                    'processing_time' => $method->processing_time,
+                    'fee' => (float) $method->fee,
+                    'required_fields' => $method->getRequiredFields(),
+                    'field_config' => $method->getFieldConfig(),
+                ];
+            })
+            ->toArray();
+
+        // Add user's Stripe payment method if available
+        if ($this->stripe_payment_method_id && $this->stripe_customer_id) {
+            try {
+                $stripeSecret = config('services.stripe.secret');
+                if ($stripeSecret) {
+                    \Stripe\Stripe::setApiKey($stripeSecret);
+                    
+                    $stripePaymentMethod = \Stripe\PaymentMethod::retrieve($this->stripe_payment_method_id);
+                    
+                    // Format card information
+                    $cardBrand = $stripePaymentMethod->card->brand ?? 'card';
+                    $cardLast4 = $stripePaymentMethod->card->last4 ?? '****';
+                    $cardExpMonth = $stripePaymentMethod->card->exp_month ?? null;
+                    $cardExpYear = $stripePaymentMethod->card->exp_year ?? null;
+                    
+                    $cardDisplayName = ucfirst($cardBrand) . ' •••• ' . $cardLast4;
+                    if ($cardExpMonth && $cardExpYear) {
+                        $cardDisplayName .= ' (' . str_pad($cardExpMonth, 2, '0', STR_PAD_LEFT) . '/' . substr($cardExpYear, -2) . ')';
+                    }
+                    
+                    // Add Stripe payment method as a withdrawal option
+                    $methods[] = [
+                        'id' => 'stripe_card',
+                        'name' => $cardDisplayName,
+                        'description' => 'Cartão de crédito/débito cadastrado no Stripe',
+                        'min_amount' => 10.00, // Minimum withdrawal amount
+                        'max_amount' => 10000.00, // Maximum withdrawal amount
+                        'processing_time' => '1-3 dias úteis',
+                        'fee' => 0.00, // No fee for Stripe card withdrawals
+                        'required_fields' => [],
+                        'field_config' => [],
+                        'stripe_payment_method_id' => $this->stripe_payment_method_id,
+                        'stripe_customer_id' => $this->stripe_customer_id,
+                        'card_brand' => $cardBrand,
+                        'card_last4' => $cardLast4,
+                        'card_exp_month' => $cardExpMonth,
+                        'card_exp_year' => $cardExpYear,
+                    ];
+                }
+            } catch (\Exception $e) {
+                // Log error but don't fail - just skip adding Stripe payment method
+                \Illuminate\Support\Facades\Log::warning('Failed to retrieve Stripe payment method for withdrawal methods', [
+                    'user_id' => $this->id,
+                    'stripe_payment_method_id' => $this->stripe_payment_method_id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return collect($methods);
     }
 
     /**

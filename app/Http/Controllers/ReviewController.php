@@ -41,25 +41,43 @@ class ReviewController extends Controller
 
         $user = Auth::user();
 
-        // Check if user is a brand or creator
-        if (!$user->isBrand() && !$user->isCreator()) {
+        if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only brands and creators can create reviews',
-            ], 403);
+                'message' => 'User not authenticated',
+            ], 401);
         }
 
+        // Log user role for debugging
+        Log::info('Review creation attempt', [
+            'user_id' => $user->id,
+            'user_role' => $user->role,
+            'is_brand' => $user->isBrand(),
+            'is_creator' => $user->isCreator(),
+            'contract_id' => $request->contract_id,
+        ]);
+
         try {
-            // Find contract based on user role
-            $contract = null;
-            if ($user->isBrand()) {
-                $contract = Contract::where('brand_id', $user->id)
-                    ->where('status', 'completed')
-                    ->find($request->contract_id);
-            } elseif ($user->isCreator()) {
-                $contract = Contract::where('creator_id', $user->id)
-                    ->where('status', 'completed')
-                    ->find($request->contract_id);
+            // Find contract and check if user is involved (as brand or creator)
+            // This allows users to review if they're involved in the contract, regardless of role field
+            $contract = Contract::where('status', 'completed')
+                ->where(function($query) use ($user) {
+                    $query->where('brand_id', $user->id)
+                          ->orWhere('creator_id', $user->id);
+                })
+                ->find($request->contract_id);
+            
+            // If contract not found, user is not involved in this contract
+            if (!$contract) {
+                Log::warning('Review creation blocked - user is not involved in contract', [
+                    'user_id' => $user->id,
+                    'user_role' => $user->role,
+                    'contract_id' => $request->contract_id,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contract not found or you are not authorized to review this contract',
+                ], 403);
             }
 
             Log::info('Review submission attempt', [
@@ -110,8 +128,9 @@ class ReviewController extends Controller
                 ], 400);
             }
 
-            // Determine who is being reviewed based on user role
-            $reviewedId = $user->isBrand() ? $contract->creator_id : $contract->brand_id;
+            // Determine who is being reviewed based on user's involvement in contract
+            // If user is the brand, they're reviewing the creator, and vice versa
+            $reviewedId = ($contract->brand_id === $user->id) ? $contract->creator_id : $contract->brand_id;
             
             Log::info('Creating review', [
                 'contract_id' => $contract->id,

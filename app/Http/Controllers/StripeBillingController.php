@@ -105,6 +105,35 @@ class StripeBillingController extends Controller
                 'invoice_settings' => ['default_payment_method' => $pm->id],
             ]);
             
+            // Store payment method ID in user model for quick access using direct DB update
+            if ($user->stripe_payment_method_id !== $pm->id) {
+                $updatedRows = DB::table('users')
+                    ->where('id', $user->id)
+                    ->update(['stripe_payment_method_id' => $pm->id]);
+                
+                // Verify the update
+                $actualStoredId = DB::table('users')
+                    ->where('id', $user->id)
+                    ->value('stripe_payment_method_id');
+                
+                if ($actualStoredId !== $pm->id) {
+                    // Fallback to Eloquent if direct DB update failed
+                    $user->refresh();
+                    $user->stripe_payment_method_id = $pm->id;
+                    $user->save();
+                    $user->refresh();
+                } else {
+                    $user->refresh();
+                }
+                
+                Log::info('Updated user stripe_payment_method_id after attaching payment method for subscription', [
+                    'user_id' => $user->id,
+                    'stripe_payment_method_id' => $pm->id,
+                    'updated_rows' => $updatedRows,
+                    'verified' => ($user->stripe_payment_method_id === $pm->id),
+                ]);
+            }
+            
             Log::info('Creating Stripe subscription', [
                 'user_id' => $user->id,
                 'customer_id' => $customer->id,

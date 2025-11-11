@@ -422,13 +422,25 @@ class BrandPaymentController extends Controller
     public function handleCheckoutSuccess(Request $request): JsonResponse
     {
         try {
-            $user = auth()->user();
-
-            if (!$user) {
+            // Get fresh user instance from database to avoid any caching issues
+            $authUser = auth()->user();
+            if (!$authUser) {
                 return response()->json([
                     'success' => false,
                     'message' => 'User not authenticated',
                 ], 401);
+            }
+            
+            // Reload user from database to ensure we have the latest data
+            $user = User::find($authUser->id);
+            if (!$user) {
+                Log::error('User not found in database after authentication', [
+                    'auth_user_id' => $authUser->id,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found',
+                ], 404);
             }
 
             if (!$user->isBrand()) {
@@ -678,35 +690,187 @@ class BrandPaymentController extends Controller
                         ->update(['is_default' => false]);
                 }
 
-                // Store payment method ID in user model if this is the default payment method
-                // or if user doesn't have a payment method stored yet
-                if ($paymentMethodRecord->is_default || !$user->stripe_payment_method_id) {
-                    $userUpdateData['stripe_payment_method_id'] = $paymentMethodId;
-                    Log::info('Updating user stripe_payment_method_id', [
+                // Always store the payment method ID in user model when a payment method is obtained
+                // This ensures the user model has the latest payment method ID for quick access
+                $userUpdateData['stripe_payment_method_id'] = $paymentMethodId;
+                
+                // Verify user ID is valid
+                if (!$user->id || !is_numeric($user->id)) {
+                    Log::error('Invalid user ID for payment method update', [
                         'user_id' => $user->id,
-                        'stripe_payment_method_id' => $paymentMethodId,
-                        'is_default' => $paymentMethodRecord->is_default,
+                        'user_type' => gettype($user->id),
+                    ]);
+                    throw new \Exception('Invalid user ID');
+                }
+                
+                // Verify payment method ID is valid
+                if (empty($paymentMethodId) || !is_string($paymentMethodId)) {
+                    Log::error('Invalid payment method ID', [
+                        'payment_method_id' => $paymentMethodId,
+                        'payment_method_id_type' => gettype($paymentMethodId),
+                    ]);
+                    throw new \Exception('Invalid payment method ID');
+                }
+                
+                Log::info('Preparing to update user with payment method ID', [
+                    'user_id' => $user->id,
+                    'stripe_payment_method_id' => $paymentMethodId,
+                    'is_default' => $paymentMethodRecord->is_default,
+                    'previous_payment_method_id' => $user->stripe_payment_method_id,
+                    'userUpdateData_keys' => array_keys($userUpdateData),
+                    'userUpdateData' => $userUpdateData,
+                ]);
+
+                // Use direct DB update to ensure it persists within the transaction
+                // This bypasses any model caching or events that might interfere
+                // First, verify the user exists in the database
+                $userExists = DB::table('users')->where('id', $user->id)->exists();
+                if (!$userExists) {
+                    Log::error('User does not exist in database', ['user_id' => $user->id]);
+                    throw new \Exception('User not found in database');
+                }
+                
+                // Perform the update
+                $updatedRows = DB::table('users')
+                    ->where('id', $user->id)
+                    ->update($userUpdateData);
+                
+                // Log the raw SQL for debugging (in development only)
+                if (config('app.debug')) {
+                    Log::debug('Direct DB update executed', [
+                        'user_id' => $user->id,
+                        'updated_rows' => $updatedRows,
+                        'update_data' => $userUpdateData,
                     ]);
                 }
-
-                // Update user model with billing method information
-                if (!empty($userUpdateData)) {
-                    $user->update($userUpdateData);
-                    Log::info('Updated user billing method information', [
+                
+                // Verify the update was successful by querying directly from DB
+                $actualStoredId = DB::table('users')
+                    ->where('id', $user->id)
+                    ->value('stripe_payment_method_id');
+                
+                Log::info('Updated user billing method information via direct DB update', [
+                    'user_id' => $user->id,
+                    'updated_fields' => array_keys($userUpdateData),
+                    'updated_rows' => $updatedRows,
+                    'expected_payment_method_id' => $paymentMethodId,
+                    'actual_stored_payment_method_id' => $actualStoredId,
+                    'update_successful' => ($actualStoredId === $paymentMethodId),
+                ]);
+                
+                // If direct DB update didn't work, try Eloquent as fallback
+                if ($actualStoredId !== $paymentMethodId) {
+                    Log::warning('Direct DB update failed, trying Eloquent update', [
                         'user_id' => $user->id,
-                        'updated_fields' => array_keys($userUpdateData),
+                        'expected' => $paymentMethodId,
+                        'actual' => $actualStoredId,
                     ]);
+                    
+                    // Reload user from database
+                    $user->refresh();
+                    $user->stripe_payment_method_id = $paymentMethodId;
+                    if (isset($userUpdateData['stripe_customer_id'])) {
+                        $user->stripe_customer_id = $userUpdateData['stripe_customer_id'];
+                    }
+                    $saved = $user->save();
+                    
+                    // Verify again
+                    $user->refresh();
+                    $actualStoredId = $user->stripe_payment_method_id;
+                    
+                    Log::info('Eloquent fallback save completed', [
+                        'user_id' => $user->id,
+                        'stripe_payment_method_id' => $actualStoredId,
+                        'save_result' => $saved,
+                        'success' => ($actualStoredId === $paymentMethodId),
+                    ]);
+                    
+                    // If Eloquent also failed, try one more time with direct DB update
+                    if ($actualStoredId !== $paymentMethodId) {
+                        Log::error('Both direct DB and Eloquent updates failed, attempting final direct DB update', [
+                            'user_id' => $user->id,
+                            'expected' => $paymentMethodId,
+                            'actual' => $actualStoredId,
+                        ]);
+                        
+                        $finalUpdate = DB::table('users')
+                            ->where('id', $user->id)
+                            ->update(['stripe_payment_method_id' => $paymentMethodId]);
+                        
+                        $finalVerification = DB::table('users')
+                            ->where('id', $user->id)
+                            ->value('stripe_payment_method_id');
+                        
+                        Log::info('Final direct DB update attempt', [
+                            'user_id' => $user->id,
+                            'updated_rows' => $finalUpdate,
+                            'final_stored_id' => $finalVerification,
+                            'success' => ($finalVerification === $paymentMethodId),
+                        ]);
+                    }
+                } else {
+                    // Refresh the user model to sync with database
+                    $user->refresh();
                 }
-
-                // Refresh user to get updated fields
-                $user->refresh();
 
                 DB::commit();
 
+                // CRITICAL: Always ensure payment method ID is stored after transaction commit
+                // This is a final safeguard to ensure the value persists
+                $postCommitVerification = DB::table('users')
+                    ->where('id', $user->id)
+                    ->value('stripe_payment_method_id');
+                
+                // If not stored, update it immediately
+                if ($postCommitVerification !== $paymentMethodId) {
+                    Log::warning('Payment method ID not found after commit, updating now', [
+                        'user_id' => $user->id,
+                        'expected' => $paymentMethodId,
+                        'actual' => $postCommitVerification,
+                    ]);
+                    
+                    // Force update outside of transaction
+                    $forceUpdate = DB::table('users')
+                        ->where('id', $user->id)
+                        ->update(['stripe_payment_method_id' => $paymentMethodId]);
+                    
+                    // Verify again
+                    $finalCheck = DB::table('users')
+                        ->where('id', $user->id)
+                        ->value('stripe_payment_method_id');
+                    
+                    if ($finalCheck !== $paymentMethodId) {
+                        // Last resort: use Eloquent with explicit save
+                        $user->refresh();
+                        $user->stripe_payment_method_id = $paymentMethodId;
+                        $saved = $user->save();
+                        $user->refresh();
+                        
+                        Log::error('CRITICAL: Payment method ID still not stored after all attempts', [
+                            'user_id' => $user->id,
+                            'expected' => $paymentMethodId,
+                            'final_value' => $user->stripe_payment_method_id,
+                            'eloquent_save_result' => $saved,
+                        ]);
+                    } else {
+                        Log::info('Payment method ID successfully stored after force update', [
+                            'user_id' => $user->id,
+                            'payment_method_id' => $paymentMethodId,
+                        ]);
+                    }
+                }
+                
+                // Final verification
+                $finalVerification = DB::table('users')
+                    ->where('id', $user->id)
+                    ->value('stripe_payment_method_id');
+                
                 Log::info('Payment method saved successfully from Stripe Checkout', [
                     'user_id' => $user->id,
                     'payment_method_id' => $paymentMethodRecord->id,
                     'stripe_payment_method_id' => $paymentMethodId,
+                    'final_verification' => $finalVerification,
+                    'verification_match' => ($finalVerification === $paymentMethodId),
                     'card_brand' => $cardBrandFormatted,
                     'card_last4' => $card->last4,
                 ]);
@@ -740,6 +904,142 @@ class BrandPaymentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to save payment method. Please try again.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Create Stripe Checkout Session for general platform funding
+     * This endpoint creates a payment mode checkout session for the brand to fund the platform
+     * No verification is performed - it just creates the checkout session.
+     */
+    public function createFundingCheckout(Request $request): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+            
+            if (!$user->isBrand()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only brands can create funding checkout sessions',
+                ], 403);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'amount' => 'required|numeric|min:10|max:100000',
+                'creator_id' => 'required|integer|exists:users,id',
+                'chat_room_id' => 'required|string',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
+            // Get campaign_id from chat room
+            $chatRoom = \App\Models\ChatRoom::where('room_id', $request->chat_room_id)->first();
+            $campaignId = $chatRoom ? $chatRoom->campaign_id : null;
+
+            $stripeSecret = config('services.stripe.secret');
+            if (!$stripeSecret) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Stripe is not configured',
+                ], 503);
+            }
+
+            Stripe::setApiKey($stripeSecret);
+
+            // Ensure Stripe customer exists
+            $customerId = $user->stripe_customer_id;
+            
+            if (!$customerId) {
+                $customer = Customer::create([
+                    'email' => $user->email,
+                    'name' => $user->name,
+                    'metadata' => [
+                        'user_id' => $user->id,
+                        'role' => 'brand',
+                    ],
+                ]);
+                $customerId = $customer->id;
+                $user->update(['stripe_customer_id' => $customerId]);
+            } else {
+                try {
+                    Customer::retrieve($customerId);
+                } catch (\Exception $e) {
+                    $customer = Customer::create([
+                        'email' => $user->email,
+                        'name' => $user->name,
+                        'metadata' => [
+                            'user_id' => $user->id,
+                            'role' => 'brand',
+                        ],
+                    ]);
+                    $customerId = $customer->id;
+                    $user->update(['stripe_customer_id' => $customerId]);
+                }
+            }
+
+            $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
+            $amount = $request->amount;
+
+            // Create Checkout Session in payment mode for platform funding
+            $checkoutSession = Session::create([
+                'customer' => $customerId,
+                'mode' => 'payment',
+                'payment_method_types' => ['card'],
+                'line_items' => [[
+                    'price_data' => [
+                        'currency' => 'brl',
+                        'product_data' => [
+                            'name' => 'Platform Funding for Offer',
+                            'description' => 'Fund your platform account to send offers',
+                        ],
+                        'unit_amount' => (int) round($amount * 100), // Convert to cents
+                    ],
+                    'quantity' => 1,
+                ]],
+                'success_url' => $frontendUrl . '/brand?component=Pagamentos&offer_funding_success=true&session_id={CHECKOUT_SESSION_ID}&creator_id=' . $request->creator_id . '&chat_room_id=' . urlencode($request->chat_room_id) . '&amount=' . $amount,
+                'cancel_url' => $frontendUrl . '/brand?component=Pagamentos&offer_funding_canceled=true&creator_id=' . $request->creator_id . '&chat_room_id=' . urlencode($request->chat_room_id),
+                'metadata' => [
+                    'user_id' => (string) $user->id,
+                    'type' => 'offer_funding',
+                    'creator_id' => (string) $request->creator_id,
+                    'chat_room_id' => $request->chat_room_id,
+                    'amount' => (string) $amount,
+                    'campaign_id' => $campaignId ? (string) $campaignId : null,
+                ],
+            ]);
+
+            Log::info('Platform funding checkout session created', [
+                'session_id' => $checkoutSession->id,
+                'user_id' => $user->id,
+                'customer_id' => $customerId,
+                'creator_id' => $request->creator_id,
+                'amount' => $amount,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'url' => $checkoutSession->url,
+                'session_id' => $checkoutSession->id,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to create platform funding checkout session', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create checkout session. Please try again.',
                 'error' => $e->getMessage(),
             ], 500);
         }
