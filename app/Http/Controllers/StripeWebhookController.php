@@ -79,7 +79,6 @@ class StripeWebhookController extends Controller
                         'customer_id' => $session->customer ?? 'no_customer',
                         'subscription_id' => $session->subscription ?? null,
                         'mode' => $session->mode ?? 'unknown',
-                        'metadata' => $session->metadata ?? null,
                     ]);
                     
                     // Handle subscription checkout
@@ -425,46 +424,23 @@ class StripeWebhookController extends Controller
                 throw $e;
             }
 
-            // Calculate expiration date based on plan duration if not provided by Stripe
-            $premiumExpiresAt = $currentPeriodEnd;
-            if (!$premiumExpiresAt && $plan) {
-                // Fallback: calculate from plan duration_months
-                $premiumExpiresAt = Carbon::now()->addMonths($plan->duration_months);
-                Log::info('Using plan duration to calculate expiration', [
-                    'plan_id' => $plan->id,
-                    'duration_months' => $plan->duration_months,
-                    'calculated_expires_at' => $premiumExpiresAt->toISOString(),
-                ]);
-            }
-
-            // Ensure premiumExpiresAt is a Carbon instance
-            if ($premiumExpiresAt && !$premiumExpiresAt instanceof Carbon) {
-                $premiumExpiresAt = Carbon::parse($premiumExpiresAt);
-            }
-
-            // Update user premium flags according to plan when subscription is successfully created
+            // Update user premium flags when subscription is successfully created
+            // Set premium status based on subscription period end date
             try {
                 $user->update([
                     'has_premium' => true,
-                    'premium_expires_at' => $premiumExpiresAt ? $premiumExpiresAt->format('Y-m-d H:i:s') : null,
+                    'premium_expires_at' => $currentPeriodEnd,
                 ]);
                 
-                // Refresh user to ensure casts are applied
-                $user->refresh();
-                
-                Log::info('User premium status updated according to plan', [
+                Log::info('User premium status updated', [
                     'user_id' => $user->id,
-                    'plan_id' => $plan->id ?? null,
-                    'plan_name' => $plan->name ?? null,
-                    'plan_duration_months' => $plan->duration_months ?? null,
                     'has_premium' => true,
-                    'premium_expires_at' => $premiumExpiresAt?->toISOString(),
+                    'premium_expires_at' => $currentPeriodEnd?->toISOString(),
                     'subscription_status' => $subscription->status,
                 ]);
             } catch (\Exception $e) {
                 Log::error('Failed to update user premium status', [
                     'user_id' => $user->id,
-                    'plan_id' => $plan->id ?? null,
                     'error' => $e->getMessage(),
                 ]);
                 // Don't throw - subscription is created, user update can be retried
@@ -594,31 +570,11 @@ class StripeWebhookController extends Controller
                 'expires_at' => $currentPeriodEnd,
             ]);
 
-            // Calculate expiration date based on plan duration if not provided by Stripe
-            $premiumExpiresAt = $currentPeriodEnd;
-            if (!$premiumExpiresAt) {
-                // Fallback: calculate from plan duration_months
-                $premiumExpiresAt = Carbon::now()->addMonths($plan->duration_months);
-                Log::info('Using plan duration to calculate expiration', [
-                    'plan_id' => $plan->id,
-                    'duration_months' => $plan->duration_months,
-                    'calculated_expires_at' => $premiumExpiresAt->toISOString(),
-                ]);
-            }
-
-            // Ensure premiumExpiresAt is a Carbon instance
-            if (!$premiumExpiresAt instanceof Carbon) {
-                $premiumExpiresAt = Carbon::parse($premiumExpiresAt);
-            }
-
-            // Update user premium flags according to plan (payment is confirmed)
+            // Update user premium flags (payment is confirmed)
             $user->update([
                 'has_premium' => true,
-                'premium_expires_at' => $premiumExpiresAt->format('Y-m-d H:i:s'), // Format as string for database
+                'premium_expires_at' => $currentPeriodEnd,
             ]);
-            
-            // Refresh user to ensure casts are applied
-            $user->refresh();
 
             DB::commit();
 
@@ -626,11 +582,7 @@ class StripeWebhookController extends Controller
                 'subscription_id' => $subscription->id,
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
-                'plan_name' => $plan->name,
-                'plan_duration_months' => $plan->duration_months,
                 'stripe_subscription_id' => $stripeSubscriptionId,
-                'premium_expires_at' => $premiumExpiresAt->toISOString(),
-                'has_premium' => $user->has_premium,
             ]);
 
         } catch (\Throwable $e) {
