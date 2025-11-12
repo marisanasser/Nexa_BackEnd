@@ -421,21 +421,41 @@ class BrandPaymentController extends Controller
      */
     public function handleCheckoutSuccess(Request $request): JsonResponse
     {
+        Log::info('=== handleCheckoutSuccess method called ===', [
+            'timestamp' => now()->toIso8601String(),
+            'request_method' => $request->method(),
+            'request_url' => $request->fullUrl(),
+            'request_headers' => $request->headers->all(),
+            'request_body' => $request->all(),
+            'request_query' => $request->query(),
+            'auth_user_id' => auth()->id(),
+        ]);
+
         try {
             // Get fresh user instance from database to avoid any caching issues
             $authUser = auth()->user();
             if (!$authUser) {
+                Log::warning('User not authenticated in handleCheckoutSuccess', [
+                    'auth_id' => auth()->id(),
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => 'User not authenticated',
                 ], 401);
             }
             
+            Log::info('Authenticated user found', [
+                'auth_user_id' => $authUser->id,
+                'auth_user_email' => $authUser->email,
+                'auth_user_role' => $authUser->role,
+            ]);
+            
             // Reload user from database to ensure we have the latest data
             $user = User::find($authUser->id);
             if (!$user) {
                 Log::error('User not found in database after authentication', [
                     'auth_user_id' => $authUser->id,
+                    'auth_user_email' => $authUser->email,
                 ]);
                 return response()->json([
                     'success' => false,
@@ -443,7 +463,19 @@ class BrandPaymentController extends Controller
                 ], 404);
             }
 
+            Log::info('User loaded from database', [
+                'user_id' => $user->id,
+                'user_email' => $user->email,
+                'user_role' => $user->role,
+                'user_stripe_customer_id' => $user->stripe_customer_id,
+                'user_stripe_payment_method_id' => $user->stripe_payment_method_id,
+            ]);
+
             if (!$user->isBrand()) {
+                Log::warning('Non-brand user attempted to add payment method', [
+                    'user_id' => $user->id,
+                    'user_role' => $user->role,
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => 'Only brands can add payment methods',
@@ -452,6 +484,13 @@ class BrandPaymentController extends Controller
 
             // Validate session_id - check both body and query parameters
             $sessionId = $request->input('session_id') ?? $request->query('session_id');
+            
+            Log::info('Session ID validation', [
+                'user_id' => $user->id,
+                'session_id_from_input' => $request->input('session_id'),
+                'session_id_from_query' => $request->query('session_id'),
+                'final_session_id' => $sessionId,
+            ]);
             
             if (!$sessionId) {
                 Log::error('Session ID missing in request', [
@@ -473,9 +512,34 @@ class BrandPaymentController extends Controller
             ]);
 
             // Retrieve the checkout session
-            $session = Session::retrieve($sessionId, [
-                'expand' => ['setup_intent', 'setup_intent.payment_method'],
-            ]);
+            try {
+                Log::info('Retrieving Stripe Checkout Session from Stripe API', [
+                    'user_id' => $user->id,
+                    'session_id' => $sessionId,
+                ]);
+
+                $session = Session::retrieve($sessionId, [
+                    'expand' => ['setup_intent', 'setup_intent.payment_method'],
+                ]);
+
+                Log::info('Stripe Checkout Session retrieved successfully', [
+                    'user_id' => $user->id,
+                    'session_id' => $session->id,
+                    'session_mode' => $session->mode ?? 'N/A',
+                    'session_status' => $session->status ?? 'N/A',
+                    'has_setup_intent' => !is_null($session->setup_intent),
+                    'has_customer' => !is_null($session->customer),
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Failed to retrieve Stripe Checkout Session', [
+                    'user_id' => $user->id,
+                    'session_id' => $sessionId,
+                    'error_message' => $e->getMessage(),
+                    'error_file' => $e->getFile(),
+                    'error_line' => $e->getLine(),
+                ]);
+                throw $e;
+            }
 
             // Verify session belongs to this user
             // Check metadata first, then fallback to customer ID
@@ -621,29 +685,66 @@ class BrandPaymentController extends Controller
             // Get card details
             $card = $paymentMethod->card ?? null;
             
+            Log::info('Retrieved payment method and card details', [
+                'user_id' => $user->id,
+                'payment_method_id' => $paymentMethodId,
+                'has_card' => !is_null($card),
+                'card_brand' => $card->brand ?? 'N/A',
+                'card_last4' => $card->last4 ?? 'N/A',
+                'card_type' => gettype($card),
+            ]);
+            
             if (!$card) {
+                Log::error('Card information not found in payment method', [
+                    'user_id' => $user->id,
+                    'payment_method_id' => $paymentMethodId,
+                    'payment_method_type' => $paymentMethod->type ?? 'N/A',
+                    'payment_method_object' => json_encode($paymentMethod),
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => 'Card information not found',
                 ], 400);
             }
 
+            Log::info('Starting database transaction for payment method storage', [
+                'user_id' => $user->id,
+                'payment_method_id' => $paymentMethodId,
+                'session_customer_id' => $session->customer ? (is_object($session->customer) ? $session->customer->id : $session->customer) : null,
+            ]);
+
             DB::beginTransaction();
 
             try {
                 // Check if payment method already exists
+                Log::info('Checking for existing payment method', [
+                    'user_id' => $user->id,
+                    'stripe_payment_method_id' => $paymentMethodId,
+                ]);
+
                 $existingMethod = BrandPaymentMethod::where('user_id', $user->id)
                     ->where('stripe_payment_method_id', $paymentMethodId)
                     ->where('is_active', true)
                     ->first();
 
                 if ($existingMethod) {
+                    Log::warning('Payment method already exists for user', [
+                        'user_id' => $user->id,
+                        'stripe_payment_method_id' => $paymentMethodId,
+                        'existing_record_id' => $existingMethod->id,
+                        'existing_is_default' => $existingMethod->is_default,
+                    ]);
                     DB::rollBack();
                     return response()->json([
                         'success' => false,
                         'message' => 'This payment method already exists',
                     ], 400);
                 }
+
+                Log::info('No existing payment method found, proceeding with creation', [
+                    'user_id' => $user->id,
+                    'payment_method_id' => $paymentMethodId,
+                ]);
 
                 // Map card brand
                 $cardBrand = $card->brand ?? 'unknown';
@@ -660,18 +761,33 @@ class BrandPaymentController extends Controller
                 // Get customer ID from session
                 $sessionCustomerId = is_object($session->customer) ? $session->customer->id : $session->customer;
                 
+                Log::info('Processing customer ID and user update data', [
+                    'user_id' => $user->id,
+                    'session_customer_id' => $sessionCustomerId,
+                    'user_current_customer_id' => $user->stripe_customer_id,
+                    'customer_id_match' => ($user->stripe_customer_id === $sessionCustomerId),
+                ]);
+                
                 // Update user's stripe_customer_id if not set or different
                 $userUpdateData = [];
                 if (!$user->stripe_customer_id || $user->stripe_customer_id !== $sessionCustomerId) {
                     $userUpdateData['stripe_customer_id'] = $sessionCustomerId;
                     Log::info('Updating user stripe_customer_id', [
                         'user_id' => $user->id,
-                        'stripe_customer_id' => $sessionCustomerId,
+                        'old_stripe_customer_id' => $user->stripe_customer_id,
+                        'new_stripe_customer_id' => $sessionCustomerId,
                     ]);
                 }
 
-                // Create payment method record
-                $paymentMethodRecord = BrandPaymentMethod::create([
+                // Check if user has default payment method
+                $hasDefault = $user->hasDefaultPaymentMethod();
+                Log::info('Checking default payment method status', [
+                    'user_id' => $user->id,
+                    'has_default_payment_method' => $hasDefault,
+                ]);
+
+                // Prepare payment method data
+                $paymentMethodData = [
                     'user_id' => $user->id,
                     'stripe_customer_id' => $sessionCustomerId,
                     'stripe_payment_method_id' => $paymentMethodId,
@@ -679,15 +795,42 @@ class BrandPaymentController extends Controller
                     'card_brand' => $cardBrandFormatted,
                     'card_last4' => $card->last4,
                     'card_holder_name' => $paymentMethod->billing_details->name ?? $user->name,
-                    'is_default' => !$user->hasDefaultPaymentMethod(), // Set as default if no default exists
+                    'is_default' => !$hasDefault,
                     'is_active' => true,
+                ];
+
+                Log::info('Creating BrandPaymentMethod record', [
+                    'user_id' => $user->id,
+                    'payment_method_data' => $paymentMethodData,
+                ]);
+
+                // Create payment method record
+                $paymentMethodRecord = BrandPaymentMethod::create($paymentMethodData);
+
+                Log::info('BrandPaymentMethod record created successfully', [
+                    'user_id' => $user->id,
+                    'payment_method_record_id' => $paymentMethodRecord->id,
+                    'stripe_payment_method_id' => $paymentMethodRecord->stripe_payment_method_id,
+                    'is_default' => $paymentMethodRecord->is_default,
+                    'card_brand' => $paymentMethodRecord->card_brand,
+                    'card_last4' => $paymentMethodRecord->card_last4,
                 ]);
 
                 // If this is set as default, unset other defaults
                 if ($paymentMethodRecord->is_default) {
-                    BrandPaymentMethod::where('user_id', $user->id)
+                    Log::info('New payment method is default, unsetting other defaults', [
+                        'user_id' => $user->id,
+                        'new_default_id' => $paymentMethodRecord->id,
+                    ]);
+
+                    $unsetCount = BrandPaymentMethod::where('user_id', $user->id)
                         ->where('id', '!=', $paymentMethodRecord->id)
                         ->update(['is_default' => false]);
+
+                    Log::info('Unset other default payment methods', [
+                        'user_id' => $user->id,
+                        'unset_count' => $unsetCount,
+                    ]);
                 }
 
                 // Always store the payment method ID in user model when a payment method is obtained
@@ -724,16 +867,34 @@ class BrandPaymentController extends Controller
                 // Use direct DB update to ensure it persists within the transaction
                 // This bypasses any model caching or events that might interfere
                 // First, verify the user exists in the database
+                Log::info('Verifying user exists in database before update', [
+                    'user_id' => $user->id,
+                ]);
+
                 $userExists = DB::table('users')->where('id', $user->id)->exists();
                 if (!$userExists) {
-                    Log::error('User does not exist in database', ['user_id' => $user->id]);
+                    Log::error('User does not exist in database', [
+                        'user_id' => $user->id,
+                        'user_email' => $user->email ?? 'N/A',
+                    ]);
                     throw new \Exception('User not found in database');
                 }
+
+                Log::info('User verified, proceeding with users table update', [
+                    'user_id' => $user->id,
+                    'update_data' => $userUpdateData,
+                ]);
                 
                 // Perform the update
                 $updatedRows = DB::table('users')
                     ->where('id', $user->id)
                     ->update($userUpdateData);
+
+                Log::info('Users table update executed', [
+                    'user_id' => $user->id,
+                    'updated_rows' => $updatedRows,
+                    'update_data' => $userUpdateData,
+                ]);
                 
                 // Log the raw SQL for debugging (in development only)
                 if (config('app.debug')) {
@@ -890,13 +1051,31 @@ class BrandPaymentController extends Controller
                 ]);
 
             } catch (\Exception $e) {
+                Log::error('Exception occurred during payment method storage transaction', [
+                    'user_id' => $user->id ?? null,
+                    'payment_method_id' => $paymentMethodId ?? null,
+                    'error_message' => $e->getMessage(),
+                    'error_file' => $e->getFile(),
+                    'error_line' => $e->getLine(),
+                    'error_trace' => $e->getTraceAsString(),
+                    'transaction_rolled_back' => true,
+                ]);
                 DB::rollBack();
                 throw $e;
             }
 
         } catch (\Exception $e) {
-            Log::error('Failed to handle checkout success', [
+            Log::error('Failed to handle checkout success - Outer catch block', [
                 'user_id' => auth()->id(),
+                'error_message' => $e->getMessage(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'error_code' => $e->getCode(),
+                'error_trace' => $e->getTraceAsString(),
+                'request_data' => [
+                    'session_id' => $request->input('session_id') ?? $request->query('session_id'),
+                    'all_input' => $request->all(),
+                ],
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
