@@ -511,7 +511,7 @@ class BrandPaymentController extends Controller
                 'session_id_type' => gettype($sessionId),
             ]);
 
-            // Retrieve the checkout session
+            // Retrieve the checkout session     
             try {
                 Log::info('Retrieving Stripe Checkout Session from Stripe API', [
                     'user_id' => $user->id,
