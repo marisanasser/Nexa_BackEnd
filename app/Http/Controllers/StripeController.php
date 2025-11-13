@@ -174,9 +174,9 @@ class StripeController extends Controller
                 $updatedRows = DB::table('users')
                     ->where('id', $user->id)
                     ->update([
-                        'stripe_account_id' => $stripeAccount->id,
-                        'stripe_payment_method_id' => $paymentMethod->id,
-                        'stripe_verification_status' => 'pending',
+                    'stripe_account_id' => $stripeAccount->id,
+                    'stripe_payment_method_id' => $paymentMethod->id,
+                    'stripe_verification_status' => 'pending',
                     ]);
                 
                 // Verify the update and refresh user model
@@ -434,9 +434,9 @@ class StripeController extends Controller
             $updatedRows = DB::table('users')
                 ->where('id', $user->id)
                 ->update([
-                    'stripe_payment_method_id' => $paymentMethod->id,
-                    'stripe_verification_status' => 'verified',
-                ]);
+                'stripe_payment_method_id' => $paymentMethod->id,
+                'stripe_verification_status' => 'verified',
+            ]);
             
             // Verify the update
             $actualStoredId = DB::table('users')

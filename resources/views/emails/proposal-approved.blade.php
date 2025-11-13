@@ -84,29 +84,40 @@
         </div>
 
         <div class="content">
-            <div class="congratulations">💖 Parabéns! Seu perfil foi selecionado!</div>
+            <div class="congratulations">🎉 Parabéns! Sua proposta foi aprovada!</div>
             
-            <p>Parabéns! Você tem a cara da marca e foi selecionada para uma parceria de sucesso! Prepare-se para mostrar todo o seu talento e representar a NEXA com criatividade e profissionalismo. Estamos animados para ver o que você vai criar! Abra o site da NEXA e verifique o seu Chat com a marca.</p>
+            <p>Olá, {{ $application->creator->name ?? 'Criador' }}!</p>
+            
+            <p>Temos uma ótima notícia: sua proposta foi selecionada pela marca <strong>{{ $application->campaign->brand->name }}</strong>! Isso significa que você foi escolhido(a) para esta parceria e estamos muito animados para ver o resultado do seu trabalho.</p>
 
             <div class="info-box">
-                <h3>📋 Detalhes da Proposta</h3>
+                <h3>📋 Informações da Parceria</h3>
                 <p><strong>Campanha:</strong> {{ $application->campaign->title }}</p>
                 <p><strong>Marca:</strong> {{ $application->campaign->brand->name }}</p>
-                <p><strong>Orçamento Proposto:</strong> R$ {{ number_format($application->proposed_budget, 2, ',', '.') }}</p>
-                <p><strong>Prazo Estimado:</strong> {{ $application->estimated_delivery_days }} dias</p>
-                <p><strong>Data de Aprovação:</strong> {{ $application->approved_at->format('d/m/Y H:i') }}</p>
+                <p><strong>Data de Aprovação:</strong> {{ $application->approved_at->format('d/m/Y') }} às {{ $application->approved_at->format('H:i') }}</p>
             </div>
 
-            <p>Agora é hora de dar início a uma parceria estratégica com a marca. Acesse o site e confira seu chat com a marca para os próximos passos.</p>
+            <p><strong>Próximos passos:</strong></p>
+            <ul style="line-height: 2;">
+                <li>Acesse sua conta na plataforma NEXA</li>
+                <li>Verifique o chat com a marca para alinhar os detalhes da parceria</li>
+                <li>Fique atento(a) às mensagens e comunique-se de forma clara e profissional</li>
+            </ul>
 
-            <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/creator/applications" class="button" style="color: white;">
-                Ver Minhas Propostas
+            <p style="margin-top: 25px;">Estamos aqui para apoiar você em cada etapa desta jornada. Se tiver qualquer dúvida, nossa equipe está à disposição!</p>
+
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/creator/applications" class="button" style="color: white; text-decoration: none;">
+                    Acessar Minhas Propostas
             </a>
+            </div>
         </div>
 
         <div class="footer">
-            <p>Este é um email automático da plataforma Nexa.</p>
-            <p>Se você tiver alguma dúvida, entre em contato conosco.</p>
+            <p><strong>Equipe NEXA</strong></p>
+            <p>Este é um email automático da plataforma NEXA.</p>
+            <p>Precisa de ajuda? Entre em contato conosco através da plataforma ou responda este email.</p>
+            <p style="margin-top: 15px; font-size: 12px; color: #999;">© {{ date('Y') }} NEXA Platform. Todos os direitos reservados.</p>
         </div>
     </div>
 </body>

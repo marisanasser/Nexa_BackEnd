@@ -532,8 +532,8 @@ class CreatorBalanceController extends Controller
                 'customer' => $customerId,
                 'mode' => 'setup', // Setup mode for payment method collection only
                 'payment_method_types' => ['card'],
-                'success_url' => $frontendUrl . '/creator?component=Saldo%20e%20Saques&payment_method=connected',
-                'cancel_url' => $frontendUrl . '/creator?component=Saldo%20e%20Saques&payment_method=cancelled',
+                'success_url' => $frontendUrl . '/creator/payment-method?payment_method=connected&session_id={CHECKOUT_SESSION_ID}',
+                'cancel_url' => $frontendUrl . '/creator/payment-method?payment_method=cancelled',
                 'metadata' => [
                     'user_id' => (string) $user->id,
                     'type' => 'creator_payment_method_setup',
@@ -563,6 +563,278 @@ class CreatorBalanceController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create payment method setup session: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Handle successful Stripe Checkout Session completion for creator payment method
+     * This is called from the frontend after returning from Stripe checkout
+     * It ensures the payment method ID is stored even if webhook fails
+     */
+    public function handleCheckoutSuccess(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated',
+                ], 401);
+            }
+
+            // Check if user is a creator or student
+            if (!$user->isCreator() && !$user->isStudent()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only creators and students can connect payment methods',
+                ], 403);
+            }
+
+            // Validate session_id - check both body and query parameters
+            $sessionId = $request->input('session_id') ?? $request->query('session_id');
+            
+            if (!$sessionId) {
+                Log::error('Session ID missing in creator checkout success request', [
+                    'user_id' => $user->id,
+                    'request_body' => $request->all(),
+                    'request_query' => $request->query(),
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Session ID is required',
+                ], 400);
+            }
+
+            Log::info('Handling creator Stripe Checkout Session success', [
+                'user_id' => $user->id,
+                'session_id' => $sessionId,
+            ]);
+
+            $stripeSecret = config('services.stripe.secret');
+            if (!$stripeSecret) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Stripe is not configured',
+                ], 500);
+            }
+
+            \Stripe\Stripe::setApiKey($stripeSecret);
+
+            // Retrieve the checkout session
+            try {
+                $session = \Stripe\Checkout\Session::retrieve($sessionId, [
+                    'expand' => ['setup_intent', 'setup_intent.payment_method'],
+                ]);
+
+                Log::info('Stripe Checkout Session retrieved for creator', [
+                    'user_id' => $user->id,
+                    'session_id' => $session->id,
+                    'session_mode' => $session->mode ?? 'N/A',
+                    'session_status' => $session->status ?? 'N/A',
+                    'has_setup_intent' => !is_null($session->setup_intent),
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Failed to retrieve Stripe Checkout Session for creator', [
+                    'user_id' => $user->id,
+                    'session_id' => $sessionId,
+                    'error' => $e->getMessage(),
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to retrieve checkout session: ' . $e->getMessage(),
+                ], 400);
+            }
+
+            // Verify session belongs to this user
+            $sessionCustomerId = $session->customer;
+            if (is_object($sessionCustomerId)) {
+                $sessionCustomerId = $sessionCustomerId->id;
+            }
+
+            if (!$sessionCustomerId || $sessionCustomerId !== $user->stripe_customer_id) {
+                Log::warning('Session customer ID does not match user customer ID', [
+                    'user_id' => $user->id,
+                    'user_customer_id' => $user->stripe_customer_id,
+                    'session_customer_id' => $sessionCustomerId,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid session - session does not belong to this user',
+                ], 403);
+            }
+
+            // Get setup intent
+            $setupIntent = $session->setup_intent;
+            
+            if (is_string($setupIntent)) {
+                $setupIntent = \Stripe\SetupIntent::retrieve($setupIntent, [
+                    'expand' => ['payment_method']
+                ]);
+            }
+
+            if (!$setupIntent || $setupIntent->status !== 'succeeded') {
+                Log::warning('Setup intent not succeeded for creator', [
+                    'user_id' => $user->id,
+                    'setup_intent_status' => $setupIntent->status ?? 'no_status',
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Setup intent not completed',
+                ], 400);
+            }
+
+            // Get payment method ID from setup intent
+            $paymentMethodId = null;
+            if (is_object($setupIntent->payment_method)) {
+                $paymentMethodId = $setupIntent->payment_method->id ?? null;
+            } elseif (is_string($setupIntent->payment_method)) {
+                $paymentMethodId = $setupIntent->payment_method;
+            }
+
+            if (!$paymentMethodId) {
+                Log::error('No payment method ID in setup intent for creator', [
+                    'user_id' => $user->id,
+                    'setup_intent_id' => $setupIntent->id ?? 'no_id',
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment method not found in setup intent',
+                ], 400);
+            }
+
+            // Check if payment method is already stored (idempotency check)
+            // If already stored, return success immediately without updating
+            $user->refresh();
+            if ($user->stripe_payment_method_id === $paymentMethodId) {
+                Log::info('Payment method already stored for creator, returning success', [
+                    'user_id' => $user->id,
+                    'payment_method_id' => $paymentMethodId,
+                    'session_id' => $sessionId,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Payment method already connected',
+                    'data' => [
+                        'payment_method_id' => $paymentMethodId,
+                        'already_stored' => true,
+                    ],
+                ]);
+            }
+
+            // Retrieve payment method details
+            try {
+                $paymentMethod = \Stripe\PaymentMethod::retrieve($paymentMethodId);
+                $cardBrand = $paymentMethod->card->brand ?? null;
+                $cardLast4 = $paymentMethod->card->last4 ?? null;
+                $cardExpMonth = $paymentMethod->card->exp_month ?? null;
+                $cardExpYear = $paymentMethod->card->exp_year ?? null;
+
+                Log::info('Retrieved payment method details for creator', [
+                    'user_id' => $user->id,
+                    'payment_method_id' => $paymentMethodId,
+                    'card_brand' => $cardBrand,
+                    'card_last4' => $cardLast4,
+                ]);
+            } catch (\Exception $e) {
+                Log::warning('Failed to retrieve payment method details, continuing anyway', [
+                    'user_id' => $user->id,
+                    'payment_method_id' => $paymentMethodId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            DB::beginTransaction();
+
+            try {
+                // Update user's stripe_payment_method_id using direct DB update
+                $updatedRows = DB::table('users')
+                    ->where('id', $user->id)
+                    ->update(['stripe_payment_method_id' => $paymentMethodId]);
+
+                // Verify the update
+                $actualStoredId = DB::table('users')
+                    ->where('id', $user->id)
+                    ->value('stripe_payment_method_id');
+
+                if ($actualStoredId !== $paymentMethodId) {
+                    // Fallback to Eloquent if direct DB update failed
+                    $user->refresh();
+                    $user->stripe_payment_method_id = $paymentMethodId;
+                    $user->save();
+                    $user->refresh();
+                }
+
+                // Ensure 'stripe_card' withdrawal method exists in withdrawal_methods table
+                $stripeCardMethod = \App\Models\WithdrawalMethod::where('code', 'stripe_card')->first();
+                
+                if (!$stripeCardMethod) {
+                    $stripeCardMethod = \App\Models\WithdrawalMethod::create([
+                        'code' => 'stripe_card',
+                        'name' => 'Cartão de Crédito/Débito (Stripe)',
+                        'description' => 'Receba seus saques diretamente no seu cartão de crédito ou débito cadastrado no Stripe',
+                        'min_amount' => 10.00,
+                        'max_amount' => 10000.00,
+                        'processing_time' => '1-3 dias úteis',
+                        'fee' => 0.00,
+                        'is_active' => true,
+                        'required_fields' => [],
+                        'field_config' => [],
+                        'sort_order' => 100,
+                    ]);
+                    
+                    Log::info('Created stripe_card withdrawal method in withdrawal_methods table', [
+                        'withdrawal_method_id' => $stripeCardMethod->id,
+                        'user_id' => $user->id,
+                    ]);
+                } else {
+                    if (!$stripeCardMethod->is_active) {
+                        $stripeCardMethod->update(['is_active' => true]);
+                    }
+                }
+
+                DB::commit();
+
+                Log::info('Successfully stored creator payment method from checkout success callback', [
+                    'user_id' => $user->id,
+                    'payment_method_id' => $paymentMethodId,
+                    'updated_rows' => $updatedRows,
+                    'verified' => ($user->stripe_payment_method_id === $paymentMethodId),
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Payment method connected successfully',
+                    'data' => [
+                        'payment_method_id' => $paymentMethodId,
+                        'card_brand' => $cardBrand ?? null,
+                        'card_last4' => $cardLast4 ?? null,
+                    ],
+                ]);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('Failed to store creator payment method in transaction', [
+                    'user_id' => $user->id,
+                    'payment_method_id' => $paymentMethodId,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                throw $e;
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Failed to handle creator checkout success', [
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to process payment method: ' . $e->getMessage(),
             ], 500);
         }
     }
