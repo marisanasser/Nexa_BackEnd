@@ -340,6 +340,15 @@ class User extends Authenticatable
                     'field_config' => $method->getFieldConfig(),
                 ];
             })
+            ->filter(function ($method) {
+                // Filter out 'stripe_card' from database methods if user has a Stripe payment method
+                // The user-specific Stripe payment method will be added below with actual card details
+                if ($method['id'] === 'stripe_card' && $this->stripe_payment_method_id) {
+                    return false;
+                }
+                return true;
+            })
+            ->values()
             ->toArray();
 
         // Add user's Stripe payment method if available

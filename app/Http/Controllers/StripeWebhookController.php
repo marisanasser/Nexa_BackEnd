@@ -1231,30 +1231,130 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Update user's stripe_payment_method_id using direct DB update
-            $updatedRows = DB::table('users')
-                ->where('id', $user->id)
-                ->update(['stripe_payment_method_id' => $paymentMethodId]);
-
-            // Verify the update
-            $actualStoredId = DB::table('users')
-                ->where('id', $user->id)
-                ->value('stripe_payment_method_id');
-
-            if ($actualStoredId !== $paymentMethodId) {
-                // Fallback to Eloquent if direct DB update failed
-                $user->refresh();
-                $user->stripe_payment_method_id = $paymentMethodId;
-                $user->save();
-                $user->refresh();
+            // Check if payment method is already stored (frontend callback already handled it)
+            // Skip webhook processing if payment method already exists to avoid duplicate updates
+            if ($user->stripe_payment_method_id === $paymentMethodId) {
+                Log::info('Payment method already stored, skipping webhook processing', [
+                    'user_id' => $user->id,
+                    'payment_method_id' => $paymentMethodId,
+                    'session_id' => $session->id,
+                ]);
+                return;
             }
 
-            Log::info('Updated user payment method ID from setup mode checkout', [
-                'user_id' => $user->id,
-                'payment_method_id' => $paymentMethodId,
-                'updated_rows' => $updatedRows,
-                'verified' => ($user->stripe_payment_method_id === $paymentMethodId),
-            ]);
+            // Check if user is creator or student (only they can have withdrawal payment methods)
+            $isCreatorOrStudent = $user->isCreator() || $user->isStudent();
+
+            // Retrieve payment method details from Stripe to get card information
+            $paymentMethod = null;
+            $cardBrand = null;
+            $cardLast4 = null;
+            $cardExpMonth = null;
+            $cardExpYear = null;
+            
+            try {
+                $paymentMethod = \Stripe\PaymentMethod::retrieve($paymentMethodId);
+                if ($paymentMethod->type === 'card' && isset($paymentMethod->card)) {
+                    $cardBrand = $paymentMethod->card->brand ?? null;
+                    $cardLast4 = $paymentMethod->card->last4 ?? null;
+                    $cardExpMonth = $paymentMethod->card->exp_month ?? null;
+                    $cardExpYear = $paymentMethod->card->exp_year ?? null;
+                }
+            } catch (\Exception $e) {
+                Log::warning('Failed to retrieve payment method details from Stripe', [
+                    'payment_method_id' => $paymentMethodId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            DB::beginTransaction();
+            
+            try {
+                // Update user's stripe_payment_method_id using direct DB update
+                $updatedRows = DB::table('users')
+                    ->where('id', $user->id)
+                    ->update(['stripe_payment_method_id' => $paymentMethodId]);
+
+                // Verify the update
+                $actualStoredId = DB::table('users')
+                    ->where('id', $user->id)
+                    ->value('stripe_payment_method_id');
+
+                if ($actualStoredId !== $paymentMethodId) {
+                    // Fallback to Eloquent if direct DB update failed
+                    $user->refresh();
+                    $user->stripe_payment_method_id = $paymentMethodId;
+                    $user->save();
+                    $user->refresh();
+                }
+
+                // Only update withdrawal_methods table if user is creator or student
+                $stripeCardMethod = null;
+                if ($isCreatorOrStudent) {
+                    // Ensure 'stripe_card' withdrawal method exists in withdrawal_methods table
+                    $stripeCardMethod = \App\Models\WithdrawalMethod::where('code', 'stripe_card')->first();
+                    
+                    if (!$stripeCardMethod) {
+                        // Create stripe_card withdrawal method if it doesn't exist
+                        $stripeCardMethod = \App\Models\WithdrawalMethod::create([
+                            'code' => 'stripe_card',
+                            'name' => 'Cartão de Crédito/Débito (Stripe)',
+                            'description' => 'Receba seus saques diretamente no seu cartão de crédito ou débito cadastrado no Stripe',
+                            'min_amount' => 10.00,
+                            'max_amount' => 10000.00,
+                            'processing_time' => '1-3 dias úteis',
+                            'fee' => 0.00,
+                            'is_active' => true,
+                            'required_fields' => [],
+                            'field_config' => [],
+                            'sort_order' => 100,
+                        ]);
+                        
+                        Log::info('Created stripe_card withdrawal method in withdrawal_methods table', [
+                            'withdrawal_method_id' => $stripeCardMethod->id,
+                            'user_id' => $user->id,
+                        ]);
+                    } else {
+                        // Ensure it's active
+                        if (!$stripeCardMethod->is_active) {
+                            $stripeCardMethod->update(['is_active' => true]);
+                            Log::info('Activated stripe_card withdrawal method', [
+                                'withdrawal_method_id' => $stripeCardMethod->id,
+                                'user_id' => $user->id,
+                            ]);
+                        }
+                    }
+                } else {
+                    Log::info('User is not creator or student, skipping withdrawal_methods table update', [
+                        'user_id' => $user->id,
+                        'user_role' => $user->role,
+                    ]);
+                }
+
+                DB::commit();
+
+                Log::info('Updated user payment method ID and withdrawal methods from setup mode checkout', [
+                    'user_id' => $user->id,
+                    'user_role' => $user->role,
+                    'is_creator_or_student' => $isCreatorOrStudent,
+                    'payment_method_id' => $paymentMethodId,
+                    'updated_rows' => $updatedRows,
+                    'verified' => ($user->stripe_payment_method_id === $paymentMethodId),
+                    'card_brand' => $cardBrand,
+                    'card_last4' => $cardLast4,
+                    'withdrawal_method_updated' => $isCreatorOrStudent && $stripeCardMethod ? true : false,
+                ]);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('Failed to update user and withdrawal methods in transaction', [
+                    'user_id' => $user->id,
+                    'payment_method_id' => $paymentMethodId,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                throw $e;
+            }
 
         } catch (\Exception $e) {
             Log::error('Failed to handle setup mode checkout', [

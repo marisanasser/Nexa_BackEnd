@@ -65,7 +65,7 @@ class ReviewController extends Controller
                     $query->where('brand_id', $user->id)
                           ->orWhere('creator_id', $user->id);
                 })
-                ->find($request->contract_id);
+                    ->find($request->contract_id);
             
             // If contract not found, user is not involved in this contract
             if (!$contract) {

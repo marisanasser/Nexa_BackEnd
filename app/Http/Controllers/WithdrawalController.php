@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use App\Services\NotificationService;
 use Stripe\Stripe;
 use Stripe\Account;
@@ -174,29 +175,21 @@ class WithdrawalController extends Controller
                 ], 400);
             }
         }
-\Log::info('Create withdrawal request', ['bankAccount' => $bankAccount]);
+
         // Build dynamic validation rules
         $validationRules = [
             'amount' => 'required|numeric|min:0.01',
             'withdrawal_method' => 'required|string',
+            'withdrawal_details' => 'nullable|array',
         ];
-\Log::info('Create withdrawal request', ['validationRules' => $validationRules]);
-        // For Pagar.me, withdrawal_details is optional
-        if ($withdrawalMethod->code === 'pagarme_bank_transfer') {
-            $validationRules['withdrawal_details'] = 'nullable|array';
-        } else {
-            $validationRules['withdrawal_details'] = 'nullable|array';
-        }
 
         $validator = Validator::make($request->all(), $validationRules);
-\Log::info('Create withdrawal request', ['validator' => $validator]);
         if ($validator->fails()) {
             Log::error('Withdrawal validation failed', [
                 'user_id' => $user->id,
                 'errors' => $validator->errors(),
                 'request_data' => $request->all()
             ]);
-\Log::info('Create withdrawal request', ['error' => 'Withdrawal validation failed']);
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
@@ -216,66 +209,92 @@ class WithdrawalController extends Controller
         // }
 
         try {
-            $balance = CreatorBalance::where('creator_id', $user->id)->first();
+            // Use database transaction to ensure data integrity
+            return DB::transaction(function () use ($user, $request, $withdrawalMethod) {
+                $balance = CreatorBalance::where('creator_id', $user->id)->first();
 
-            if (!$balance) {
-                Log::warning('No balance found for creator, creating new balance', [
-                    'creator_id' => $user->id
-                ]);
+                if (!$balance) {
+                    Log::warning('No balance found for creator, creating new balance', [
+                        'creator_id' => $user->id
+                    ]);
+                    
+                    $balance = CreatorBalance::create([
+                        'creator_id' => $user->id,
+                        'available_balance' => 0,
+                        'pending_balance' => 0,
+                        'total_earned' => 0,
+                        'total_withdrawn' => 0,
+                    ]);
+                }
+
+                // Check if user has sufficient balance
+                if (!$balance->canWithdraw($request->amount)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Saldo insuficiente para o saque. Saldo disponível: ' . $balance->formatted_available_balance,
+                    ], 400);
+                }
+
+                // Check if amount is within method limits
+                if (!$withdrawalMethod->isAmountValid($request->amount)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Valor deve estar entre {$withdrawalMethod->formatted_min_amount} e {$withdrawalMethod->formatted_max_amount} para {$withdrawalMethod->name}",
+                    ], 400);
+                }
+
+                // Check if user has pending withdrawals
+                $pendingWithdrawals = $user->withdrawals()
+                    ->whereIn('status', ['pending', 'processing'])
+                    ->count();
+
+                if ($pendingWithdrawals >= 3) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Você tem muitos saques pendentes. Aguarde o processamento dos saques atuais.',
+                    ], 400);
+                }
+
+                // Prepare withdrawal details with method-specific information
+                $withdrawalDetails = $request->withdrawal_details ?? [];
                 
-                $balance = CreatorBalance::create([
-                    'creator_id' => $user->id,
-                    'available_balance' => 0,
-                    'pending_balance' => 0,
-                    'total_earned' => 0,
-                    'total_withdrawn' => 0,
-                ]);
-            }
-
-            // Check if user has sufficient balance
-            if (!$balance->canWithdraw($request->amount)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Saldo insuficiente para o saque. Saldo disponível: ' . $balance->formatted_available_balance,
-                ], 400);
-            }
-
-            // Check if amount is within method limits
-            if (!$withdrawalMethod->isAmountValid($request->amount)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Valor deve estar entre {$withdrawalMethod->formatted_min_amount} e {$withdrawalMethod->formatted_max_amount} para {$withdrawalMethod->name}",
-                ], 400);
-            }
-
-            // Check if user has pending withdrawals
-            $pendingWithdrawals = $user->withdrawals()
-                ->whereIn('status', ['pending', 'processing'])
-                ->count();
-
-            if ($pendingWithdrawals >= 3) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Você tem muitos saques pendentes. Aguarde o processamento dos saques atuais.',
-                ], 400);
-            }
-
-            $withdrawal = Withdrawal::create([
-                'creator_id' => $user->id,
-                'amount' => $request->amount,
-                'platform_fee' => 5.00, // 5% platform fee
-                'fixed_fee' => 5.00, // R$5 fixed platform fee
-                'withdrawal_method' => $request->withdrawal_method,
-                'withdrawal_details' => $request->withdrawal_details ?? [],
-                'status' => 'pending',
-            ]);
-
-            // If it's a Pagar.me withdrawal, store bank account info
-            if ($withdrawalMethod->code === 'pagarme_bank_transfer') {
-                $bankAccount = \App\Models\BankAccount::where('user_id', $user->id)->first();
-                if ($bankAccount) {
-                    $withdrawal->update([
-                        'withdrawal_details' => array_merge($request->withdrawal_details ?? [], [
+                // Add method fee percentage to withdrawal details for reference
+                $withdrawalDetails['method_fee_percentage'] = $withdrawalMethod->fee;
+                $withdrawalDetails['method_name'] = $withdrawalMethod->name;
+                $withdrawalDetails['method_code'] = $withdrawalMethod->code;
+                
+                // If it's a Stripe card withdrawal, store Stripe payment method ID
+                if ($withdrawalMethod->code === 'stripe_card' && $user->stripe_payment_method_id) {
+                    $withdrawalDetails['stripe_payment_method_id'] = $user->stripe_payment_method_id;
+                    $withdrawalDetails['stripe_customer_id'] = $user->stripe_customer_id;
+                    
+                    // Try to get card details from Stripe
+                    try {
+                        $stripeSecret = config('services.stripe.secret');
+                        if ($stripeSecret) {
+                            \Stripe\Stripe::setApiKey($stripeSecret);
+                            $paymentMethod = \Stripe\PaymentMethod::retrieve($user->stripe_payment_method_id);
+                            if ($paymentMethod->card) {
+                                $withdrawalDetails['card_brand'] = $paymentMethod->card->brand ?? null;
+                                $withdrawalDetails['card_last4'] = $paymentMethod->card->last4 ?? null;
+                                $withdrawalDetails['card_exp_month'] = $paymentMethod->card->exp_month ?? null;
+                                $withdrawalDetails['card_exp_year'] = $paymentMethod->card->exp_year ?? null;
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning('Failed to retrieve Stripe payment method details for withdrawal', [
+                            'user_id' => $user->id,
+                            'stripe_payment_method_id' => $user->stripe_payment_method_id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+                
+                // If it's a Pagar.me withdrawal, store bank account info
+                if ($withdrawalMethod->code === 'pagarme_bank_transfer') {
+                    $bankAccount = \App\Models\BankAccount::where('user_id', $user->id)->first();
+                    if ($bankAccount) {
+                        $withdrawalDetails = array_merge($withdrawalDetails, [
                             'bank_code' => $bankAccount->bank_code,
                             'agencia' => $bankAccount->agencia,
                             'agencia_dv' => $bankAccount->agencia_dv,
@@ -283,32 +302,66 @@ class WithdrawalController extends Controller
                             'conta_dv' => $bankAccount->conta_dv,
                             'cpf' => $bankAccount->cpf,
                             'name' => $bankAccount->name,
-                        ])
-                    ]);
+                        ]);
+                    }
                 }
-            }
 
-            // Deduct from available balance
-            $balance->withdraw($request->amount);
+                // Create withdrawal record in database
+                $withdrawal = Withdrawal::create([
+                    'creator_id' => $user->id,
+                    'amount' => $request->amount,
+                    'platform_fee' => 5.00, // 5% platform fee
+                    'fixed_fee' => 5.00, // R$5 fixed platform fee
+                    'withdrawal_method' => $request->withdrawal_method,
+                    'withdrawal_details' => $withdrawalDetails,
+                    'status' => 'pending',
+                ]);
 
-            Log::info('Withdrawal request created successfully', [
-                'withdrawal_id' => $withdrawal->id,
-                'creator_id' => $user->id,
-                'amount' => $request->amount,
-                'method' => $request->withdrawal_method,
-            ]);
+                // Verify withdrawal was created successfully
+                if (!$withdrawal || !$withdrawal->id) {
+                    throw new \Exception('Failed to create withdrawal record in database');
+                }
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Withdrawal request submitted successfully',
-                'data' => [
-                    'id' => $withdrawal->id,
-                    'amount' => $withdrawal->formatted_amount,
-                    'method' => $withdrawal->withdrawal_method_label,
+                // Deduct from available balance
+                $withdrawResult = $balance->withdraw($request->amount);
+                
+                if (!$withdrawResult) {
+                    throw new \Exception('Failed to deduct amount from available balance');
+                }
+                
+                // Refresh balance to get updated values
+                $balance->refresh();
+
+                Log::info('Withdrawal request created and stored successfully in database', [
+                    'withdrawal_id' => $withdrawal->id,
+                    'creator_id' => $user->id,
+                    'amount' => $request->amount,
+                    'formatted_amount' => $withdrawal->formatted_amount,
+                    'method' => $request->withdrawal_method,
+                    'method_name' => $withdrawalMethod->name,
                     'status' => $withdrawal->status,
-                    'created_at' => $withdrawal->created_at->format('Y-m-d H:i:s'),
-                ],
-            ], 201);
+                    'net_amount' => $withdrawal->net_amount,
+                    'total_fees' => $withdrawal->total_fees,
+                    'created_at' => $withdrawal->created_at->toDateTimeString(),
+                    'has_stripe_payment_method' => isset($withdrawalDetails['stripe_payment_method_id']),
+                    'balance_after_withdrawal' => [
+                        'available_balance' => $balance->available_balance,
+                        'total_withdrawn' => $balance->total_withdrawn,
+                    ],
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Withdrawal request submitted successfully',
+                    'data' => [
+                        'id' => $withdrawal->id,
+                        'amount' => $withdrawal->formatted_amount,
+                        'method' => $withdrawal->withdrawal_method_label,
+                        'status' => $withdrawal->status,
+                        'created_at' => $withdrawal->created_at->format('Y-m-d H:i:s'),
+                    ],
+                ], 201);
+            });
 
         } catch (\Exception $e) {
             Log::error('Error creating withdrawal request', [

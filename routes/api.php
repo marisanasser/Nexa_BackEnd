@@ -294,6 +294,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/earnings', [PaymentController::class, 'getEarnings']); // Get earnings and balance
         Route::get('/withdrawal-methods', [CreatorBalanceController::class, 'withdrawalMethods']); // Get available withdrawal methods
         Route::post('/stripe-payment-method-checkout', [CreatorBalanceController::class, 'createStripePaymentMethodCheckout']); // Connect Stripe payment method for withdrawals
+        Route::post('/stripe-payment-method-checkout-success', [CreatorBalanceController::class, 'handleCheckoutSuccess']); // Handle checkout success callback
     });
 
     // Brand payment methods (for contract payments)

@@ -251,7 +251,7 @@ class ContractPaymentController extends Controller
             ]);
             
             \Stripe\PaymentMethod::attach($pmId, ['customer' => $customer->id]);
-            
+
             // Store payment method ID in user model for quick access using direct DB update
             if ($user->stripe_payment_method_id !== $pmId) {
                 $updatedRows = DB::table('users')

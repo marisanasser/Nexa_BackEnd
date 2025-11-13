@@ -708,7 +708,7 @@ class Contract extends Model
                     // If it's still in pending, move it to available
                     $balance->refresh(); // Get latest balance
                     $moveSuccess = $balance->movePendingToAvailable($payment->creator_amount);
-                    
+                        
                     if ($moveSuccess) {
                         \Illuminate\Support\Facades\Log::info('Moved payment to available balance for contract on campaign completion', [
                             'contract_id' => $contract->id,
