@@ -1485,6 +1485,59 @@ class BrandPaymentController extends Controller
     /**
      * Create notification for successful offer funding
      */
+    /**
+     * Check if brand has funded the platform
+     */
+    public function checkFundingStatus(Request $request): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+            
+            if (!$user || !$user->isBrand()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only brands can access this endpoint',
+                ], 403);
+            }
+
+            // Check for platform funding transactions
+            $hasFunding = \App\Models\Transaction::where('user_id', $user->id)
+                ->where('status', 'paid')
+                ->where(function($query) {
+                    $query->whereJsonContains('payment_data->type', 'offer_funding')
+                          ->orWhereJsonContains('payment_data->type', 'platform_funding');
+                })
+                ->exists();
+
+            // Also check BrandBalance if it exists
+            $brandBalance = \App\Models\BrandBalance::where('brand_id', $user->id)->first();
+            $hasBalance = $brandBalance && $brandBalance->total_funded > 0;
+
+            $hasFunded = $hasFunding || $hasBalance;
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'has_funded' => $hasFunded,
+                    'has_funding_transactions' => $hasFunding,
+                    'has_balance' => $hasBalance,
+                    'available_balance' => $brandBalance ? $brandBalance->available_balance : 0,
+                    'total_funded' => $brandBalance ? $brandBalance->total_funded : 0,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to check brand funding status', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to check funding status',
+            ], 500);
+        }
+    }
+
     private function createOfferFundingNotification($userId, $amount, $metadata, $transactionId): void
     {
         try {
