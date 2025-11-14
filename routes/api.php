@@ -306,6 +306,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/create-checkout-session', [BrandPaymentController::class, 'createCheckoutSession']);
         Route::post('/create-funding-checkout', [BrandPaymentController::class, 'createFundingCheckout']);
         Route::post('/handle-checkout-success', [BrandPaymentController::class, 'handleCheckoutSuccess']);
+        Route::post('/handle-offer-funding-success', [BrandPaymentController::class, 'handleOfferFundingSuccess']);
     });
 
     // Stripe Connect and setup

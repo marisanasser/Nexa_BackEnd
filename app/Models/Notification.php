@@ -327,4 +327,44 @@ class Notification extends Model
             'data' => $reviewData,
         ]);
     }
+
+    public static function createPlatformFundingSuccess($userId, $amount, $fundingData = []): self
+    {
+        $formattedAmount = 'R$ ' . number_format($amount, 2, ',', '.');
+        
+        return self::create([
+            'user_id' => $userId,
+            'type' => 'platform_funding_success',
+            'title' => 'Fundos Adicionados com Sucesso',
+            'message' => "Seu pagamento de {$formattedAmount} foi processado com sucesso. Os fundos foram adicionados à sua conta.",
+            'data' => array_merge([
+                'amount' => $amount,
+                'formatted_amount' => $formattedAmount,
+            ], $fundingData),
+        ]);
+    }
+
+    public static function createWithdrawalSuccess($userId, $amount, $netAmount, $totalFees, $withdrawalData = []): self
+    {
+        $formattedAmount = 'R$ ' . number_format($amount, 2, ',', '.');
+        $formattedNetAmount = 'R$ ' . number_format($netAmount, 2, ',', '.');
+        $formattedFees = 'R$ ' . number_format($totalFees, 2, ',', '.');
+        
+        $methodName = $withdrawalData['method_name'] ?? 'método selecionado';
+        
+        return self::create([
+            'user_id' => $userId,
+            'type' => 'withdrawal_completed',
+            'title' => 'Saque Processado com Sucesso',
+            'message' => "Seu saque de {$formattedAmount} via {$methodName} foi processado com sucesso. Valor líquido: {$formattedNetAmount} (taxas: {$formattedFees}).",
+            'data' => array_merge([
+                'amount' => $amount,
+                'formatted_amount' => $formattedAmount,
+                'net_amount' => $netAmount,
+                'formatted_net_amount' => $formattedNetAmount,
+                'total_fees' => $totalFees,
+                'formatted_total_fees' => $formattedFees,
+            ], $withdrawalData),
+        ]);
+    }
 } 

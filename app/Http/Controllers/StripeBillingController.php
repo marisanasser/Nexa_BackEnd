@@ -450,6 +450,7 @@ class StripeBillingController extends Controller
                     'quantity' => 1,
                 ]],
                 'mode' => 'subscription',
+                'locale' => 'pt-BR',
                 'success_url' => $frontendUrl . '/creator/subscription?success=true&session_id={CHECKOUT_SESSION_ID}',
                 'cancel_url' => $frontendUrl . '/creator/subscription?canceled=true',
                 'metadata' => [

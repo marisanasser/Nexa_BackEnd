@@ -360,6 +360,7 @@ class CampaignApplicationController extends Controller
                     'customer' => $customerId,
                     'mode' => 'setup', // Setup mode for payment method collection only
                     'payment_method_types' => ['card'],
+                    'locale' => 'pt-BR',
                     'success_url' => $frontendUrl . '/brand?component=Pagamentos&success=true&session_id={CHECKOUT_SESSION_ID}&application_id=' . $application->id . '&campaign_id=' . $application->campaign_id,
                     'cancel_url' => $frontendUrl . '/brand?component=Pagamentos&canceled=true&application_id=' . $application->id . '&campaign_id=' . $application->campaign_id,
                     'metadata' => [
@@ -495,6 +496,7 @@ class CampaignApplicationController extends Controller
                         'customer' => $customerId,
                         'mode' => 'payment', // Payment mode to charge the brand
                         'payment_method_types' => ['card'],
+                        'locale' => 'pt-BR',
                         'line_items' => [[
                             'price_data' => [
                                 'currency' => 'brl',

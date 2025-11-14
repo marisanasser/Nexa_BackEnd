@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Services\NotificationService;
+use Illuminate\Support\Facades\Log;
 
 class Withdrawal extends Model
 {
@@ -150,28 +151,57 @@ class Withdrawal extends Model
     private function createWithdrawalNotification(string $status, string $reason = null): void
     {
         try {
-            $notification = Notification::create([
-                'user_id' => $this->creator_id,
-                'type' => 'withdrawal_' . $status,
-                'title' => $status === 'completed' ? 'Saque Processado' : 'Falha no Saque',
-                'message' => $status === 'completed' 
-                    ? "Seu saque de {$this->formatted_amount} foi processado com sucesso."
-                    : "Falha no processamento do saque de {$this->formatted_amount}. Motivo: {$reason}",
-                'data' => [
+            if ($status === 'completed') {
+                // Use the new static method for completed withdrawals with detailed information
+                $withdrawalMethod = WithdrawalMethod::findByCode($this->withdrawal_method);
+                $methodName = $withdrawalMethod ? $withdrawalMethod->name : $this->withdrawal_method_label;
+                
+                $withdrawalData = [
                     'withdrawal_id' => $this->id,
-                    'amount' => $this->amount,
                     'method' => $this->withdrawal_method,
-                    'status' => $status,
-                    'reason' => $reason,
-                ],
-                'read_at' => null,
-            ]);
+                    'method_name' => $methodName,
+                    'transaction_id' => $this->transaction_id,
+                    'processed_at' => $this->processed_at ? $this->processed_at->toDateTimeString() : null,
+                ];
+                
+                // Add withdrawal details if available
+                if ($this->withdrawal_details) {
+                    $withdrawalData = array_merge($withdrawalData, $this->withdrawal_details);
+                }
+                
+                $notification = Notification::createWithdrawalSuccess(
+                    $this->creator_id,
+                    $this->amount,
+                    $this->net_amount,
+                    $this->total_fees,
+                    $withdrawalData
+                );
+            } else {
+                // For failed/cancelled withdrawals, use the original format
+                $notification = Notification::create([
+                    'user_id' => $this->creator_id,
+                    'type' => 'withdrawal_' . $status,
+                    'title' => $status === 'failed' ? 'Falha no Saque' : 'Saque Cancelado',
+                    'message' => $status === 'failed'
+                        ? "Falha no processamento do saque de {$this->formatted_amount}. Motivo: {$reason}"
+                        : "Seu saque de {$this->formatted_amount} foi cancelado." . ($reason ? " Motivo: {$reason}" : ''),
+                    'data' => [
+                        'withdrawal_id' => $this->id,
+                        'amount' => $this->amount,
+                        'method' => $this->withdrawal_method,
+                        'status' => $status,
+                        'reason' => $reason,
+                    ],
+                    'is_read' => false,
+                ]);
+            }
 
             // Send real-time notification
             NotificationService::sendSocketNotification($this->creator_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to create withdrawal notification', [
                 'withdrawal_id' => $this->id,
+                'status' => $status,
                 'error' => $e->getMessage()
             ]);
         }
