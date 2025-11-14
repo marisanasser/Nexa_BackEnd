@@ -307,6 +307,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/create-funding-checkout', [BrandPaymentController::class, 'createFundingCheckout']);
         Route::post('/handle-checkout-success', [BrandPaymentController::class, 'handleCheckoutSuccess']);
         Route::post('/handle-offer-funding-success', [BrandPaymentController::class, 'handleOfferFundingSuccess']);
+        Route::get('/check-funding-status', [BrandPaymentController::class, 'checkFundingStatus']); // Check if brand has funded platform
     });
 
     // Stripe Connect and setup
