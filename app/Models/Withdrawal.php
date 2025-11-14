@@ -128,6 +128,9 @@ class Withdrawal extends Model
             // Update creator balance
             $this->updateCreatorBalance();
 
+            // Create transaction record for successful withdrawal
+            $this->createTransactionRecord();
+
             // Notify creator about successful withdrawal
             self::createWithdrawalNotification('completed');
 
@@ -313,6 +316,126 @@ class Withdrawal extends Model
         $balance = CreatorBalance::where('creator_id', $this->creator_id)->first();
         if ($balance) {
             $balance->increment('available_balance', $this->amount);
+        }
+    }
+
+    /**
+     * Create transaction record for completed withdrawal
+     */
+    private function createTransactionRecord(): void
+    {
+        try {
+            // Check if transaction already exists for this withdrawal
+            // Check both payment_data and metadata for withdrawal_id
+            $existingTransaction = Transaction::where('user_id', $this->creator_id)
+                ->where(function($query) {
+                    $query->whereJsonContains('payment_data->withdrawal_id', (string)$this->id)
+                          ->orWhereJsonContains('payment_data->withdrawal_id', $this->id)
+                          ->orWhereJsonContains('metadata->withdrawal_id', (string)$this->id)
+                          ->orWhereJsonContains('metadata->withdrawal_id', $this->id);
+                })
+                ->first();
+
+            if ($existingTransaction) {
+                Log::info('Transaction record already exists for withdrawal', [
+                    'withdrawal_id' => $this->id,
+                    'transaction_id' => $existingTransaction->id,
+                ]);
+                return;
+            }
+
+            // Get withdrawal method details
+            $withdrawalMethod = WithdrawalMethod::findByCode($this->withdrawal_method);
+            $methodName = $withdrawalMethod ? $withdrawalMethod->name : $this->withdrawal_method_label;
+
+            // Prepare payment data
+            $paymentData = [
+                'withdrawal_id' => $this->id,
+                'withdrawal_method' => $this->withdrawal_method,
+                'method_name' => $methodName,
+                'gross_amount' => $this->amount,
+                'net_amount' => $this->net_amount,
+                'total_fees' => $this->total_fees,
+                'platform_fee' => $this->platform_fee,
+                'fixed_fee' => $this->fixed_fee,
+                'transaction_id' => $this->transaction_id,
+                'processed_at' => $this->processed_at ? $this->processed_at->toDateTimeString() : null,
+            ];
+
+            // Add withdrawal details if available
+            if ($this->withdrawal_details) {
+                $paymentData = array_merge($paymentData, $this->withdrawal_details);
+            }
+
+            // Determine payment method for transaction record
+            $paymentMethod = 'withdrawal';
+            $stripePaymentIntentId = null;
+            $stripeChargeId = null;
+
+            if ($this->withdrawal_method === 'stripe_connect' || $this->withdrawal_method === 'stripe_card') {
+                $paymentMethod = 'stripe_withdrawal';
+                // For Stripe withdrawals, transaction_id might be a transfer ID
+                if ($this->transaction_id && strpos($this->transaction_id, 'tr_') === 0) {
+                    // This is a Stripe transfer ID
+                    $stripePaymentIntentId = $this->transaction_id;
+                }
+            } elseif ($this->withdrawal_method === 'pagarme_bank_transfer') {
+                $paymentMethod = 'pagarme_withdrawal';
+            } elseif ($this->withdrawal_method === 'pix') {
+                $paymentMethod = 'pix_withdrawal';
+            } elseif ($this->withdrawal_method === 'bank_transfer') {
+                $paymentMethod = 'bank_transfer_withdrawal';
+            }
+
+            // Get card details from withdrawal_details if available (for Stripe card withdrawals)
+            $cardBrand = null;
+            $cardLast4 = null;
+            $cardHolderName = null;
+
+            if ($this->withdrawal_details) {
+                $cardBrand = $this->withdrawal_details['card_brand'] ?? null;
+                $cardLast4 = $this->withdrawal_details['card_last4'] ?? null;
+                $cardHolderName = $this->withdrawal_details['card_holder_name'] ?? null;
+            }
+
+            // Create transaction record
+            $transaction = Transaction::create([
+                'user_id' => $this->creator_id,
+                'stripe_payment_intent_id' => $stripePaymentIntentId,
+                'stripe_charge_id' => $stripeChargeId,
+                'status' => 'paid',
+                'amount' => $this->amount,
+                'payment_method' => $paymentMethod,
+                'card_brand' => $cardBrand,
+                'card_last4' => $cardLast4,
+                'card_holder_name' => $cardHolderName,
+                'payment_data' => $paymentData,
+                'paid_at' => $this->processed_at ?? now(),
+                'metadata' => [
+                    'withdrawal_id' => $this->id,
+                    'withdrawal_method' => $this->withdrawal_method,
+                    'method_name' => $methodName,
+                    'net_amount' => $this->net_amount,
+                    'total_fees' => $this->total_fees,
+                ],
+            ]);
+
+            Log::info('Transaction record created for withdrawal', [
+                'withdrawal_id' => $this->id,
+                'transaction_id' => $transaction->id,
+                'creator_id' => $this->creator_id,
+                'amount' => $this->amount,
+                'payment_method' => $paymentMethod,
+            ]);
+
+        } catch (\Exception $e) {
+            // Log error but don't fail the withdrawal
+            Log::error('Failed to create transaction record for withdrawal', [
+                'withdrawal_id' => $this->id,
+                'creator_id' => $this->creator_id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
         }
     }
 
