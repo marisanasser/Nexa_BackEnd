@@ -215,6 +215,7 @@ class Withdrawal extends Model
         // Handle different withdrawal methods
         switch ($this->withdrawal_method) {
             case 'stripe_connect':
+            case 'stripe_connect_bank_account':
                 $this->processStripeConnectWithdrawal();
                 break;
             case 'pagarme_bank_transfer':
@@ -387,15 +388,23 @@ class Withdrawal extends Model
                 $paymentMethod = 'bank_transfer_withdrawal';
             }
 
-            // Get card details from withdrawal_details if available (for Stripe card withdrawals)
+            // Get bank account details from withdrawal_details if available (for Stripe Connect withdrawals)
             $cardBrand = null;
             $cardLast4 = null;
             $cardHolderName = null;
 
             if ($this->withdrawal_details) {
-                $cardBrand = $this->withdrawal_details['card_brand'] ?? null;
-                $cardLast4 = $this->withdrawal_details['card_last4'] ?? null;
-                $cardHolderName = $this->withdrawal_details['card_holder_name'] ?? null;
+                // For Stripe Connect bank account withdrawals, use bank account info
+                if ($this->withdrawal_method === 'stripe_connect_bank_account') {
+                    $cardBrand = $this->withdrawal_details['bank_name'] ?? null;
+                    $cardLast4 = $this->withdrawal_details['bank_last4'] ?? null;
+                    $cardHolderName = $this->withdrawal_details['account_holder_name'] ?? null;
+                } else {
+                    // Fallback to card details for other methods
+                    $cardBrand = $this->withdrawal_details['card_brand'] ?? null;
+                    $cardLast4 = $this->withdrawal_details['card_last4'] ?? null;
+                    $cardHolderName = $this->withdrawal_details['card_holder_name'] ?? null;
+                }
             }
 
             // Create transaction record
