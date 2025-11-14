@@ -262,7 +262,7 @@ class WithdrawalController extends Controller
                         ], 400);
                     }
                 } elseif ($dynamicMethod) {
-                    // Dynamic method (e.g., stripe_connect_bank_account)
+                    // Dynamic method (e.g., stripe_connect_bank_account)mkmlmlk
                     $minAmount = $dynamicMethod['min_amount'] ?? 0;
                     $maxAmount = $dynamicMethod['max_amount'] ?? 1000000;
                     if ($request->amount < $minAmount || $request->amount > $maxAmount) {
