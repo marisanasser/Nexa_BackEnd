@@ -689,6 +689,7 @@ class ContractPaymentController extends Controller
                 'customer' => $customerId,
                 'mode' => 'payment',
                 'payment_method_types' => ['card'],
+                'locale' => 'pt-BR',
                 'line_items' => [[
                     'price_data' => [
                         'currency' => 'brl',

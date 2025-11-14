@@ -373,6 +373,7 @@ class BrandPaymentController extends Controller
                 'customer' => $customerId,
                 'mode' => 'setup',
                 'payment_method_types' => ['card'],
+                'locale' => 'pt-BR',
                 'success_url' => $frontendUrl . '/brand/payment-methods?success=true&session_id={CHECKOUT_SESSION_ID}',
                 'cancel_url' => $frontendUrl . '/brand/payment-methods?canceled=true',
                 'metadata' => [
@@ -1172,6 +1173,7 @@ class BrandPaymentController extends Controller
                 'customer' => $customerId,
                 'mode' => 'payment',
                 'payment_method_types' => ['card'],
+                'locale' => 'pt-BR',
                 'line_items' => [[
                     'price_data' => [
                         'currency' => 'brl',
@@ -1250,5 +1252,277 @@ class BrandPaymentController extends Controller
             'last4' => $last4,
             'holder_name' => $cardHolderName
         ];
+    }
+
+    /**
+     * Handle successful offer funding checkout (frontend callback)
+     * This creates the transaction and notification immediately without waiting for webhook
+     */
+    public function handleOfferFundingSuccess(Request $request): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+            
+            if (!$user || !$user->isBrand()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only brands can access this endpoint',
+                ], 403);
+            }
+
+            $sessionId = $request->input('session_id') ?? $request->query('session_id');
+            
+            if (!$sessionId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Session ID is required',
+                ], 400);
+            }
+
+            Log::info('Handling offer funding success callback', [
+                'user_id' => $user->id,
+                'session_id' => $sessionId,
+            ]);
+
+            Stripe::setApiKey(config('services.stripe.secret'));
+            
+            // Retrieve the checkout session
+            $session = Session::retrieve($sessionId, [
+                'expand' => ['payment_intent', 'payment_intent.charges.data.payment_method_details'],
+            ]);
+
+            // Verify session belongs to this user
+            $metadata = $session->metadata ?? null;
+            $sessionUserId = null;
+            
+            if (is_array($metadata)) {
+                $sessionUserId = $metadata['user_id'] ?? null;
+            } elseif (is_object($metadata)) {
+                $sessionUserId = $metadata->user_id ?? null;
+            }
+
+            if (!$sessionUserId || (string)$sessionUserId !== (string)$user->id) {
+                Log::warning('Session does not belong to user', [
+                    'session_user_id' => $sessionUserId,
+                    'authenticated_user_id' => $user->id,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid session',
+                ], 403);
+            }
+
+            // Check if payment was successful
+            if ($session->payment_status !== 'paid') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment not completed',
+                ], 400);
+            }
+
+            // Get amount from metadata or session
+            $amount = null;
+            if (is_array($metadata)) {
+                $amount = $metadata['amount'] ?? null;
+            } elseif (is_object($metadata)) {
+                $amount = $metadata->amount ?? null;
+            }
+            
+            $transactionAmount = $amount ? (float) $amount : ($session->amount_total / 100);
+
+            // Get payment intent
+            $paymentIntentId = $session->payment_intent;
+            if (is_object($paymentIntentId)) {
+                $paymentIntentId = $paymentIntentId->id;
+            }
+
+            if (!$paymentIntentId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment intent not found',
+                ], 400);
+            }
+
+            // Check if transaction already exists (idempotency)
+            $existingTransaction = \App\Models\Transaction::where('stripe_payment_intent_id', $paymentIntentId)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if ($existingTransaction) {
+                Log::info('Offer funding transaction already exists', [
+                    'transaction_id' => $existingTransaction->id,
+                    'user_id' => $user->id,
+                ]);
+                
+                // Still create notification if it doesn't exist
+                $this->createOfferFundingNotification($user->id, $transactionAmount, $metadata, $existingTransaction->id);
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Transaction already processed',
+                    'data' => [
+                        'transaction_id' => $existingTransaction->id,
+                        'amount' => $transactionAmount,
+                    ],
+                ]);
+            }
+
+            // Retrieve payment intent to get charge details
+            $paymentIntent = \Stripe\PaymentIntent::retrieve($paymentIntentId, [
+                'expand' => ['charges.data.payment_method_details'],
+            ]);
+
+            if ($paymentIntent->status !== 'succeeded') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment intent not succeeded',
+                ], 400);
+            }
+
+            // Get payment method details
+            $charge = null;
+            $cardBrand = null;
+            $cardLast4 = null;
+            $cardHolderName = null;
+
+            if (!empty($paymentIntent->charges->data)) {
+                $charge = $paymentIntent->charges->data[0];
+                $paymentMethodDetails = $charge->payment_method_details->card ?? null;
+                if ($paymentMethodDetails) {
+                    $cardBrand = $paymentMethodDetails->brand ?? null;
+                    $cardLast4 = $paymentMethodDetails->last4 ?? null;
+                    $cardHolderName = $paymentMethodDetails->name ?? null;
+                }
+            }
+
+            DB::beginTransaction();
+
+            try {
+                // Create transaction record
+                $transaction = \App\Models\Transaction::create([
+                    'user_id' => $user->id,
+                    'stripe_payment_intent_id' => $paymentIntent->id,
+                    'stripe_charge_id' => $charge->id ?? null,
+                    'status' => 'paid',
+                    'amount' => $transactionAmount,
+                    'payment_method' => 'stripe',
+                    'card_brand' => $cardBrand,
+                    'card_last4' => $cardLast4,
+                    'card_holder_name' => $cardHolderName,
+                    'payment_data' => [
+                        'checkout_session_id' => $session->id,
+                        'payment_intent' => $paymentIntent->id,
+                        'charge_id' => $charge->id ?? null,
+                        'type' => 'offer_funding',
+                        'metadata' => $metadata,
+                    ],
+                    'paid_at' => now(),
+                ]);
+
+                // Update campaign final_price if campaign_id exists
+                $campaignId = null;
+                if (is_array($metadata)) {
+                    $campaignId = $metadata['campaign_id'] ?? null;
+                } elseif (is_object($metadata)) {
+                    $campaignId = $metadata->campaign_id ?? null;
+                }
+
+                if ($campaignId) {
+                    try {
+                        $campaign = \App\Models\Campaign::find($campaignId);
+                        if ($campaign) {
+                            $campaign->update([
+                                'final_price' => $transactionAmount,
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning('Failed to update campaign final_price', [
+                            'campaign_id' => $campaignId,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+
+                DB::commit();
+
+                Log::info('Offer funding transaction created successfully', [
+                    'transaction_id' => $transaction->id,
+                    'user_id' => $user->id,
+                    'amount' => $transactionAmount,
+                ]);
+
+                // Create notification immediately
+                $this->createOfferFundingNotification($user->id, $transactionAmount, $metadata, $transaction->id);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Platform funding processed successfully',
+                    'data' => [
+                        'transaction_id' => $transaction->id,
+                        'amount' => $transactionAmount,
+                    ],
+                ]);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Failed to handle offer funding success', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to process funding. Please try again.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Create notification for successful offer funding
+     */
+    private function createOfferFundingNotification($userId, $amount, $metadata, $transactionId): void
+    {
+        try {
+            $fundingData = [
+                'transaction_id' => $transactionId,
+            ];
+            
+            if (is_array($metadata)) {
+                $fundingData['creator_id'] = $metadata['creator_id'] ?? null;
+                $fundingData['chat_room_id'] = $metadata['chat_room_id'] ?? null;
+                $fundingData['campaign_id'] = $metadata['campaign_id'] ?? null;
+            } elseif (is_object($metadata)) {
+                $fundingData['creator_id'] = $metadata->creator_id ?? null;
+                $fundingData['chat_room_id'] = $metadata->chat_room_id ?? null;
+                $fundingData['campaign_id'] = $metadata->campaign_id ?? null;
+            }
+            
+            $notification = \App\Models\Notification::createPlatformFundingSuccess(
+                $userId,
+                $amount,
+                $fundingData
+            );
+            
+            // Send real-time notification via Socket.IO
+            \App\Services\NotificationService::sendSocketNotification($userId, $notification);
+            
+            Log::info('Platform funding success notification created', [
+                'notification_id' => $notification->id,
+                'user_id' => $userId,
+                'amount' => $amount,
+            ]);
+        } catch (\Exception $e) {
+            // Log error but don't fail the transaction
+            Log::error('Failed to create platform funding success notification', [
+                'user_id' => $userId,
+                'amount' => $amount,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 } 

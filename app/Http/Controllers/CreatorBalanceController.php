@@ -532,6 +532,7 @@ class CreatorBalanceController extends Controller
                 'customer' => $customerId,
                 'mode' => 'setup', // Setup mode for payment method collection only
                 'payment_method_types' => ['card'],
+                'locale' => 'pt-BR',
                 'success_url' => $frontendUrl . '/creator/payment-method?payment_method=connected&session_id={CHECKOUT_SESSION_ID}',
                 'cancel_url' => $frontendUrl . '/creator/payment-method?payment_method=cancelled',
                 'metadata' => [

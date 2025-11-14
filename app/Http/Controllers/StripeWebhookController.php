@@ -1039,6 +1039,9 @@ class StripeWebhookController extends Controller
             // Get amount from session or metadata (convert from cents if needed)
             $transactionAmount = $amount ? (float) $amount : ($session->amount_total / 100);
 
+            // Get metadata from session
+            $metadata = $session->metadata ?? null;
+
             // Get campaign_id from metadata to update campaign price
             $campaignId = null;
             if (is_array($metadata)) {
@@ -1144,6 +1147,48 @@ class StripeWebhookController extends Controller
                     'payment_intent_id' => $paymentIntent->id,
                     'amount' => $transactionAmount,
                 ]);
+
+                // Create notification for successful platform funding
+                try {
+                    $metadata = $session->metadata ?? null;
+                    $fundingData = [
+                        'transaction_id' => $transaction->id,
+                        'session_id' => $session->id,
+                        'payment_intent_id' => $paymentIntent->id,
+                    ];
+                    
+                    if (is_array($metadata)) {
+                        $fundingData['creator_id'] = $metadata['creator_id'] ?? null;
+                        $fundingData['chat_room_id'] = $metadata['chat_room_id'] ?? null;
+                        $fundingData['campaign_id'] = $metadata['campaign_id'] ?? null;
+                    } elseif (is_object($metadata)) {
+                        $fundingData['creator_id'] = $metadata->creator_id ?? null;
+                        $fundingData['chat_room_id'] = $metadata->chat_room_id ?? null;
+                        $fundingData['campaign_id'] = $metadata->campaign_id ?? null;
+                    }
+                    
+                    $notification = \App\Models\Notification::createPlatformFundingSuccess(
+                        $user->id,
+                        $transactionAmount,
+                        $fundingData
+                    );
+                    
+                    // Send real-time notification via Socket.IO
+                    \App\Services\NotificationService::sendSocketNotification($user->id, $notification);
+                    
+                    Log::info('Platform funding success notification created', [
+                        'notification_id' => $notification->id,
+                        'user_id' => $user->id,
+                        'amount' => $transactionAmount,
+                    ]);
+                } catch (\Exception $e) {
+                    // Log error but don't fail the transaction
+                    Log::error('Failed to create platform funding success notification', [
+                        'user_id' => $user->id,
+                        'amount' => $transactionAmount,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
 
             } catch (\Exception $e) {
                 DB::rollBack();

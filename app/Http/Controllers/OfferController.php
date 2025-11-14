@@ -186,6 +186,7 @@ class OfferController extends Controller
                     'customer' => $customerId,
                     'mode' => 'setup',
                     'payment_method_types' => ['card'],
+                    'locale' => 'pt-BR',
                     'success_url' => $frontendUrl . '/brand?component=Pagamentos&success=true&session_id={CHECKOUT_SESSION_ID}&action=send_offer&creator_id=' . $request->creator_id . '&chat_room_id=' . $request->chat_room_id,
                     'cancel_url' => $frontendUrl . '/brand?component=Pagamentos&canceled=true&action=send_offer&creator_id=' . $request->creator_id . '&chat_room_id=' . $request->chat_room_id,
                     'metadata' => [
