@@ -263,28 +263,38 @@ class WithdrawalController extends Controller
                 $withdrawalDetails['method_name'] = $withdrawalMethod->name;
                 $withdrawalDetails['method_code'] = $withdrawalMethod->code;
                 
-                // If it's a Stripe card withdrawal, store Stripe payment method ID
-                if ($withdrawalMethod->code === 'stripe_card' && $user->stripe_payment_method_id) {
-                    $withdrawalDetails['stripe_payment_method_id'] = $user->stripe_payment_method_id;
-                    $withdrawalDetails['stripe_customer_id'] = $user->stripe_customer_id;
+                // If it's a Stripe Connect bank account withdrawal, store bank account info
+                if ($withdrawalMethod->code === 'stripe_connect_bank_account' && $user->stripe_account_id) {
+                    $withdrawalDetails['stripe_account_id'] = $user->stripe_account_id;
                     
-                    // Try to get card details from Stripe
+                    // Try to get bank account details from Stripe Connect
                     try {
                         $stripeSecret = config('services.stripe.secret');
                         if ($stripeSecret) {
                             \Stripe\Stripe::setApiKey($stripeSecret);
-                            $paymentMethod = \Stripe\PaymentMethod::retrieve($user->stripe_payment_method_id);
-                            if ($paymentMethod->card) {
-                                $withdrawalDetails['card_brand'] = $paymentMethod->card->brand ?? null;
-                                $withdrawalDetails['card_last4'] = $paymentMethod->card->last4 ?? null;
-                                $withdrawalDetails['card_exp_month'] = $paymentMethod->card->exp_month ?? null;
-                                $withdrawalDetails['card_exp_year'] = $paymentMethod->card->exp_year ?? null;
+                            
+                            // Retrieve external accounts (bank accounts) for the connected account
+                            $externalAccounts = \Stripe\Account::allExternalAccounts(
+                                $user->stripe_account_id,
+                                ['object' => 'bank_account', 'limit' => 1]
+                            );
+                            
+                            if (!empty($externalAccounts->data)) {
+                                $bankAccount = $externalAccounts->data[0];
+                                $withdrawalDetails['bank_account_id'] = $bankAccount->id;
+                                $withdrawalDetails['bank_name'] = $bankAccount->bank_name ?? null;
+                                $withdrawalDetails['bank_last4'] = $bankAccount->last4 ?? null;
+                                $withdrawalDetails['account_holder_name'] = $bankAccount->account_holder_name ?? null;
+                                $withdrawalDetails['account_holder_type'] = $bankAccount->account_holder_type ?? null;
+                                $withdrawalDetails['country'] = $bankAccount->country ?? 'BR';
+                                $withdrawalDetails['currency'] = $bankAccount->currency ?? 'brl';
+                                $withdrawalDetails['routing_number'] = $bankAccount->routing_number ?? null;
                             }
                         }
                     } catch (\Exception $e) {
-                        Log::warning('Failed to retrieve Stripe payment method details for withdrawal', [
+                        Log::warning('Failed to retrieve Stripe Connect bank account details for withdrawal', [
                             'user_id' => $user->id,
-                            'stripe_payment_method_id' => $user->stripe_payment_method_id,
+                            'stripe_account_id' => $user->stripe_account_id,
                             'error' => $e->getMessage(),
                         ]);
                     }

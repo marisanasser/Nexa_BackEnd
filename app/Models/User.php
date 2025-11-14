@@ -341,9 +341,9 @@ class User extends Authenticatable
                 ];
             })
             ->filter(function ($method) {
-                // Filter out 'stripe_card' from database methods if user has a Stripe payment method
-                // The user-specific Stripe payment method will be added below with actual card details
-                if ($method['id'] === 'stripe_card' && $this->stripe_payment_method_id) {
+                // Filter out 'stripe_card' and 'stripe_connect' from database methods if user has a Stripe Connect account
+                // The user-specific Stripe Connect bank account will be added below with actual bank details
+                if (($method['id'] === 'stripe_card' || $method['id'] === 'stripe_connect') && $this->stripe_account_id) {
                     return false;
                 }
                 return true;
@@ -351,50 +351,64 @@ class User extends Authenticatable
             ->values()
             ->toArray();
 
-        // Add user's Stripe payment method if available
-        if ($this->stripe_payment_method_id && $this->stripe_customer_id) {
+        // Add user's Stripe Connect bank account if available
+        if ($this->stripe_account_id) {
             try {
                 $stripeSecret = config('services.stripe.secret');
                 if ($stripeSecret) {
                     \Stripe\Stripe::setApiKey($stripeSecret);
                     
-                    $stripePaymentMethod = \Stripe\PaymentMethod::retrieve($this->stripe_payment_method_id);
+                    // Retrieve Stripe Connect account
+                    $stripeAccount = \Stripe\Account::retrieve($this->stripe_account_id);
                     
-                    // Format card information
-                    $cardBrand = $stripePaymentMethod->card->brand ?? 'card';
-                    $cardLast4 = $stripePaymentMethod->card->last4 ?? '****';
-                    $cardExpMonth = $stripePaymentMethod->card->exp_month ?? null;
-                    $cardExpYear = $stripePaymentMethod->card->exp_year ?? null;
-                    
-                    $cardDisplayName = ucfirst($cardBrand) . ' •••• ' . $cardLast4;
-                    if ($cardExpMonth && $cardExpYear) {
-                        $cardDisplayName .= ' (' . str_pad($cardExpMonth, 2, '0', STR_PAD_LEFT) . '/' . substr($cardExpYear, -2) . ')';
+                    // Check if payouts are enabled (means bank account is set up)
+                    if ($stripeAccount->payouts_enabled) {
+                        // Retrieve external accounts (bank accounts) for the connected account
+                        $externalAccounts = \Stripe\Account::allExternalAccounts(
+                            $this->stripe_account_id,
+                            ['object' => 'bank_account', 'limit' => 1]
+                        );
+                        
+                        if (!empty($externalAccounts->data)) {
+                            $bankAccount = $externalAccounts->data[0];
+                            
+                            // Format bank account information
+                            $bankName = $bankAccount->bank_name ?? 'Banco';
+                            $last4 = $bankAccount->last4 ?? '****';
+                            $accountHolderName = $bankAccount->account_holder_name ?? '';
+                            
+                            $bankDisplayName = $bankName . ' •••• ' . $last4;
+                            if ($accountHolderName) {
+                                $bankDisplayName .= ' (' . $accountHolderName . ')';
+                            }
+                            
+                            // Add Stripe Connect bank account as a withdrawal option
+                            $methods[] = [
+                                'id' => 'stripe_connect_bank_account',
+                                'name' => $bankDisplayName,
+                                'description' => 'Conta bancária cadastrada na sua conta Stripe Connect',
+                                'min_amount' => 10.00, // Minimum withdrawal amount
+                                'max_amount' => 10000.00, // Maximum withdrawal amount
+                                'processing_time' => '1-3 dias úteis',
+                                'fee' => 0.00, // No fee for Stripe Connect withdrawals
+                                'required_fields' => [],
+                                'field_config' => [],
+                                'stripe_account_id' => $this->stripe_account_id,
+                                'bank_account_id' => $bankAccount->id,
+                                'bank_name' => $bankName,
+                                'bank_last4' => $last4,
+                                'account_holder_name' => $accountHolderName,
+                                'country' => $bankAccount->country ?? 'BR',
+                                'currency' => $bankAccount->currency ?? 'brl',
+                            ];
+                        }
                     }
-                    
-                    // Add Stripe payment method as a withdrawal option
-                    $methods[] = [
-                        'id' => 'stripe_card',
-                        'name' => $cardDisplayName,
-                        'description' => 'Cartão de crédito/débito cadastrado no Stripe',
-                        'min_amount' => 10.00, // Minimum withdrawal amount
-                        'max_amount' => 10000.00, // Maximum withdrawal amount
-                        'processing_time' => '1-3 dias úteis',
-                        'fee' => 0.00, // No fee for Stripe card withdrawals
-                        'required_fields' => [],
-                        'field_config' => [],
-                        'stripe_payment_method_id' => $this->stripe_payment_method_id,
-                        'stripe_customer_id' => $this->stripe_customer_id,
-                        'card_brand' => $cardBrand,
-                        'card_last4' => $cardLast4,
-                        'card_exp_month' => $cardExpMonth,
-                        'card_exp_year' => $cardExpYear,
-                    ];
                 }
             } catch (\Exception $e) {
-                // Log error but don't fail - just skip adding Stripe payment method
-                \Illuminate\Support\Facades\Log::warning('Failed to retrieve Stripe payment method for withdrawal methods', [
+                // Log error but don't fail - just skip adding Stripe bank account
+                \Illuminate\Support\Facades\Log::warning('Failed to retrieve Stripe Connect bank account for withdrawal methods', [
                     'user_id' => $this->id,
-                    'stripe_payment_method_id' => $this->stripe_payment_method_id,
+                    'stripe_account_id' => $this->stripe_account_id,
                     'error' => $e->getMessage(),
                 ]);
             }

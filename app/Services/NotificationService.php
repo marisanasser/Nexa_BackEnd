@@ -1358,6 +1358,69 @@ class NotificationService
     }
 
     /**
+     * Notify user about payment completed
+     */
+    public static function notifyUserOfPaymentCompleted($jobPayment): void
+    {
+        try {
+            $notification = Notification::create([
+                'user_id' => $jobPayment->creator_id,
+                'type' => 'payment_completed',
+                'title' => 'Pagamento Concluído',
+                'message' => "Seu pagamento de R$ " . number_format($jobPayment->creator_amount, 2, ',', '.') . " foi processado com sucesso.",
+                'data' => [
+                    'job_payment_id' => $jobPayment->id,
+                    'contract_id' => $jobPayment->contract_id,
+                    'amount' => $jobPayment->creator_amount,
+                    'formatted_amount' => 'R$ ' . number_format($jobPayment->creator_amount, 2, ',', '.'),
+                    'transaction_id' => $jobPayment->transaction_id,
+                    'processed_at' => $jobPayment->processed_at ? $jobPayment->processed_at->toISOString() : null,
+                ],
+                'is_read' => false,
+            ]);
+            
+            // Send real-time notification via Socket.IO
+            self::sendSocketNotification($jobPayment->creator_id, $notification);
+        } catch (\Exception $e) {
+            Log::error('Failed to notify user of payment completed', [
+                'job_payment_id' => $jobPayment->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Notify user about payment failed
+     */
+    public static function notifyUserOfPaymentFailed($jobPayment, string $reason = null): void
+    {
+        try {
+            $notification = Notification::create([
+                'user_id' => $jobPayment->creator_id,
+                'type' => 'payment_failed',
+                'title' => 'Falha no Pagamento',
+                'message' => "Falha no processamento do pagamento. " . ($reason ? "Motivo: {$reason}" : "Tente novamente mais tarde."),
+                'data' => [
+                    'job_payment_id' => $jobPayment->id,
+                    'contract_id' => $jobPayment->contract_id,
+                    'amount' => $jobPayment->creator_amount,
+                    'formatted_amount' => 'R$ ' . number_format($jobPayment->creator_amount, 2, ',', '.'),
+                    'failure_reason' => $reason,
+                ],
+                'is_read' => false,
+            ]);
+            
+            // Send real-time notification via Socket.IO
+            self::sendSocketNotification($jobPayment->creator_id, $notification);
+        } catch (\Exception $e) {
+            Log::error('Failed to notify user of payment failed', [
+                'job_payment_id' => $jobPayment->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
      * Notify creator about proposal approval
      */
     public static function notifyCreatorOfProposalApproval(CampaignApplication $application): void
