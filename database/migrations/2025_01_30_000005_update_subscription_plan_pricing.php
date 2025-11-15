@@ -30,16 +30,15 @@ return new class extends Migration
 
         DB::table('subscription_plans')->where('name', 'Plano Semestral')->update([
             'name' => 'Six-Month Plan',
-            'description' => 'Assinatura de 6 meses do Nexa Premium',
+            'description' => 'Assinatura de 1 mês do Nexa Premium',
             'price' => 29.90,
-            'duration_months' => 6,
+            'duration_months' => 1,
             'features' => json_encode([
                 'Aplicações ilimitadas em campanhas',
                 'Acesso a todas as campanhas exclusivas',
                 'Prioridade na aprovação de campanhas',
                 'Suporte premium via chat',
-                'Ferramentas avançadas de criação de conteúdo',
-                'Economia significativa comparado ao plano mensal'
+                'Ferramentas avançadas de criação de conteúdo'
             ]),
             'updated_at' => now(),
         ]);
