@@ -463,16 +463,11 @@ class StripeBillingController extends Controller
                 $customer = Customer::retrieve($user->stripe_customer_id);
             }
 
-            // Calculate cancel_at date based on plan duration
-            $cancelAt = null;
-            if ($plan->duration_months > 1) {
-                $cancelAt = \Carbon\Carbon::now()->addMonths($plan->duration_months)->timestamp;
-            }
-            
             // Create Stripe Checkout Session
+            // Note: cancel_at cannot be set in checkout session, it will be set after subscription creation via webhook
             $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
             
-            $checkoutParams = [
+            $checkoutSession = \Stripe\Checkout\Session::create([
                 'customer' => $customer->id,
                 'payment_method_types' => ['card'],
                 'line_items' => [[
@@ -487,24 +482,9 @@ class StripeBillingController extends Controller
                     'user_id' => $user->id,
                     'plan_id' => $plan->id,
                     'plan_name' => $plan->name,
+                    'duration_months' => $plan->duration_months, // Store duration for later use
                 ],
-            ];
-            
-            // Add subscription_data with cancel_at if plan has a fixed duration
-            if ($cancelAt) {
-                $checkoutParams['subscription_data'] = [
-                    'cancel_at' => $cancelAt,
-                ];
-                Log::info('Setting checkout subscription cancel_at', [
-                    'user_id' => $user->id,
-                    'plan_id' => $plan->id,
-                    'duration_months' => $plan->duration_months,
-                    'cancel_at_timestamp' => $cancelAt,
-                    'cancel_at_date' => \Carbon\Carbon::createFromTimestamp($cancelAt)->toDateTimeString(),
-                ]);
-            }
-            
-            $checkoutSession = \Stripe\Checkout\Session::create($checkoutParams);
+            ]);
 
             Log::info('Stripe checkout session created', [
                 'user_id' => $user->id,

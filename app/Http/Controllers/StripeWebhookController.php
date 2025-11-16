@@ -394,6 +394,29 @@ class StripeWebhookController extends Controller
                     'stripe_status' => $stripeSub->status ?? 'incomplete',
                 ]);
                 
+                // Set cancel_at for plans with fixed duration (semestral and anual)
+                if ($plan->duration_months > 1) {
+                    $cancelAt = \Carbon\Carbon::now()->addMonths($plan->duration_months)->timestamp;
+                    try {
+                        $stripeSub = \Stripe\Subscription::update($stripeSubscriptionId, [
+                            'cancel_at' => $cancelAt,
+                        ]);
+                        Log::info('Set cancel_at for subscription', [
+                            'subscription_id' => $stripeSubscriptionId,
+                            'plan_id' => $plan->id,
+                            'duration_months' => $plan->duration_months,
+                            'cancel_at_timestamp' => $cancelAt,
+                            'cancel_at_date' => \Carbon\Carbon::createFromTimestamp($cancelAt)->toDateTimeString(),
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::error('Failed to set cancel_at for subscription', [
+                            'subscription_id' => $stripeSubscriptionId,
+                            'error' => $e->getMessage(),
+                        ]);
+                        // Continue anyway - subscription is created
+                    }
+                }
+                
                 $subscription = LocalSubscription::create([
                     'user_id' => $user->id,
                     'subscription_plan_id' => $plan->id,
@@ -554,6 +577,29 @@ class StripeWebhookController extends Controller
                 'paid_at' => now(),
             ]);
 
+            // Set cancel_at for plans with fixed duration (semestral and anual)
+            if ($plan->duration_months > 1) {
+                $cancelAt = \Carbon\Carbon::now()->addMonths($plan->duration_months)->timestamp;
+                try {
+                    $stripeSub = \Stripe\Subscription::update($stripeSubscriptionId, [
+                        'cancel_at' => $cancelAt,
+                    ]);
+                    Log::info('Set cancel_at for subscription from invoice', [
+                        'subscription_id' => $stripeSubscriptionId,
+                        'plan_id' => $plan->id,
+                        'duration_months' => $plan->duration_months,
+                        'cancel_at_timestamp' => $cancelAt,
+                        'cancel_at_date' => \Carbon\Carbon::createFromTimestamp($cancelAt)->toDateTimeString(),
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to set cancel_at for subscription from invoice', [
+                        'subscription_id' => $stripeSubscriptionId,
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Continue anyway - subscription is created
+                }
+            }
+            
             // Create subscription with active status (payment is confirmed)
             $subscription = LocalSubscription::create([
                 'user_id' => $user->id,
