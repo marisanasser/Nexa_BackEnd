@@ -241,28 +241,34 @@ class Withdrawal extends Model
     {
         // Strategy 1: Try to find a charge from JobPayment records
         // JobPayments are created when contracts are completed and payments are made
+        // Note: transaction_id can be a string (like "TXN_...") or a numeric ID
         $jobPayment = \App\Models\JobPayment::where('creator_id', $creatorId)
             ->whereNotNull('transaction_id')
-            
             ->orderBy('created_at', 'desc')
-            ->first();
+            ->get()
+            ->first(function ($jobPayment) {
+                // Only try to load transaction if transaction_id is numeric
+                return is_numeric($jobPayment->transaction_id);
+            });
 
         if ($jobPayment && is_numeric($jobPayment->transaction_id)) {
-            $jobPayment->load("transaction");
-            if ($jobPayment->transaction) {
-            $transaction = $jobPayment->transaction;
+            // Load the transaction relationship only if transaction_id is numeric
+            $jobPayment->load('transaction');
             
-            // Check if transaction has a stripe_charge_id
-            if ($transaction->stripe_charge_id) {
-                Log::info('Found source charge from JobPayment transaction', [
-                    'withdrawal_id' => $this->id,
-                    'creator_id' => $creatorId,
-                    'job_payment_id' => $jobPayment->id,
-                    'transaction_id' => $transaction->id,
-                    'stripe_charge_id' => $transaction->stripe_charge_id,
-                ]);
-                return $transaction->stripe_charge_id;
-}
+            if ($jobPayment->transaction) {
+                $transaction = $jobPayment->transaction;
+                
+                // Check if transaction has a stripe_charge_id
+                if ($transaction->stripe_charge_id) {
+                    Log::info('Found source charge from JobPayment transaction', [
+                        'withdrawal_id' => $this->id,
+                        'creator_id' => $creatorId,
+                        'job_payment_id' => $jobPayment->id,
+                        'transaction_id' => $transaction->id,
+                        'stripe_charge_id' => $transaction->stripe_charge_id,
+                    ]);
+                    return $transaction->stripe_charge_id;
+                }
             }
         }
 
