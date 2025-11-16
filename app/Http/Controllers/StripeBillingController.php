@@ -504,6 +504,9 @@ class StripeBillingController extends Controller
         Log::info('createSubscriptionFromCheckout called', [
             'user_id' => auth()->id(),
             'session_id' => $request->session_id,
+            'request_all' => $request->all(),
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
         ]);
         try {
             $user = auth()->user();
