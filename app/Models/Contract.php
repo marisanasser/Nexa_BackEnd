@@ -564,8 +564,31 @@ class Contract extends Model
         $creatorAmount = $this->budget * 0.95;
         $platformFee = $this->budget * 0.05;
 
+        // Check if transaction already exists for this contract
+        $existingTransaction = \App\Models\Transaction::where('contract_id', $this->id)->first();
+        
+        // Create transaction record if it doesn't exist (for tracking brand's payment)
+        if (!$existingTransaction) {
+            $transaction = \App\Models\Transaction::create([
+                'user_id' => $this->brand_id,
+                'contract_id' => $this->id,
+                'pagarme_transaction_id' => 'contract_completed_' . $this->id,
+                'status' => 'paid', // Assuming payment is already made to platform
+                'amount' => $this->budget,
+                'payment_method' => 'platform_escrow', // Indicates payment held by platform
+                'payment_data' => [
+                    'type' => 'contract_completion',
+                    'contract_id' => $this->id,
+                    'created_at_completion' => true,
+                ],
+                'paid_at' => now(),
+            ]);
+        } else {
+            $transaction = $existingTransaction;
+        }
+
         // Create payment record immediately when brand completes the campaign
-        JobPayment::create([
+        $jobPayment = JobPayment::create([
             'contract_id' => $this->id,
             'brand_id' => $this->brand_id,
             'creator_id' => $this->creator_id,
@@ -574,6 +597,7 @@ class Contract extends Model
             'creator_amount' => $creatorAmount,
             'payment_method' => 'platform_escrow',
             'status' => 'pending', // Payment is pending until creator reviews
+            'transaction_id' => $transaction->id, // Link to the transaction
         ]);
 
         $this->update([

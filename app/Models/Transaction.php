@@ -12,6 +12,7 @@ class Transaction extends Model
 
     protected $fillable = [
         'user_id',
+        'pagarme_transaction_id',
         'stripe_payment_intent_id',
         'stripe_charge_id',
         'status',
@@ -40,6 +41,14 @@ class Transaction extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Get the contract associated with this transaction.
+     */
+    public function contract(): BelongsTo
+    {
+        return $this->belongsTo(Contract::class);
     }
 
     /**
