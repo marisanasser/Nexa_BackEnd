@@ -413,102 +413,88 @@ class StripeBillingController extends Controller
     /**
      * Get Stripe checkout URL for subscription purchase
      */
-    public function getCheckoutUrl(Request $request): JsonResponse
-    {
-        try {
-            $user = auth()->user();
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User not authenticated',
-                ], 401);
-            }
-
-            $request->validate([
-                'plan_id' => 'required|integer|exists:subscription_plans,id',
-            ]);
-
-            $plan = SubscriptionPlan::find($request->plan_id);
-            if (!$plan || !$plan->is_active) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Plan not found or inactive',
-                ], 404);
-            }
-
-            // Check if plan has Stripe price configured
-            if (empty($plan->stripe_price_id)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Stripe price not configured for this plan',
-                ], 400);
-            }
-
-            // Ensure Stripe customer exists
-            if (!$user->stripe_customer_id) {
-                Log::info('Creating new Stripe customer for checkout', [
-                    'user_id' => $user->id,
-                    'email' => $user->email,
-                ]);
-                
-                $customer = Customer::create([
-                    'email' => $user->email,
-                    'metadata' => [
-                        'user_id' => $user->id,
-                        'name' => $user->name
-                    ],
-                ]);
-                $user->update(['stripe_customer_id' => $customer->id]);
-            } else {
-                $customer = Customer::retrieve($user->stripe_customer_id);
-            }
-
-            // Create Stripe Checkout Session
-            // Note: cancel_at cannot be set in checkout session, it will be set after subscription creation via webhook
-            $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
-            
-            $checkoutSession = \Stripe\Checkout\Session::create([
-                'customer' => $customer->id,
-                'payment_method_types' => ['card'],
-                'line_items' => [[
-                    'price' => $plan->stripe_price_id,
-                    'quantity' => 1,
-                ]],
-                'mode' => 'subscription',
-                'locale' => 'pt-BR',
-                'success_url' => $frontendUrl . '/creator/subscription?success=true&session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url' => $frontendUrl . '/creator/subscription?canceled=true',
-                'metadata' => [
-                    'user_id' => $user->id,
-                    'plan_id' => $plan->id,
-                    'plan_name' => $plan->name,
-                    'duration_months' => $plan->duration_months, // Store duration for later use
-                ],
-            ]);
-
-            Log::info('Stripe checkout session created', [
-                'user_id' => $user->id,
-                'plan_id' => $plan->id,
-                'session_id' => $checkoutSession->id,
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'url' => $checkoutSession->url
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Error creating checkout URL', [
-                'user_id' => auth()->id(),
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
+   public function getCheckoutUrl(Request $request): JsonResponse
+{
+    try {
+        $user = auth()->user();
+        if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error creating checkout URL. Please try again.',
-            ], 500);
+                'message' => 'User not authenticated',
+            ], 401);
         }
+
+        $request->validate([
+            'plan_id' => 'required|integer|exists:subscription_plans,id',
+        ]);
+
+        $plan = SubscriptionPlan::find($request->plan_id);
+        if (!$plan || !$plan->is_active) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Plan not found or inactive',
+            ], 404);
+        }
+
+        if (empty($plan->stripe_price_id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Stripe price not configured for this plan',
+            ], 400);
+        }
+
+        // Ensure Stripe customer exists
+        if (!$user->stripe_customer_id) {
+            $customer = \Stripe\Customer::create([
+                'email' => $user->email,
+                'metadata' => ['user_id' => $user->id, 'name' => $user->name],
+            ]);
+            $user->update(['stripe_customer_id' => $customer->id]);
+        } else {
+            $customer = \Stripe\Customer::retrieve($user->stripe_customer_id);
+        }
+
+        $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
+
+        // ✅ Remove cancel_at from checkout
+        $checkoutSession = \Stripe\Checkout\Session::create([
+            'customer' => $customer->id,
+            'payment_method_types' => ['card'],
+            'line_items' => [[
+                'price' => $plan->stripe_price_id,
+                'quantity' => 1,
+            ]],
+            'mode' => 'subscription',
+            'locale' => 'pt-BR',
+            'success_url' => $frontendUrl . '/creator/subscription?success=true&session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url' => $frontendUrl . '/creator/subscription?canceled=true',
+            'metadata' => [
+                'user_id' => $user->id,
+                'plan_id' => $plan->id,
+                'plan_name' => $plan->name,
+                'duration_months' => $plan->duration_months, // store for webhook
+            ],
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'url' => $checkoutSession->url,
+        ]);
+
+    } catch (\Exception $e) {
+        \Log::error('Error creating checkout URL', [
+            'user_id' => auth()->id(),
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Error creating checkout URL. Please try again.',
+        ], 500);
     }
+}
+
 
     /**
      * Create subscription from checkout session (called when user returns from Stripe checkout)

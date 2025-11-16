@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Stripe\Subscription as StripeSubscription;
 use App\Models\Subscription as LocalSubscription;
 use App\Models\SubscriptionPlan;
 use App\Models\Transaction;
@@ -356,10 +357,14 @@ class StripeWebhookController extends Controller
                     $paymentIntentId = $stripeSub->latest_invoice->payment_intent;
                 }
             }
-
             // Use payment intent ID as transaction identifier (unique identifier for Stripe transactions)
+            $stripeSubId = is_object($session->subscription) ? $session->subscription->id : $session->subscription;
             $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_' . $stripeSubscriptionId;
-
+            $durationMonths = (int)($session->metadata->duration_months ?? 1);
+            $cancelAt = Carbon::now()->addMonths($durationMonths)->timestamp;
+                StripeSubscription::update($stripeSubId, [
+                'cancel_at' => $cancelAt,
+            ]);
             // Create transaction
             try {
                 $transaction = Transaction::create([
