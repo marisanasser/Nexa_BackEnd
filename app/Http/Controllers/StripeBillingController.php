@@ -671,6 +671,29 @@ class StripeBillingController extends Controller
                 'paid_at' => now(),
             ]);
 
+            // Set cancel_at for plans with fixed duration (semestral and anual)
+            if ($plan->duration_months > 1) {
+                $cancelAt = \Carbon\Carbon::now()->addMonths($plan->duration_months)->timestamp;
+                try {
+                    $stripeSub = \Stripe\Subscription::update($stripeSubscriptionId, [
+                        'cancel_at' => $cancelAt,
+                    ]);
+                    Log::info('Set cancel_at for subscription from checkout', [
+                        'subscription_id' => $stripeSubscriptionId,
+                        'plan_id' => $plan->id,
+                        'duration_months' => $plan->duration_months,
+                        'cancel_at_timestamp' => $cancelAt,
+                        'cancel_at_date' => \Carbon\Carbon::createFromTimestamp($cancelAt)->toDateTimeString(),
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to set cancel_at for subscription from checkout', [
+                        'subscription_id' => $stripeSubscriptionId,
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Continue anyway - subscription is created
+                }
+            }
+            
             // Create subscription
             $subscription = \App\Models\Subscription::create([
                 'user_id' => $user->id,
