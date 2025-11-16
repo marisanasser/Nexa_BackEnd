@@ -466,8 +466,12 @@ class StripeBillingController extends Controller
             ]],
             'mode' => 'subscription',
             'locale' => 'pt-BR',
-            'success_url' => $frontendUrl . '/creator/subscription?success=true&session_id={CHECKOUT_SESSION_ID}',
-            'cancel_url' => $frontendUrl . '/creator/subscription?canceled=true',
+            // Importante: redirecionar direto para /creator com o componente de assinatura,
+            // preservando os parâmetros success e session_id para o frontend processar.
+            // Isso evita que a rota /creator/subscription converta a URL e remova os parâmetros
+            // antes do componente Subscription montar.
+            'success_url' => $frontendUrl . '/creator?component=subscription&success=true&session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url' => $frontendUrl . '/creator?component=subscription&canceled=true',
             'metadata' => [
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
