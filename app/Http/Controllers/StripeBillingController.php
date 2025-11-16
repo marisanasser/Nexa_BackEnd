@@ -501,7 +501,7 @@ class StripeBillingController extends Controller
      */
     public function createSubscriptionFromCheckout(Request $request): JsonResponse
     {
-        Log::info('HHHHHHHHHHHHHHHHHHHHHHHHHHHH', [
+        Log::info('createSubscriptionFromCheckout called', [
             'user_id' => auth()->id(),
             'session_id' => $request->session_id,
         ]);
@@ -544,10 +544,29 @@ class StripeBillingController extends Controller
             // Check if subscription already exists
             $existingSub = \App\Models\Subscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
             if ($existingSub) {
-                Log::info('Subscription already exists', [
+                Log::info('Subscription already exists, updating user premium status', [
                     'subscription_id' => $existingSub->id,
                     'user_id' => $user->id,
                 ]);
+                
+                // Ensure user has premium access even if subscription exists
+                if (!$user->has_premium) {
+                    $premiumExpiresAt = $existingSub->expires_at 
+                        ? \Carbon\Carbon::parse($existingSub->expires_at)
+                        : \Carbon\Carbon::now()->addMonths($existingSub->subscriptionPlan->duration_months ?? 1);
+                    
+                    $user->update([
+                        'has_premium' => true,
+                        'premium_expires_at' => $premiumExpiresAt->format('Y-m-d H:i:s'),
+                    ]);
+                    
+                    Log::info('User premium status updated from existing subscription', [
+                        'user_id' => $user->id,
+                        'has_premium' => $user->has_premium,
+                        'premium_expires_at' => $user->premium_expires_at,
+                    ]);
+                }
+                
                 return response()->json([
                     'success' => true,
                     'message' => 'Subscription already exists',
