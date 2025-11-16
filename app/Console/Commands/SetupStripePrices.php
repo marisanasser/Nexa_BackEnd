@@ -17,7 +17,7 @@ class SetupStripePrices extends Command
      *
      * @var string
      */
-    protected $signature = 'stripe:setup-prices';
+    protected $signature = 'stripe:setup-prices {--force : Force update existing prices}';
 
     /**
      * The console command description.
@@ -56,12 +56,25 @@ class SetupStripePrices extends Command
         foreach ($plans as $plan) {
             try {
                 // Check if plan already has stripe_price_id
-                if ($plan->stripe_price_id) {
+                if ($plan->stripe_price_id && !$this->option('force')) {
                     $this->newLine();
                     $this->warn("Plan '{$plan->name}' already has a Stripe price ID: {$plan->stripe_price_id}");
                     $this->info("Skipping... Use --force to update existing prices.");
                     $bar->advance();
                     continue;
+                }
+
+                // If force and price exists, delete old price first
+                if ($this->option('force') && $plan->stripe_price_id) {
+                    try {
+                        $oldPrice = Price::retrieve($plan->stripe_price_id);
+                        $oldPrice->delete();
+                        $this->newLine();
+                        $this->info("Deleted old price for plan '{$plan->name}': {$plan->stripe_price_id}");
+                    } catch (\Exception $e) {
+                        $this->newLine();
+                        $this->warn("Could not delete old price for plan '{$plan->name}': " . $e->getMessage());
+                    }
                 }
 
                 // Create or retrieve product
@@ -75,6 +88,9 @@ class SetupStripePrices extends Command
                     'stripe_product_id' => $product->id,
                     'stripe_price_id' => $price->id,
                 ]);
+
+                $this->newLine();
+                $this->info("✅ Created price for '{$plan->name}': {$price->id} (R$ {$plan->price}/mês, {$plan->duration_months} meses)");
 
                 $bar->advance();
 
@@ -128,25 +144,28 @@ class SetupStripePrices extends Command
 
     /**
      * Create a Stripe price for the plan
+     * All plans are now monthly recurring (interval_count: 1)
+     * The duration_months is used to set cancel_at when creating the subscription
      */
     private function createPrice(SubscriptionPlan $plan, string $productId): Price
     {
-        // Convert price to cents
+        // Convert price to cents (monthly price)
         $priceInCents = (int) round($plan->price * 100);
 
-        // Determine if it's recurring or one-time
-        // For subscription plans, we'll use recurring
+        // All subscription plans are now monthly recurring
+        // The total duration (duration_months) will be handled via cancel_at when creating subscriptions
         return Price::create([
             'product' => $productId,
             'unit_amount' => $priceInCents,
             'currency' => 'brl', // Brazilian Real
             'recurring' => [
-                'interval' => $plan->duration_months > 1 ? 'month' : 'month',
-                'interval_count' => $plan->duration_months,
+                'interval' => 'month',
+                'interval_count' => 1, // Always monthly, regardless of plan duration
             ],
             'metadata' => [
                 'plan_id' => $plan->id,
                 'duration_months' => $plan->duration_months,
+                'monthly_price' => $plan->price,
             ],
         ]);
     }

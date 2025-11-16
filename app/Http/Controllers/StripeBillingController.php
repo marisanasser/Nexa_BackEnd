@@ -140,15 +140,39 @@ class StripeBillingController extends Controller
                 'stripe_price_id' => $plan->stripe_price_id,
             ]);
             
-            // Create subscription
-            $stripeSub = StripeSubscription::create([
+            // Calculate cancel_at date based on plan duration
+            // Plans are now monthly recurring, so we cancel after duration_months
+            $cancelAt = null;
+            if ($plan->duration_months > 1) {
+                // Cancel subscription after the specified number of months
+                // Using Carbon to add months and convert to Unix timestamp
+                $cancelAt = \Carbon\Carbon::now()->addMonths($plan->duration_months)->timestamp;
+            }
+            
+            // Build subscription parameters
+            $subscriptionParams = [
                 'customer' => $customer->id,
                 'items' => [
                     ['price' => $plan->stripe_price_id],
                 ],
                 'payment_behavior' => 'default_incomplete',
                 'expand' => ['latest_invoice.payment_intent'],
-            ]);
+            ];
+            
+            // Add cancel_at if plan has a fixed duration
+            if ($cancelAt) {
+                $subscriptionParams['cancel_at'] = $cancelAt;
+                Log::info('Setting subscription cancel_at', [
+                    'user_id' => $user->id,
+                    'plan_id' => $plan->id,
+                    'duration_months' => $plan->duration_months,
+                    'cancel_at_timestamp' => $cancelAt,
+                    'cancel_at_date' => \Carbon\Carbon::createFromTimestamp($cancelAt)->toDateTimeString(),
+                ]);
+            }
+            
+            // Create subscription
+            $stripeSub = StripeSubscription::create($subscriptionParams);
             
             Log::info('Stripe subscription created', [
                 'user_id' => $user->id,
@@ -439,10 +463,16 @@ class StripeBillingController extends Controller
                 $customer = Customer::retrieve($user->stripe_customer_id);
             }
 
+            // Calculate cancel_at date based on plan duration
+            $cancelAt = null;
+            if ($plan->duration_months > 1) {
+                $cancelAt = \Carbon\Carbon::now()->addMonths($plan->duration_months)->timestamp;
+            }
+            
             // Create Stripe Checkout Session
             $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
             
-            $checkoutSession = \Stripe\Checkout\Session::create([
+            $checkoutParams = [
                 'customer' => $customer->id,
                 'payment_method_types' => ['card'],
                 'line_items' => [[
@@ -458,7 +488,23 @@ class StripeBillingController extends Controller
                     'plan_id' => $plan->id,
                     'plan_name' => $plan->name,
                 ],
-            ]);
+            ];
+            
+            // Add subscription_data with cancel_at if plan has a fixed duration
+            if ($cancelAt) {
+                $checkoutParams['subscription_data'] = [
+                    'cancel_at' => $cancelAt,
+                ];
+                Log::info('Setting checkout subscription cancel_at', [
+                    'user_id' => $user->id,
+                    'plan_id' => $plan->id,
+                    'duration_months' => $plan->duration_months,
+                    'cancel_at_timestamp' => $cancelAt,
+                    'cancel_at_date' => \Carbon\Carbon::createFromTimestamp($cancelAt)->toDateTimeString(),
+                ]);
+            }
+            
+            $checkoutSession = \Stripe\Checkout\Session::create($checkoutParams);
 
             Log::info('Stripe checkout session created', [
                 'user_id' => $user->id,
