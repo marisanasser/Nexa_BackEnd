@@ -840,11 +840,21 @@ class ContractPaymentController extends Controller
             $perPage = min($request->get('per_page', 10), 100);
             $page = $request->get('page', 1);
 
-            $contractIds = $user->brandContracts()->pluck('id');
-            $jobPaymentTransactionIds = \App\Models\JobPayment::where('brand_id', $user->id)
-                ->whereNotNull('transaction_id')
-                ->pluck('transaction_id')
-                ->unique();
+$contractIds = $user->brandContracts()->pluck("id");
+            // Get transaction IDs from JobPayments, filtering only numeric IDs
+            // (transaction_id can be a string like "TXN_..." or a numeric ID)
+            $jobPaymentTransactionIds = \App\Models\JobPayment::where("brand_id", $user->id)
+                ->whereNotNull("transaction_id")
+                ->pluck("transaction_id")
+                ->filter(function ($id) {
+                    // Only include numeric transaction IDs (actual Transaction model IDs)
+                    return is_numeric($id);
+                })
+                ->map(function ($id) {
+                    return (int) $id;
+                })
+                ->unique()
+                ->values();
 
             $transactions = \App\Models\Transaction::where(function ($query) use ($user, $contractIds, $jobPaymentTransactionIds) {
                     if ($contractIds->isNotEmpty()) {

@@ -164,14 +164,14 @@ class CreatorBalance extends Model
         return 'R$ ' . number_format($this->earnings_this_year, 2, ',', '.');
     }
 
-    public function getPendingWithdrawalsCount(): int
+    public function getPendingWithdrawalsCountAttribute(): int
     {
         return $this->withdrawals()
             ->whereIn('status', ['pending', 'processing'])
             ->count();
     }
 
-    public function getPendingWithdrawalsAmount(): float
+    public function getPendingWithdrawalsAmountAttribute(): float
     {
         return $this->withdrawals()
             ->whereIn('status', ['pending', 'processing'])

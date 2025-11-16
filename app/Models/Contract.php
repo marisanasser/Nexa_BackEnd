@@ -572,7 +572,7 @@ class Contract extends Model
             $transaction = \App\Models\Transaction::create([
                 'user_id' => $this->brand_id,
                 'contract_id' => $this->id,
-                'pagarme_transaction_id' => 'contract_completed_' . $this->id,
+                'stripe_payment_intent_id' => 'contract_completed_' . $this->id,
                 'status' => 'paid', // Assuming payment is already made to platform
                 'amount' => $this->budget,
                 'payment_method' => 'platform_escrow', // Indicates payment held by platform

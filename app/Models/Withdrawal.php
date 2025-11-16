@@ -243,11 +243,13 @@ class Withdrawal extends Model
         // JobPayments are created when contracts are completed and payments are made
         $jobPayment = \App\Models\JobPayment::where('creator_id', $creatorId)
             ->whereNotNull('transaction_id')
-            ->with('transaction')
+            
             ->orderBy('created_at', 'desc')
             ->first();
 
-        if ($jobPayment && $jobPayment->transaction) {
+        if ($jobPayment && is_numeric($jobPayment->transaction_id)) {
+            $jobPayment->load("transaction");
+            if ($jobPayment->transaction) {
             $transaction = $jobPayment->transaction;
             
             // Check if transaction has a stripe_charge_id
@@ -260,6 +262,7 @@ class Withdrawal extends Model
                     'stripe_charge_id' => $transaction->stripe_charge_id,
                 ]);
                 return $transaction->stripe_charge_id;
+}
             }
         }
 
