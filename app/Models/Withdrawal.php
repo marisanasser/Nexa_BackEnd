@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Services\NotificationService;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class Withdrawal extends Model
 {
@@ -232,6 +233,148 @@ class Withdrawal extends Model
         }
     }
 
+    /**
+     * Find a source charge for the creator to use as source_transaction in Stripe Transfer
+     * This is required for transfers involving Brazil
+     */
+    private function findSourceChargeForCreator(int $creatorId): ?string
+    {
+        // Strategy 1: Try to find a charge from JobPayment records
+        // JobPayments are created when contracts are completed and payments are made
+        $jobPayment = \App\Models\JobPayment::where('creator_id', $creatorId)
+            ->whereNotNull('transaction_id')
+            ->with('transaction')
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if ($jobPayment && $jobPayment->transaction) {
+            $transaction = $jobPayment->transaction;
+            
+            // Check if transaction has a stripe_charge_id
+            if ($transaction->stripe_charge_id) {
+                Log::info('Found source charge from JobPayment transaction', [
+                    'withdrawal_id' => $this->id,
+                    'creator_id' => $creatorId,
+                    'job_payment_id' => $jobPayment->id,
+                    'transaction_id' => $transaction->id,
+                    'stripe_charge_id' => $transaction->stripe_charge_id,
+                ]);
+                return $transaction->stripe_charge_id;
+            }
+        }
+
+        // Strategy 2: Try to find a charge from Contract -> Transaction relationship
+        // Check if contract_id column exists in transactions table
+        if (Schema::hasColumn('transactions', 'contract_id')) {
+            $contractTransaction = \App\Models\Transaction::whereHas('contract', function ($query) use ($creatorId) {
+                $query->where('creator_id', $creatorId);
+            })
+            ->whereNotNull('stripe_charge_id')
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+            if ($contractTransaction && $contractTransaction->stripe_charge_id) {
+                Log::info('Found source charge from contract transaction', [
+                    'withdrawal_id' => $this->id,
+                    'creator_id' => $creatorId,
+                    'transaction_id' => $contractTransaction->id,
+                    'stripe_charge_id' => $contractTransaction->stripe_charge_id,
+                ]);
+                return $contractTransaction->stripe_charge_id;
+            }
+        }
+
+        // Strategy 3: Try to find any transaction for this creator with a stripe_charge_id
+        $anyTransaction = \App\Models\Transaction::where('user_id', $creatorId)
+            ->whereNotNull('stripe_charge_id')
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if ($anyTransaction && $anyTransaction->stripe_charge_id) {
+            Log::info('Found source charge from any creator transaction', [
+                'withdrawal_id' => $this->id,
+                'creator_id' => $creatorId,
+                'transaction_id' => $anyTransaction->id,
+                'stripe_charge_id' => $anyTransaction->stripe_charge_id,
+            ]);
+            return $anyTransaction->stripe_charge_id;
+        }
+
+        // Strategy 4: Development/Test fallback - Try to get a charge from Stripe API with available balance
+        // This is useful when the local database doesn't have transaction records
+        if (app()->environment(['local', 'testing'])) {
+            try {
+                $stripeSecret = config('services.stripe.secret');
+                if ($stripeSecret) {
+                    \Stripe\Stripe::setApiKey($stripeSecret);
+                    
+                    // Calculate required amount (withdrawal amount - fixed fee, in cents)
+                    $requiredAmount = (int) round(($this->amount - 5.00) * 100);
+                    
+                    // Get recent charges from the platform account
+                    $charges = \Stripe\Charge::all([
+                        'limit' => 10, // Fetch more charges to find one with enough balance
+                        'expand' => ['data.balance_transaction'],
+                    ]);
+                    
+                    // Find a charge with enough available balance
+                    foreach ($charges->data as $charge) {
+                        if ($charge->amount < $requiredAmount) {
+                            continue; // Charge doesn't have enough value
+                        }
+                        
+                        // Check how much of this charge has been used in transfers
+                        $transfers = \Stripe\Transfer::all([
+                            'limit' => 100, // Fetch enough transfers to check against this charge
+                        ]);
+                        
+                        $usedAmount = 0;
+                        foreach ($transfers->data as $transfer) {
+                            if ($transfer->source_transaction === $charge->id) {
+                                $usedAmount += $transfer->amount;
+                            }
+                        }
+                        
+                        $availableAmount = $charge->amount - $usedAmount;
+                        
+                        if ($availableAmount >= $requiredAmount) {
+                            Log::info('Found source charge from Stripe API with available balance', [
+                                'withdrawal_id' => $this->id,
+                                'creator_id' => $creatorId,
+                                'stripe_charge_id' => $charge->id,
+                                'charge_amount' => $charge->amount / 100,
+                                'used_amount' => $usedAmount / 100,
+                                'available_amount' => $availableAmount / 100,
+                                'required_amount' => $requiredAmount / 100,
+                            ]);
+                            return $charge->id;
+                        }
+                    }
+                    
+                    // If no charge with enough balance found, log warning
+                    Log::warning('No charge with sufficient available balance found', [
+                        'withdrawal_id' => $this->id,
+                        'creator_id' => $creatorId,
+                        'required_amount' => $requiredAmount / 100,
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::warning('Failed to get charge from Stripe API (development fallback)', [
+                    'withdrawal_id' => $this->id,
+                    'creator_id' => $creatorId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        Log::warning('No source charge found for creator', [
+            'withdrawal_id' => $this->id,
+            'creator_id' => $creatorId,
+        ]);
+
+        return null;
+    }
+
     private function processStripeConnectWithdrawal(): void
     {
         // Ensure creator has a connected account
@@ -255,18 +398,34 @@ class Withdrawal extends Model
             throw new \Exception('Valor líquido inválido para transferência.');
         }
 
-        // Create transfer to connected account
-        $transfer = \Stripe\Transfer::create([
+        // Find source charge for this creator (required for Brazil transfers)
+        $sourceChargeId = $this->findSourceChargeForCreator($this->creator_id);
+        
+        if (!$sourceChargeId) {
+            Log::warning('No source charge found for withdrawal', [
+                'withdrawal_id' => $this->id,
+                'creator_id' => $this->creator_id,
+            ]);
+            // For Brazil, source_transaction is mandatory, so we must fail
+            throw new \Exception('Não foi possível encontrar uma transação de origem válida para o saque. Entre em contato com o suporte.');
+        }
+
+        // Prepare transfer parameters
+        $transferParams = [
             'amount' => $amountInCents,
             'currency' => 'brl',
             'destination' => $creator->stripe_account_id,
+            'source_transaction' => $sourceChargeId, // Required for Brazil transfers
             'metadata' => [
                 'withdrawal_id' => (string) $this->id,
                 'creator_id' => (string) $this->creator_id,
                 'gross_amount' => (string) $this->amount,
                 'fixed_fee' => '5.00',
             ],
-        ]);
+        ];
+
+        // Create transfer to connected account
+        $transfer = \Stripe\Transfer::create($transferParams);
 
         // Store transfer id in transaction_id (generic field)
         $this->update([

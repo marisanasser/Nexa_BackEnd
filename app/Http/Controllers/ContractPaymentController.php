@@ -814,4 +814,162 @@ class ContractPaymentController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get brand's transaction history (transactions related to brand's contracts)
+     */
+    public function getBrandTransactionHistory(Request $request): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated',
+                ], 401);
+            }
+
+            if (!$user->isBrand()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This endpoint is only available for brands',
+                ], 403);
+            }
+
+            $perPage = min($request->get('per_page', 10), 100);
+            $page = $request->get('page', 1);
+
+            $contractIds = $user->brandContracts()->pluck('id');
+            $jobPaymentTransactionIds = \App\Models\JobPayment::where('brand_id', $user->id)
+                ->whereNotNull('transaction_id')
+                ->pluck('transaction_id')
+                ->unique();
+
+            $transactions = \App\Models\Transaction::where(function ($query) use ($user, $contractIds, $jobPaymentTransactionIds) {
+                    if ($contractIds->isNotEmpty()) {
+                        $query->whereIn('contract_id', $contractIds);
+                    }
+                    $query->orWhere('user_id', $user->id);
+                    if ($contractIds->isNotEmpty()) {
+                        $query->orWhereHas('contract', function ($q) use ($user) {
+                            $q->where('brand_id', $user->id);
+                        });
+                    }
+                    if ($jobPaymentTransactionIds->isNotEmpty()) {
+                        $query->orWhereIn('id', $jobPaymentTransactionIds);
+                    }
+                })
+                ->with(['contract' => function ($query) {
+                    $query->select('id', 'title', 'budget', 'creator_id', 'brand_id')
+                        ->with(['creator' => function ($q) {
+                            $q->select('id', 'name', 'email');
+                        }]);
+                }])
+                ->orderBy('created_at', 'desc')
+                ->paginate($perPage, ['*'], 'page', $page);
+
+            $transactions->getCollection()->transform(function ($transaction) {
+                $paymentData = $transaction->payment_data ?? [];
+                $pagarmeTransactionId = $paymentData['pagarme_transaction_id'] 
+                    ?? $paymentData['transaction_id'] 
+                    ?? $transaction->stripe_payment_intent_id 
+                    ?? $transaction->stripe_charge_id 
+                    ?? null;
+
+                $contract = $transaction->contract;
+                $contractTitle = 'N/A';
+                $contractBudget = 0;
+                $creator = null;
+
+                if ($contract) {
+                    $contractTitle = $contract->title ?? 'N/A';
+                    $contractBudget = $contract->budget ?? 0;
+                    if ($contract->creator) {
+                        $creator = [
+                            'id' => $contract->creator->id,
+                            'name' => $contract->creator->name,
+                            'email' => $contract->creator->email,
+                        ];
+                    }
+                } elseif ($transaction->contract_id) {
+                    $contract = \App\Models\Contract::find($transaction->contract_id);
+                    if ($contract) {
+                        $contractTitle = $contract->title ?? 'N/A';
+                        $contractBudget = $contract->budget ?? 0;
+                        $contractCreator = \App\Models\User::find($contract->creator_id);
+                        if ($contractCreator) {
+                            $creator = [
+                                'id' => $contractCreator->id,
+                                'name' => $contractCreator->name,
+                                'email' => $contractCreator->email,
+                            ];
+                        }
+                    }
+                } elseif (isset($paymentData['contract_id'])) {
+                    $contract = \App\Models\Contract::find($paymentData['contract_id']);
+                    if ($contract) {
+                        $contractTitle = $contract->title ?? 'N/A';
+                        $contractBudget = $contract->budget ?? 0;
+                        $contractCreator = \App\Models\User::find($contract->creator_id);
+                        if ($contractCreator) {
+                            $creator = [
+                                'id' => $contractCreator->id,
+                                'name' => $contractCreator->name,
+                                'email' => $contractCreator->email,
+                            ];
+                        }
+                    }
+                }
+
+                return [
+                    'id' => $transaction->id,
+                    'contract_id' => $transaction->contract_id,
+                    'contract_title' => $contractTitle,
+                    'contract_budget' => $contractBudget,
+                    'creator' => $creator,
+                    'pagarme_transaction_id' => $pagarmeTransactionId ?? '',
+                    'stripe_payment_intent_id' => $transaction->stripe_payment_intent_id ?? '',
+                    'stripe_charge_id' => $transaction->stripe_charge_id ?? '',
+                    'status' => $transaction->status,
+                    'amount' => (string) $transaction->amount,
+                    'payment_method' => $transaction->payment_method ?? '',
+                    'card_brand' => $transaction->card_brand ?? '',
+                    'card_last4' => $transaction->card_last4 ?? '',
+                    'card_holder_name' => $transaction->card_holder_name ?? '',
+                    'payment_data' => $transaction->payment_data ?? [],
+                    'paid_at' => $transaction->paid_at?->format('Y-m-d H:i:s') ?? '',
+                    'expires_at' => $transaction->expires_at?->format('Y-m-d H:i:s') ?? '',
+                    'created_at' => $transaction->created_at->format('Y-m-d H:i:s'),
+                    'updated_at' => $transaction->updated_at->format('Y-m-d H:i:s'),
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'transactions' => $transactions->items(),
+                'pagination' => [
+                    'current_page' => $transactions->currentPage(),
+                    'last_page' => $transactions->lastPage(),
+                    'per_page' => $transactions->perPage(),
+                    'total' => $transactions->total(),
+                    'from' => $transactions->firstItem(),
+                    'to' => $transactions->lastItem(),
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching brand transaction history', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch brand transaction history',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
 } 
