@@ -101,11 +101,11 @@ class CreatorBalanceController extends Controller
                 'success' => true,
                 'data' => [
                     'balance' => [
-                        'available_balance' => $balance->available_balance,
-                        'pending_balance' => $balance->pending_balance,
-                        'total_balance' => $balance->total_balance,
-                        'total_earned' => $balance->total_earned,
-                        'total_withdrawn' => $balance->total_withdrawn,
+                        'available_balance' => (float) $balance->available_balance,
+                        'pending_balance' => (float) $balance->pending_balance,
+                        'total_balance' => (float) $balance->total_balance,
+                        'total_earned' => (float) $balance->total_earned,
+                        'total_withdrawn' => (float) $balance->total_withdrawn,
                         'formatted_available_balance' => $balance->formatted_available_balance,
                         'formatted_pending_balance' => $balance->formatted_pending_balance,
                         'formatted_total_balance' => $balance->formatted_total_balance,
@@ -113,8 +113,8 @@ class CreatorBalanceController extends Controller
                         'formatted_total_withdrawn' => $balance->formatted_total_withdrawn,
                     ],
                     'earnings' => [
-                        'this_month' => $balance->earnings_this_month,
-                        'this_year' => $balance->earnings_this_year,
+                        'this_month' => (float) $balance->earnings_this_month,
+                        'this_year' => (float) $balance->earnings_this_year,
                         'formatted_this_month' => $balance->formatted_earnings_this_month,
                         'formatted_this_year' => $balance->formatted_earnings_this_year,
                     ],
