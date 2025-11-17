@@ -65,7 +65,7 @@ class ContractController extends Controller
             $message = \App\Models\Message::create([
                 'chat_room_id' => $chatRoom->id,
                 'sender_id' => null, // System message
-                'message' => '🎉 O contrato foi finalizado com sucesso. O criador pode avaliar a marca clicando no botão abaixo.',
+                'message' => '🎉 O contrato foi finalizado com sucesso! Para liberar o valor para saque, você precisa avaliar a marca clicando no botão abaixo.',
                 'message_type' => 'contract_completion',
                 'offer_data' => json_encode([
                     'contract_id' => $contract->id,
