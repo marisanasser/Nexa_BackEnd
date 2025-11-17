@@ -119,8 +119,8 @@ class CreatorBalanceController extends Controller
                         'formatted_this_year' => $balance->formatted_earnings_this_year,
                     ],
                     'withdrawals' => [
-                        'pending_count' => $balance->pending_withdrawals_count,
-                        'pending_amount' => $balance->pending_withdrawals_amount,
+                        'pending_count' => (int) $balance->pending_withdrawals_count,
+                        'pending_amount' => (float) $balance->pending_withdrawals_amount,
                         'formatted_pending_amount' => $balance->formatted_pending_withdrawals_amount,
                     ],
                     'recent_transactions' => $recentTransactions->map(function ($payment) {
