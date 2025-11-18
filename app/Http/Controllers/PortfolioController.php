@@ -33,7 +33,7 @@ class PortfolioController extends Controller
         'application/octet-stream' // Fallback for files where MIME type detection fails
     ];
     
-    const MAX_FILE_SIZE =  200 * 1024 * 1024; // 200MB 
+    const MAX_FILE_SIZE =  2 * 1024 * 1024 * 1024; // 2GB for large video files 
     const MAX_TOTAL_FILES = 200; // 200 files
 
     /**
@@ -670,10 +670,11 @@ class PortfolioController extends Controller
                         'file_size' => $file->getSize(),
                         'max_size' => self::MAX_FILE_SIZE
                     ]);
+                    $maxSizeGB = self::MAX_FILE_SIZE / 1024 / 1024 / 1024;
                     return response()->json([
                         'success' => false,
                         'message' => 'Arquivo muito grande',
-                        'errors' => ['files.' . $index => ['Arquivo muito grande. Máximo: ' . (self::MAX_FILE_SIZE / 1024 / 1024) . 'MB']]
+                        'errors' => ['files.' . $index => ['Arquivo muito grande. O tamanho máximo permitido é ' . $maxSizeGB . 'GB por arquivo.']]
                     ], 422);
                 }
 
