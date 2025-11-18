@@ -679,6 +679,14 @@ class PortfolioController extends Controller
                 }
 
                 // Determine media type
+                Log::info('Determining media type', [
+                    'user_id' => $user->id,
+                    'index' => $index,
+                    'mime_type' => $mimeType,
+                    'original_name' => $file->getClientOriginalName(),
+                    'client_extension' => $file->getClientOriginalExtension(),
+                ]);
+
                 if (str_starts_with($mimeType, 'image/')) {
                     $mediaType = 'image';
                 } elseif (str_starts_with($mimeType, 'video/')) {
@@ -688,24 +696,145 @@ class PortfolioController extends Controller
                     $extension = strtolower(pathinfo($file->getClientOriginalName(), PATHINFO_EXTENSION));
                     $videoExtensions = ['mp4', 'mov', 'avi', 'mpeg', 'mpg', 'wmv', 'webm', 'ogg', 'mkv', 'flv', '3gp'];
                     $mediaType = in_array($extension, $videoExtensions) ? 'video' : 'image';
+                    
+                    Log::info('Media type determined from extension', [
+                        'user_id' => $user->id,
+                        'index' => $index,
+                        'extension' => $extension,
+                        'media_type' => $mediaType,
+                    ]);
                 }
                 
+                Log::info('Media type determined', [
+                    'user_id' => $user->id,
+                    'index' => $index,
+                    'media_type' => $mediaType,
+                ]);
+                
                 // Generate unique filename
-                $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $originalExtension = $file->getClientOriginalExtension();
+                $filename = time() . '_' . uniqid() . '.' . $originalExtension;
+                
+                Log::info('Filename generated', [
+                    'user_id' => $user->id,
+                    'index' => $index,
+                    'original_extension' => $originalExtension,
+                    'extension_empty' => empty($originalExtension),
+                    'generated_filename' => $filename,
+                    'filename_length' => strlen($filename),
+                ]);
+                
+                // Check if storage directory exists
+                $storagePath = 'portfolio/' . $user->id;
+                $fullStoragePath = storage_path('app/public/' . $storagePath);
+                $directoryExists = is_dir($fullStoragePath);
+                $directoryWritable = $directoryExists ? is_writable($fullStoragePath) : false;
+                
+                Log::info('Storage directory check', [
+                    'user_id' => $user->id,
+                    'index' => $index,
+                    'storage_path' => $storagePath,
+                    'full_storage_path' => $fullStoragePath,
+                    'directory_exists' => $directoryExists,
+                    'directory_writable' => $directoryWritable,
+                ]);
                 
                 // Store file
-                $storedPath = $file->storeAs('portfolio/' . $user->id, $filename, 'public');
+                try {
+                    Log::info('Attempting to store file', [
+                        'user_id' => $user->id,
+                        'index' => $index,
+                        'storage_path' => $storagePath,
+                        'filename' => $filename,
+                        'file_size' => $file->getSize(),
+                    ]);
+                    
+                    $storedPath = $file->storeAs($storagePath, $filename, 'public');
+                    
+                    Log::info('File stored successfully', [
+                        'user_id' => $user->id,
+                        'index' => $index,
+                        'stored_path' => $storedPath,
+                        'file_exists' => Storage::disk('public')->exists($storedPath),
+                    ]);
+                } catch (\Exception $storageException) {
+                    Log::error('File storage failed', [
+                        'user_id' => $user->id,
+                        'index' => $index,
+                        'error' => $storageException->getMessage(),
+                        'error_file' => $storageException->getFile(),
+                        'error_line' => $storageException->getLine(),
+                        'trace' => $storageException->getTraceAsString(),
+                    ]);
+                    throw $storageException;
+                }
                 
-                // Create portfolio item
-                $item = $portfolio->items()->create([
+                // Prepare data for database insertion
+                $title = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+                $order = $portfolio->items()->count();
+                
+                $itemData = [
                     'file_path' => $storedPath,
                     'file_name' => $file->getClientOriginalName(),
                     'file_type' => $mimeType,
                     'media_type' => $mediaType,
                     'file_size' => $file->getSize(),
-                    'title' => pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME),
-                    'order' => $portfolio->items()->count()
+                    'title' => $title,
+                    'order' => $order
+                ];
+                
+                Log::info('Preparing to create portfolio item', [
+                    'user_id' => $user->id,
+                    'index' => $index,
+                    'portfolio_id' => $portfolio->id,
+                    'item_data' => $itemData,
+                    'file_path_length' => strlen($storedPath),
+                    'file_name_length' => strlen($file->getClientOriginalName()),
+                    'title_length' => strlen($title),
                 ]);
+                
+                // Create portfolio item
+                try {
+                    $item = $portfolio->items()->create($itemData);
+                    
+                    Log::info('Portfolio item created successfully', [
+                        'user_id' => $user->id,
+                        'index' => $index,
+                        'item_id' => $item->id,
+                        'portfolio_id' => $item->portfolio_id,
+                    ]);
+                } catch (\Exception $dbException) {
+                    Log::error('Database creation failed', [
+                        'user_id' => $user->id,
+                        'index' => $index,
+                        'portfolio_id' => $portfolio->id,
+                        'error' => $dbException->getMessage(),
+                        'error_code' => $dbException->getCode(),
+                        'error_file' => $dbException->getFile(),
+                        'error_line' => $dbException->getLine(),
+                        'trace' => $dbException->getTraceAsString(),
+                        'item_data' => $itemData,
+                    ]);
+                    
+                    // Try to clean up stored file if database insert failed
+                    try {
+                        if (isset($storedPath) && Storage::disk('public')->exists($storedPath)) {
+                            Storage::disk('public')->delete($storedPath);
+                            Log::info('Cleaned up stored file after database failure', [
+                                'user_id' => $user->id,
+                                'stored_path' => $storedPath,
+                            ]);
+                        }
+                    } catch (\Exception $cleanupException) {
+                        Log::warning('Failed to cleanup stored file', [
+                            'user_id' => $user->id,
+                            'stored_path' => $storedPath,
+                            'cleanup_error' => $cleanupException->getMessage(),
+                        ]);
+                    }
+                    
+                    throw $dbException;
+                }
 
                 $uploadedItems[] = $item;
             }
@@ -730,16 +859,31 @@ class PortfolioController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Failed to upload portfolio media', [
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
+            Log::error('Failed to upload portfolio media - CRITICAL ERROR', [
+                'user_id' => $user->id ?? null,
+                'error_message' => $e->getMessage(),
+                'error_code' => $e->getCode(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'error_class' => get_class($e),
+                'trace' => $e->getTraceAsString(),
+                'previous_exception' => $e->getPrevious() ? [
+                    'message' => $e->getPrevious()->getMessage(),
+                    'file' => $e->getPrevious()->getFile(),
+                    'line' => $e->getPrevious()->getLine(),
+                ] : null,
+                'request_data' => [
+                    'files_count' => is_array($uploadedFiles ?? []) ? count($uploadedFiles) : 0,
+                    'has_files' => $request->hasFile('files'),
+                    'content_type' => $request->header('Content-Type'),
+                ],
             ]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Erro interno do servidor',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'error_type' => get_class($e),
             ], 500);
         }
     }
