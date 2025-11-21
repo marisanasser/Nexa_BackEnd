@@ -587,21 +587,63 @@ class PortfolioController extends Controller
                 'has_files' => $request->hasFile('files'),
                 'all_files_keys' => array_keys($request->allFiles() ?? []),
                 'files' => is_array($uploadedFiles) ? array_map(function ($file) {
-                    return $file ? [
-                        'name' => $file->getClientOriginalName(),
-                        'size' => $file->getSize(),
-                        'mime' => $file->getMimeType(),
-                        'is_valid' => $file->isValid()
-                    ] : null;
+                    if (!$file) {
+                        return null;
+                    }
+                    
+                    try {
+                        $fileInfo = [
+                            'name' => $file->getClientOriginalName(),
+                            'is_valid' => $file->isValid(),
+                        ];
+                        
+                        // Only try to get size and MIME type if file is valid and readable
+                        if ($file->isValid()) {
+                            try {
+                                $fileInfo['size'] = $file->getSize();
+                            } catch (\Exception $e) {
+                                $fileInfo['size_error'] = $e->getMessage();
+                            }
+                            
+                            try {
+                                $fileInfo['mime'] = $file->getMimeType();
+                            } catch (\Exception $e) {
+                                $fileInfo['mime_error'] = $e->getMessage();
+                                // Try to get MIME type from client if available
+                                if (method_exists($file, 'getClientMimeType')) {
+                                    $fileInfo['client_mime'] = $file->getClientMimeType();
+                                }
+                            }
+                        }
+                        
+                        return $fileInfo;
+                    } catch (\Exception $e) {
+                        return [
+                            'error' => $e->getMessage(),
+                            'error_class' => get_class($e),
+                            'file_class' => get_class($file),
+                        ];
+                    }
                 }, $uploadedFiles) : []
             ]);
 
             // Basic validation
+            Log::info('Starting file validation checks', [
+                'user_id' => $user->id,
+                'uploaded_files_count' => is_array($uploadedFiles) ? count($uploadedFiles) : 0,
+                'uploaded_files_empty' => empty($uploadedFiles),
+                'is_array' => is_array($uploadedFiles),
+                'has_files_request' => $request->hasFile('files'),
+            ]);
+            
             if (empty($uploadedFiles) || (is_array($uploadedFiles) && count($uploadedFiles) === 0)) {
-                Log::warning('No files uploaded', [
+                Log::warning('VALIDATION FAILED: No files uploaded', [
                     'user_id' => $user->id,
                     'all_files' => $request->allFiles(),
-                    'content_type' => $request->header('Content-Type')
+                    'all_files_keys' => array_keys($request->allFiles() ?? []),
+                    'content_type' => $request->header('Content-Type'),
+                    'uploaded_files_type' => gettype($uploadedFiles),
+                    'uploaded_files_value' => $uploadedFiles,
                 ]);
                 return response()->json([
                     'success' => false,
@@ -611,7 +653,11 @@ class PortfolioController extends Controller
             }
 
             if (count($uploadedFiles) > 5) {
-                Log::warning('Too many files uploaded', ['user_id' => $user->id, 'count' => count($uploadedFiles)]);
+                Log::warning('VALIDATION FAILED: Too many files uploaded', [
+                    'user_id' => $user->id,
+                    'count' => count($uploadedFiles),
+                    'max_allowed' => 5
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => 'Máximo de 5 arquivos por upload',
@@ -623,21 +669,58 @@ class PortfolioController extends Controller
             $uploadedItems = [];
 
             foreach ($uploadedFiles as $index => $file) {
+                // Safely get file info for logging
+                $logMimeType = null;
+                $logFileSize = null;
+                $mimeTypeError = null;
+                
+                if ($file) {
+                    try {
+                        if ($file->isValid()) {
+                            try {
+                                $logFileSize = $file->getSize();
+                            } catch (\Exception $e) {
+                                $mimeTypeError = 'Size error: ' . $e->getMessage();
+                            }
+                            
+                            try {
+                                $logMimeType = $file->getMimeType();
+                            } catch (\Exception $e) {
+                                $mimeTypeError = ($mimeTypeError ? $mimeTypeError . ' | ' : '') . 'MIME error: ' . $e->getMessage();
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        $mimeTypeError = 'File access error: ' . $e->getMessage();
+                    }
+                }
+                
                 Log::info('Validating file', [
                     'user_id' => $user->id,
                     'index' => $index,
                     'file_exists' => !is_null($file),
                     'is_valid' => $file ? $file->isValid() : false,
-                    'mime_type' => $file ? $file->getMimeType() : null,
-                    'file_size' => $file ? $file->getSize() : null,
+                    'mime_type' => $logMimeType,
+                    'file_size' => $logFileSize,
+                    'mime_type_error' => $mimeTypeError,
                     'max_size' => self::MAX_FILE_SIZE
                 ]);
 
+                Log::info('Checking file validity', [
+                    'user_id' => $user->id,
+                    'index' => $index,
+                    'file_exists' => !is_null($file),
+                    'file_class' => $file ? get_class($file) : null,
+                    'is_valid' => $file ? $file->isValid() : false,
+                ]);
+                
                 if (!$file || !$file->isValid()) {
-                    Log::error('File validation failed: invalid file', [
+                    Log::error('VALIDATION FAILED: Invalid file', [
                         'user_id' => $user->id,
                         'index' => $index,
-                        'file' => $file
+                        'file_class' => $file ? get_class($file) : null,
+                        'file_is_null' => is_null($file),
+                        'is_valid' => $file ? $file->isValid() : false,
+                        'original_name' => $file ? $file->getClientOriginalName() : null,
                     ]);
                     return response()->json([
                         'success' => false,
@@ -646,14 +729,86 @@ class PortfolioController extends Controller
                     ], 422);
                 }
 
-                // Check file type
-                $mimeType = $file->getMimeType();
+                // Check file type - with error handling
+                try {
+                    $mimeType = $file->getMimeType();
+                } catch (\Exception $e) {
+                    Log::error('Failed to get MIME type', [
+                        'user_id' => $user->id,
+                        'index' => $index,
+                        'error' => $e->getMessage(),
+                        'original_name' => $file->getClientOriginalName(),
+                    ]);
+                    
+                    // Try to get MIME type from client if available
+                    $mimeType = null;
+                    if (method_exists($file, 'getClientMimeType')) {
+                        $clientMimeType = $file->getClientMimeType();
+                        // Only use client MIME type if it's in accepted types
+                        if ($clientMimeType && in_array($clientMimeType, self::ACCEPTED_TYPES)) {
+                            $mimeType = $clientMimeType;
+                            Log::info('Using client MIME type as fallback', [
+                                'user_id' => $user->id,
+                                'index' => $index,
+                                'client_mime_type' => $mimeType,
+                            ]);
+                        } else {
+                            Log::warning('Client MIME type not in accepted types, using extension fallback', [
+                                'user_id' => $user->id,
+                                'index' => $index,
+                                'client_mime_type' => $clientMimeType,
+                                'accepted' => in_array($clientMimeType, self::ACCEPTED_TYPES),
+                            ]);
+                        }
+                    }
+                    
+                    // If client MIME type didn't work, use extension-based detection
+                    if (!$mimeType) {
+                        $extension = strtolower(pathinfo($file->getClientOriginalName(), PATHINFO_EXTENSION));
+                        $mimeTypeMap = [
+                            'mp4' => 'video/mp4',
+                            'mov' => 'video/quicktime',
+                            'avi' => 'video/x-msvideo',
+                            'webm' => 'video/webm',
+                            'ogg' => 'video/ogg',
+                            'mkv' => 'video/x-matroska',
+                            'flv' => 'video/x-flv',
+                            '3gp' => 'video/3gpp',
+                            'wmv' => 'video/x-ms-wmv',
+                            'mpeg' => 'video/mpeg',
+                            'mpg' => 'video/mpeg',
+                            'jpg' => 'image/jpeg',
+                            'jpeg' => 'image/jpeg',
+                            'png' => 'image/png',
+                        ];
+                        $mimeType = $mimeTypeMap[$extension] ?? 'application/octet-stream';
+                        
+                        Log::info('Using extension-based MIME type as fallback', [
+                            'user_id' => $user->id,
+                            'index' => $index,
+                            'extension' => $extension,
+                            'fallback_mime_type' => $mimeType,
+                        ]);
+                    }
+                }
+                
+                Log::info('Checking MIME type against accepted types', [
+                    'user_id' => $user->id,
+                    'index' => $index,
+                    'mime_type' => $mimeType,
+                    'mime_type_in_accepted' => in_array($mimeType, self::ACCEPTED_TYPES),
+                    'accepted_types' => self::ACCEPTED_TYPES,
+                ]);
+                
                 if (!in_array($mimeType, self::ACCEPTED_TYPES)) {
-                    Log::error('File validation failed: unsupported MIME type', [
+                    Log::error('VALIDATION FAILED: Unsupported MIME type', [
                         'user_id' => $user->id,
                         'index' => $index,
                         'mime_type' => $mimeType,
-                        'accepted_types' => self::ACCEPTED_TYPES
+                        'mime_type_type' => gettype($mimeType),
+                        'accepted_types' => self::ACCEPTED_TYPES,
+                        'original_name' => $file->getClientOriginalName(),
+                        'extension' => pathinfo($file->getClientOriginalName(), PATHINFO_EXTENSION),
                     ]);
                     return response()->json([
                         'success' => false,
@@ -663,12 +818,33 @@ class PortfolioController extends Controller
                 }
 
                 // Check file size
-                if ($file->getSize() > self::MAX_FILE_SIZE) {
-                    Log::error('File validation failed: file too large', [
+                $fileSize = null;
+                try {
+                    $fileSize = $file->getSize();
+                } catch (\Exception $e) {
+                    Log::error('Failed to get file size', [
                         'user_id' => $user->id,
                         'index' => $index,
-                        'file_size' => $file->getSize(),
-                        'max_size' => self::MAX_FILE_SIZE
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+                
+                Log::info('Checking file size', [
+                    'user_id' => $user->id,
+                    'index' => $index,
+                    'file_size' => $fileSize,
+                    'max_size' => self::MAX_FILE_SIZE,
+                    'size_exceeds_limit' => $fileSize ? ($fileSize > self::MAX_FILE_SIZE) : null,
+                ]);
+                
+                if ($fileSize && $fileSize > self::MAX_FILE_SIZE) {
+                    Log::error('VALIDATION FAILED: File too large', [
+                        'user_id' => $user->id,
+                        'index' => $index,
+                        'file_size' => $fileSize,
+                        'max_size' => self::MAX_FILE_SIZE,
+                        'file_size_mb' => round($fileSize / 1024 / 1024, 2),
+                        'max_size_gb' => round(self::MAX_FILE_SIZE / 1024 / 1024 / 1024, 2),
                     ]);
                     $maxSizeGB = self::MAX_FILE_SIZE / 1024 / 1024 / 1024;
                     return response()->json([
