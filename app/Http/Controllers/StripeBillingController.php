@@ -466,12 +466,8 @@ class StripeBillingController extends Controller
             ]],
             'mode' => 'subscription',
             'locale' => 'pt-BR',
-            // Importante: redirecionar direto para /creator com o componente de assinatura,
-            // preservando os parâmetros success e session_id para o frontend processar.
-            // Isso evita que a rota /creator/subscription converta a URL e remova os parâmetros
-            // antes do componente Subscription montar.
-            'success_url' => $frontendUrl . '/creator?component=subscription&success=true&session_id={CHECKOUT_SESSION_ID}',
-            'cancel_url' => $frontendUrl . '/creator?component=subscription&canceled=true',
+            'success_url' => $frontendUrl . '/creator/subscription?success=true&session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url' => $frontendUrl . '/creator/subscription?canceled=true',
             'metadata' => [
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
@@ -505,12 +501,9 @@ class StripeBillingController extends Controller
      */
     public function createSubscriptionFromCheckout(Request $request): JsonResponse
     {
-        Log::info('createSubscriptionFromCheckout called', [
+        Log::info('HHHHHHHHHHHHHHHHHHHHHHHHHHHH', [
             'user_id' => auth()->id(),
             'session_id' => $request->session_id,
-            'request_all' => $request->all(),
-            'ip' => $request->ip(),
-            'user_agent' => $request->userAgent(),
         ]);
         try {
             $user = auth()->user();
@@ -551,29 +544,10 @@ class StripeBillingController extends Controller
             // Check if subscription already exists
             $existingSub = \App\Models\Subscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
             if ($existingSub) {
-                Log::info('Subscription already exists, updating user premium status', [
+                Log::info('Subscription already exists', [
                     'subscription_id' => $existingSub->id,
                     'user_id' => $user->id,
                 ]);
-                
-                // Ensure user has premium access even if subscription exists
-                if (!$user->has_premium) {
-                    $premiumExpiresAt = $existingSub->expires_at 
-                        ? \Carbon\Carbon::parse($existingSub->expires_at)
-                        : \Carbon\Carbon::now()->addMonths($existingSub->subscriptionPlan->duration_months ?? 1);
-                    
-                    $user->update([
-                        'has_premium' => true,
-                        'premium_expires_at' => $premiumExpiresAt->format('Y-m-d H:i:s'),
-                    ]);
-                    
-                    Log::info('User premium status updated from existing subscription', [
-                        'user_id' => $user->id,
-                        'has_premium' => $user->has_premium,
-                        'premium_expires_at' => $user->premium_expires_at,
-                    ]);
-                }
-                
                 return response()->json([
                     'success' => true,
                     'message' => 'Subscription already exists',
@@ -697,29 +671,6 @@ class StripeBillingController extends Controller
                 'paid_at' => now(),
             ]);
 
-            // Set cancel_at for plans with fixed duration (semestral and anual)
-            if ($plan->duration_months > 1) {
-                $cancelAt = \Carbon\Carbon::now()->addMonths($plan->duration_months)->timestamp;
-                try {
-                    $stripeSub = \Stripe\Subscription::update($stripeSubscriptionId, [
-                        'cancel_at' => $cancelAt,
-                    ]);
-                    Log::info('Set cancel_at for subscription from checkout', [
-                        'subscription_id' => $stripeSubscriptionId,
-                        'plan_id' => $plan->id,
-                        'duration_months' => $plan->duration_months,
-                        'cancel_at_timestamp' => $cancelAt,
-                        'cancel_at_date' => \Carbon\Carbon::createFromTimestamp($cancelAt)->toDateTimeString(),
-                    ]);
-                } catch (\Exception $e) {
-                    Log::error('Failed to set cancel_at for subscription from checkout', [
-                        'subscription_id' => $stripeSubscriptionId,
-                        'error' => $e->getMessage(),
-                    ]);
-                    // Continue anyway - subscription is created
-                }
-            }
-            
             // Create subscription
             $subscription = \App\Models\Subscription::create([
                 'user_id' => $user->id,

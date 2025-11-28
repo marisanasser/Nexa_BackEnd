@@ -541,7 +541,6 @@ class PortfolioController extends Controller
                 'message' => 'Apenas criadores podem fazer upload de mídia'
             ], 403);
         }
-        
 
         try {
             // Get uploaded files - handle both 'files' and 'files[]' notation
