@@ -451,7 +451,23 @@ class StripeBillingController extends Controller
             ]);
             $user->update(['stripe_customer_id' => $customer->id]);
         } else {
-            $customer = \Stripe\Customer::retrieve($user->stripe_customer_id);
+            try {
+                $customer = \Stripe\Customer::retrieve($user->stripe_customer_id);
+            } catch (\Stripe\Exception\InvalidRequestException $e) {
+                // Customer ID exists in database but not in Stripe (e.g., from test account)
+                // Create a new customer and update the database
+                \Log::warning('Stripe customer not found, creating new one', [
+                    'user_id' => $user->id,
+                    'old_customer_id' => $user->stripe_customer_id,
+                    'error' => $e->getMessage(),
+                ]);
+                
+                $customer = \Stripe\Customer::create([
+                    'email' => $user->email,
+                    'metadata' => ['user_id' => $user->id, 'name' => $user->name],
+                ]);
+                $user->update(['stripe_customer_id' => $customer->id]);
+            }
         }
 
         $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
