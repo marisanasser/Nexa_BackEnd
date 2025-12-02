@@ -31,14 +31,13 @@ class SubscriptionPlan extends Model
     ];
 
     /**
-     * Get the monthly equivalent price
+     * Get the monthly price
+     * Note: The price in the database is already the monthly price for all plans
      */
     public function getMonthlyPriceAttribute(): float
     {
-        if ($this->duration_months === 0) {
-            return $this->price;
-        }
-        return round($this->price / $this->duration_months, 2);
+        // The price is already monthly, so return it directly
+        return (float) $this->price;
     }
 
     /**
@@ -55,8 +54,8 @@ class SubscriptionPlan extends Model
             return null;
         }
         
-        $monthlyEquivalent = $this->price / $this->duration_months;
-        $savings = (($monthlyPlan->price - $monthlyEquivalent) / $monthlyPlan->price) * 100;
+        // Both prices are already monthly, so compare directly
+        $savings = (($monthlyPlan->price - $this->price) / $monthlyPlan->price) * 100;
         
         return round($savings, 0);
     }
