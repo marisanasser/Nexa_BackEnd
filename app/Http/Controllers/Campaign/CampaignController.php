@@ -733,10 +733,11 @@ class CampaignController extends Controller
         // We just need to ensure they are arrays if present
         
         // Handle deadline format - ensure it's a proper date format
+        // Use createFromFormat to avoid timezone issues (parse can interpret timezone and cause 1-day difference)
         if (isset($data['deadline']) && is_string($data['deadline'])) {
             try {
-                // Try to parse the date string
-                $deadline = \Carbon\Carbon::parse($data['deadline']);
+                // Parse as local date (Y-m-d format) to avoid timezone conversion issues
+                $deadline = \Carbon\Carbon::createFromFormat('Y-m-d', $data['deadline'])->startOfDay();
                 $data['deadline'] = $deadline->format('Y-m-d');
             } catch (\Exception $e) {
                 \Log::warning('Invalid deadline format', ['deadline' => $data['deadline']]);
