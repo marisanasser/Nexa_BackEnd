@@ -35,14 +35,29 @@ class StripeController extends Controller
             'stripe_secret_prefix' => $stripeSecret ? substr($stripeSecret, 0, 7) : 'missing',
         ]);
         
-        $this->sns = new SnsClient([
-            'version' => 'latest',
-            'region'  => env('AWS_DEFAULT_REGION', 'sa-east-1'),
-            'credentials' => [
-                'key'    => env('AWS_ACCESS_KEY_ID'),
-                'secret' => env('AWS_SECRET_ACCESS_KEY'),
-            ],
-        ]);
+        // Initialize SNS client only if AWS credentials are available and valid
+        $awsKey = env('AWS_ACCESS_KEY_ID');
+        $awsSecret = env('AWS_SECRET_ACCESS_KEY');
+        if (!empty($awsKey) && !empty($awsSecret)) {
+            try {
+                $this->sns = new SnsClient([
+                    'version' => 'latest',
+                    'region'  => env('AWS_DEFAULT_REGION', 'sa-east-1'),
+                    'credentials' => [
+                        'key'    => $awsKey,
+                        'secret' => $awsSecret,
+                    ],
+                ]);
+            } catch (\Aws\Exception\AwsException $e) {
+                Log::warning('Failed to initialize SNS client', ['error' => $e->getMessage()]);
+                $this->sns = null;
+            } catch (\Exception $e) {
+                Log::warning('Failed to initialize SNS client', ['error' => $e->getMessage()]);
+                $this->sns = null;
+            }
+        } else {
+            $this->sns = null;
+        }
     }
 
     /**
