@@ -242,6 +242,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
 // Public subscription plans (no authentication required)
 Route::get('/subscription/plans', [SubscriptionController::class, 'getPlans']);
 
+// Public subscription checkout endpoint (no auth required - validates via Stripe)
+Route::post('/payment/create-subscription-from-checkout-public', [StripeBillingController::class, 'createSubscriptionFromCheckoutPublic'])->middleware(['throttle:payment']);
+
 // Payment routes
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/payment/methods', [PaymentController::class, 'getPaymentMethods'])->middleware(['throttle:dashboard']);

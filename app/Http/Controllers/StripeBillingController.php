@@ -769,6 +769,296 @@ class StripeBillingController extends Controller
     }
 
     /**
+     * Create subscription from checkout session (PUBLIC - no auth required)
+     * Validates via Stripe session metadata/customer_id
+     * Used as fallback when user is logged out after Stripe redirect
+     */
+    public function createSubscriptionFromCheckoutPublic(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'session_id' => 'required|string',
+            ]);
+
+            $sessionId = $request->session_id;
+
+            Log::info('Creating subscription from checkout session (public)', [
+                'session_id' => $sessionId,
+                'ip' => $request->ip(),
+            ]);
+
+            // Retrieve the checkout session
+            $session = \Stripe\Checkout\Session::retrieve($sessionId, [
+                'expand' => ['subscription', 'subscription.latest_invoice.payment_intent']
+            ]);
+
+            if (!$session->subscription) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No subscription found in checkout session',
+                ], 400);
+            }
+
+            $stripeSubscriptionId = is_object($session->subscription) 
+                ? $session->subscription->id 
+                : $session->subscription;
+
+            // Check if subscription already exists
+            $existingSub = \App\Models\Subscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
+            if ($existingSub) {
+                Log::info('Subscription already exists (public)', [
+                    'subscription_id' => $existingSub->id,
+                ]);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Subscription already exists',
+                    'subscription_id' => $existingSub->id,
+                ]);
+            }
+
+            // Get customer ID from session
+            $customerId = is_object($session->customer) 
+                ? $session->customer->id 
+                : $session->customer;
+
+            if (!$customerId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No customer found in checkout session',
+                ], 400);
+            }
+
+            // Find user by Stripe customer ID
+            $user = \App\Models\User::where('stripe_customer_id', $customerId)->first();
+
+            if (!$user) {
+                Log::warning('User not found for Stripe customer (public)', [
+                    'customer_id' => $customerId,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found for this checkout session',
+                ], 404);
+            }
+
+            // Validate session metadata (if present)
+            $metadata = $session->metadata ?? null;
+            $sessionUserId = null;
+            
+            if (is_array($metadata)) {
+                $sessionUserId = $metadata['user_id'] ?? null;
+            } elseif (is_object($metadata)) {
+                $sessionUserId = $metadata->user_id ?? null;
+            }
+
+            // Verify user matches metadata (if present)
+            if ($sessionUserId && (string)$sessionUserId !== (string)$user->id) {
+                Log::warning('User ID mismatch in checkout session (public)', [
+                    'session_user_id' => $sessionUserId,
+                    'found_user_id' => $user->id,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid checkout session',
+                ], 403);
+            }
+
+            // Retrieve subscription from Stripe
+            $stripeSub = is_object($session->subscription)
+                ? $session->subscription
+                : \Stripe\Subscription::retrieve($stripeSubscriptionId, [
+                    'expand' => ['latest_invoice.payment_intent']
+                ]);
+
+            // Get plan from metadata or subscription price
+            $planId = null;
+            if (isset($session->metadata)) {
+                if (is_array($session->metadata) && isset($session->metadata['plan_id'])) {
+                    $planId = (int) $session->metadata['plan_id'];
+                } elseif (is_object($session->metadata) && isset($session->metadata->plan_id)) {
+                    $planId = (int) $session->metadata->plan_id;
+                }
+            }
+
+            if (!$planId) {
+                // Try to get plan from subscription price
+                $priceId = $stripeSub->items->data[0]->price->id ?? null;
+                if ($priceId) {
+                    $plan = \App\Models\SubscriptionPlan::where('stripe_price_id', $priceId)->first();
+                    if ($plan) {
+                        $planId = $plan->id;
+                    }
+                }
+            }
+
+            if (!$planId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Could not determine plan for checkout session',
+                ], 400);
+            }
+
+            $plan = \App\Models\SubscriptionPlan::find($planId);
+            if (!$plan) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Plan not found',
+                ], 404);
+            }
+
+            // Check payment status
+            $paymentSuccessful = false;
+            $invoiceStatus = null;
+            $paymentIntentStatus = null;
+
+            if (isset($stripeSub->latest_invoice) && is_object($stripeSub->latest_invoice)) {
+                $invoiceStatus = $stripeSub->latest_invoice->status ?? null;
+                if (isset($stripeSub->latest_invoice->payment_intent)) {
+                    if (is_object($stripeSub->latest_invoice->payment_intent)) {
+                        $paymentIntentStatus = $stripeSub->latest_invoice->payment_intent->status ?? null;
+                    }
+                }
+            }
+
+            $paymentSuccessful = (
+                $stripeSub->status === 'active' ||
+                $invoiceStatus === 'paid' ||
+                $paymentIntentStatus === 'succeeded'
+            );
+
+            if (!$paymentSuccessful) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment not yet confirmed. Subscription will be created when payment is processed.',
+                ], 400);
+            }
+
+            DB::beginTransaction();
+
+            $currentPeriodEnd = isset($stripeSub->current_period_end) 
+                ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_end) 
+                : null;
+            $currentPeriodStart = isset($stripeSub->current_period_start) 
+                ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_start) 
+                : null;
+
+            $invoiceId = null;
+            if ($stripeSub->latest_invoice) {
+                if (is_object($stripeSub->latest_invoice)) {
+                    $invoiceId = $stripeSub->latest_invoice->id ?? null;
+                } elseif (is_string($stripeSub->latest_invoice)) {
+                    $invoiceId = $stripeSub->latest_invoice;
+                }
+            }
+
+            $paymentIntentId = null;
+            if (isset($stripeSub->latest_invoice) && is_object($stripeSub->latest_invoice)) {
+                if (isset($stripeSub->latest_invoice->payment_intent)) {
+                    if (is_object($stripeSub->latest_invoice->payment_intent)) {
+                        $paymentIntentId = $stripeSub->latest_invoice->payment_intent->id ?? null;
+                    } elseif (is_string($stripeSub->latest_invoice->payment_intent)) {
+                        $paymentIntentId = $stripeSub->latest_invoice->payment_intent;
+                    }
+                }
+            }
+
+            $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_' . $stripeSubscriptionId;
+
+            // Create transaction
+            $transaction = \App\Models\Transaction::create([
+                'user_id' => $user->id,
+                'stripe_payment_intent_id' => $transactionId,
+                'status' => 'paid',
+                'amount' => $plan->price,
+                'payment_method' => 'stripe',
+                'payment_data' => [
+                    'invoice' => $invoiceId,
+                    'subscription' => $stripeSubscriptionId,
+                    'checkout_session' => $sessionId,
+                ],
+                'paid_at' => now(),
+            ]);
+
+            // Create subscription
+            $subscription = \App\Models\Subscription::create([
+                'user_id' => $user->id,
+                'subscription_plan_id' => $plan->id,
+                'status' => \App\Models\Subscription::STATUS_ACTIVE,
+                'amount_paid' => $plan->price,
+                'payment_method' => 'stripe',
+                'transaction_id' => $transaction->id,
+                'auto_renew' => true,
+                'stripe_subscription_id' => $stripeSubscriptionId,
+                'stripe_latest_invoice_id' => $invoiceId,
+                'stripe_status' => $stripeSub->status ?? 'active',
+                'starts_at' => $currentPeriodStart,
+                'expires_at' => $currentPeriodEnd,
+            ]);
+
+            // Calculate expiration date based on plan duration if not provided by Stripe
+            $premiumExpiresAt = $currentPeriodEnd;
+            if (!$premiumExpiresAt) {
+                $premiumExpiresAt = \Carbon\Carbon::now()->addMonths($plan->duration_months);
+                Log::info('Using plan duration to calculate expiration (public)', [
+                    'plan_id' => $plan->id,
+                    'duration_months' => $plan->duration_months,
+                    'calculated_expires_at' => $premiumExpiresAt->toISOString(),
+                ]);
+            }
+
+            // Ensure premiumExpiresAt is a Carbon instance
+            if (!$premiumExpiresAt instanceof \Carbon\Carbon) {
+                $premiumExpiresAt = \Carbon\Carbon::parse($premiumExpiresAt);
+            }
+
+            // Update user premium flags
+            $user->update([
+                'has_premium' => true,
+                'premium_expires_at' => $premiumExpiresAt->format('Y-m-d H:i:s'),
+            ]);
+            
+            // Refresh user to ensure casts are applied
+            $user->refresh();
+
+            DB::commit();
+
+            Log::info('Subscription created from checkout session (public endpoint)', [
+                'subscription_id' => $subscription->id,
+                'user_id' => $user->id,
+                'plan_id' => $plan->id,
+                'plan_name' => $plan->name,
+                'plan_duration_months' => $plan->duration_months,
+                'stripe_subscription_id' => $stripeSubscriptionId,
+                'premium_expires_at' => $premiumExpiresAt->toISOString(),
+                'has_premium' => $user->has_premium,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Subscription created successfully',
+                'subscription' => [
+                    'id' => $subscription->id,
+                    'status' => $subscription->status,
+                    'expires_at' => $subscription->expires_at?->format('Y-m-d H:i:s'),
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to create subscription from checkout (public)', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'session_id' => $request->session_id ?? null,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create subscription: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Get current subscription status (from local mirror)
      */
     public function getSubscriptionStatus(): JsonResponse
