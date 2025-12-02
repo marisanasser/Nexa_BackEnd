@@ -471,10 +471,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::get('/guides', [AdminController::class, 'getGuides']);
     Route::get('/guides/{id}', [AdminController::class, 'getGuide'])->where('id', '[0-9]+');
     Route::post('/guides', [GuideController::class, 'store']);                // Create a new guide
-    Route::put('/guides/{id}', function ($id) {
-        $guide = \App\Models\Guide::findOrFail($id);
-        return app(\App\Http\Controllers\GuideController::class)->update(request(), $guide);
-    })->where('id', '[0-9]+');        // Update a guide by ID
+    Route::put('/guides/{id}', [AdminController::class, 'updateGuide'])->where('id', '[0-9]+');        // Update a guide by ID
     Route::delete('/guides/{id}', function ($id) {
         $guide = \App\Models\Guide::findOrFail($id);
         return app(\App\Http\Controllers\GuideController::class)->destroy($guide);

@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Carbon\Carbon;
 
 class AdminController extends Controller
@@ -1530,6 +1531,104 @@ class AdminController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to fetch guide: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Update a guide for admin management
+     */
+    public function updateGuide($id, Request $request): JsonResponse
+    {
+        try {
+            // Validate request manually
+            $validated = $request->validate([
+                'title' => 'required|string|min:2|max:255',
+                'audience' => 'required|string|in:Brand,Creator',
+                'description' => 'required|string|min:10',
+                'steps' => 'sometimes|array',
+                'steps.*.title' => 'required_with:steps|string|min:2|max:255',
+                'steps.*.description' => 'required_with:steps|string|min:10',
+                'steps.*.videoFile' => 'sometimes|nullable|file|mimes:mp4,mov,avi,wmv,mpeg|max:81920',
+            ]);
+
+            $guide = \App\Models\Guide::findOrFail($id);
+            
+            $data = $request->only(['title', 'audience', 'description']);
+            $data['video_path'] = null;
+            $data['video_mime'] = null;
+
+            \DB::beginTransaction();
+
+            $guide->update($data);
+
+            // Handle steps update if provided
+            if ($request->has('steps') && is_array($request->steps)) {
+                // Delete existing steps
+                $guide->steps()->delete();
+
+                // Create new steps
+                foreach ($request->steps as $index => $stepData) {
+                    $stepFields = [
+                        'guide_id' => $guide->id,
+                        'title' => $stepData['title'],
+                        'description' => $stepData['description'],
+                        'order' => $index,
+                    ];
+
+                    // Handle step video if provided
+                    if (isset($stepData['videoFile']) && $stepData['videoFile'] instanceof \Illuminate\Http\UploadedFile) {
+                        $file = $stepData['videoFile'];
+                        $filename = Str::uuid()->toString() . '.' . $file->getClientOriginalExtension();
+                        $path = $file->storeAs('videos/steps', $filename, 'public');
+                        
+                        $stepFields['video_path'] = $path;
+                        $stepFields['video_mime'] = $file->getMimeType();
+                    }
+
+                    // Handle step screenshots if provided
+                    if (isset($stepData['screenshots']) && is_array($stepData['screenshots'])) {
+                        $screenshotPaths = [];
+                        foreach ($stepData['screenshots'] as $screenshot) {
+                            if ($screenshot instanceof \Illuminate\Http\UploadedFile) {
+                                $filename = \Illuminate\Support\Str::uuid()->toString() . '.' . $screenshot->getClientOriginalExtension();
+                                $path = $screenshot->storeAs('screenshots/steps', $filename, 'public');
+                                $screenshotPaths[] = $path;
+                            }
+                        }
+                        $stepFields['screenshots'] = $screenshotPaths;
+                    }
+
+                    \App\Models\Step::create($stepFields);
+                }
+            }
+
+            \DB::commit();
+
+            // Reload guide with steps
+            $guide->load('steps');
+
+            return response()->json([
+                'success' => true,
+                'data' => $guide
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            \Log::error('Guide update failed:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update guide: ' . $e->getMessage()
             ], 500);
         }
     }
