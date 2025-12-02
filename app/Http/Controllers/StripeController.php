@@ -610,6 +610,7 @@ class StripeController extends Controller
                     'refresh_url' => config('app.frontend_url') . '/creator/stripe-connect?refresh=true',
                     'return_url' => config('app.frontend_url') . '/creator',
                     'type' => 'account_onboarding',
+                    'locale' => 'pt-BR',
                 ]);
                 
                 Log::info('Stripe account link created successfully', [
