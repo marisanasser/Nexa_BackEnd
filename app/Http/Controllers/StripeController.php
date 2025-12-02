@@ -605,12 +605,15 @@ class StripeController extends Controller
             
             try {
                 // Create account link for onboarding
+                // Note: Stripe AccountLink does not support 'locale' parameter
+                // The language is automatically detected based on:
+                // 1. User's browser language settings
+                // 2. Account country (already set to 'BR' for Brazil)
                 $accountLink = \Stripe\AccountLink::create([
                     'account' => $user->stripe_account_id,
                     'refresh_url' => config('app.frontend_url') . '/creator/stripe-connect?refresh=true',
                     'return_url' => config('app.frontend_url') . '/creator',
                     'type' => 'account_onboarding',
-                    'locale' => 'pt-BR',
                 ]);
                 
                 Log::info('Stripe account link created successfully', [
