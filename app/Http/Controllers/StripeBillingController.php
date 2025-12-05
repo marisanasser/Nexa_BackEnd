@@ -27,9 +27,7 @@ class StripeBillingController extends Controller
         ]);
     }
 
-    /**
-     * Create/activate a subscription for creators via Stripe Billing
-     */
+    
     public function createSubscription(Request $request): JsonResponse
     {
         $request->validate([
@@ -44,7 +42,7 @@ class StripeBillingController extends Controller
             return response()->json(['success' => false, 'message' => 'Only creators can subscribe'], 403);
         }
 
-        // Prevent duplicate active access
+        
         if ($user->hasPremiumAccess()) {
             return response()->json(['success' => false, 'message' => 'User already has premium access'], 409);
         }
@@ -66,7 +64,7 @@ class StripeBillingController extends Controller
         
         DB::beginTransaction();
         try {
-            // Ensure Stripe customer exists
+            
             if (!$user->stripe_customer_id) {
                 Log::info('Creating new Stripe customer for subscription', [
                     'user_id' => $user->id,
@@ -98,26 +96,26 @@ class StripeBillingController extends Controller
                 'payment_method_id' => $request->payment_method_id,
             ]);
             
-            // Attach and set default payment method
+            
             $pm = StripePaymentMethod::retrieve($request->payment_method_id);
             $pm->attach(['customer' => $customer->id]);
             Customer::update($customer->id, [
                 'invoice_settings' => ['default_payment_method' => $pm->id],
             ]);
             
-            // Store payment method ID in user model for quick access using direct DB update
+            
             if ($user->stripe_payment_method_id !== $pm->id) {
                 $updatedRows = DB::table('users')
                     ->where('id', $user->id)
                     ->update(['stripe_payment_method_id' => $pm->id]);
                 
-                // Verify the update
+                
                 $actualStoredId = DB::table('users')
                     ->where('id', $user->id)
                     ->value('stripe_payment_method_id');
                 
                 if ($actualStoredId !== $pm->id) {
-                    // Fallback to Eloquent if direct DB update failed
+                    
                     $user->refresh();
                     $user->stripe_payment_method_id = $pm->id;
                     $user->save();
@@ -140,16 +138,16 @@ class StripeBillingController extends Controller
                 'stripe_price_id' => $plan->stripe_price_id,
             ]);
             
-            // Calculate cancel_at date based on plan duration
-            // Plans are now monthly recurring, so we cancel after duration_months
+            
+            
             $cancelAt = null;
             if ($plan->duration_months > 1) {
-                // Cancel subscription after the specified number of months
-                // Using Carbon to add months and convert to Unix timestamp
+                
+                
                 $cancelAt = \Carbon\Carbon::now()->addMonths($plan->duration_months)->timestamp;
             }
             
-            // Build subscription parameters
+            
             $subscriptionParams = [
                 'customer' => $customer->id,
                 'items' => [
@@ -159,7 +157,7 @@ class StripeBillingController extends Controller
                 'expand' => ['latest_invoice.payment_intent'],
             ];
             
-            // Add cancel_at if plan has a fixed duration
+            
             if ($cancelAt) {
                 $subscriptionParams['cancel_at'] = $cancelAt;
                 Log::info('Setting subscription cancel_at', [
@@ -171,7 +169,7 @@ class StripeBillingController extends Controller
                 ]);
             }
             
-            // Create subscription
+            
             $stripeSub = StripeSubscription::create($subscriptionParams);
             
             Log::info('Stripe subscription created', [
@@ -180,7 +178,7 @@ class StripeBillingController extends Controller
                 'status' => $stripeSub->status ?? 'unknown',
                 'latest_invoice' => $stripeSub->latest_invoice->id ?? 'no_invoice',
             ]);
-            // Safely extract invoice and payment intent IDs from initial subscription creation
+            
             $initialInvoiceId = null;
             $initialPaymentIntentId = null;
             
@@ -200,11 +198,11 @@ class StripeBillingController extends Controller
                 }
             }
             
-            // Persist local subscription in pending state
+            
             $localTx = Transaction::create([
                 'user_id' => $user->id,
                 'stripe_payment_intent_id' => $initialPaymentIntentId,
-                'status' => 'pending', // Start as pending, will be updated to 'paid' when payment succeeds
+                'status' => 'pending', 
                 'amount' => $plan->price,
                 'payment_method' => 'stripe',
                 'payment_data' => [ 'invoice' => $initialInvoiceId ],
@@ -237,7 +235,7 @@ class StripeBillingController extends Controller
                 'stripe_subscription_id' => $stripeSub->id,
             ]);
             
-            // Refresh subscription from Stripe to get latest status
+            
             $stripeSub = StripeSubscription::retrieve($stripeSub->id, [
                 'expand' => ['latest_invoice.payment_intent']
             ]);
@@ -249,28 +247,28 @@ class StripeBillingController extends Controller
                 'has_latest_invoice' => isset($stripeSub->latest_invoice),
             ]);
 
-            // Safely extract invoice and payment intent
-            // Stripe may return objects or string IDs, so we need to check types
+            
+            
             $invoice = null;
             $pi = null;
             
             if (isset($stripeSub->latest_invoice)) {
-                // Check if latest_invoice is an object (expanded) or string (ID)
+                
                 if (is_object($stripeSub->latest_invoice)) {
                     $invoice = $stripeSub->latest_invoice;
                     
-                    // Check if payment_intent is an object or string
+                    
                     if (isset($invoice->payment_intent)) {
                         if (is_object($invoice->payment_intent)) {
                             $pi = $invoice->payment_intent;
                         }
-                        // If it's a string ID, we can't access properties - will remain null
+                        
                     }
                 }
-                // If latest_invoice is a string ID, we can't access it - will remain null
+                
             }
             
-            // Handle 3D Secure authentication
+            
             if ($pi && is_object($pi) && isset($pi->status) && $pi->status === 'requires_action') {
                 Log::info('Payment requires 3D Secure authentication', [
                     'user_id' => $user->id,
@@ -295,7 +293,7 @@ class StripeBillingController extends Controller
                 'subscription_status' => $stripeSub->status ?? 'unknown',
             ]);
             
-            // Check if payment succeeded immediately
+            
             $paymentSucceeded = false;
             if ($invoice && is_object($invoice) && isset($invoice->status) && $invoice->status === 'paid') {
                 $paymentSucceeded = true;
@@ -305,7 +303,7 @@ class StripeBillingController extends Controller
                 $paymentSucceeded = true;
             }
 
-            // If payment succeeded immediately, activate subscription now
+            
             if ($paymentSucceeded) {
                 Log::info('Payment succeeded immediately, activating subscription', [
                     'user_id' => $user->id,
@@ -325,7 +323,7 @@ class StripeBillingController extends Controller
                     if ($invoice && is_object($invoice) && isset($invoice->id)) {
                         $invoiceId = $invoice->id;
                     } elseif (is_string($stripeSub->latest_invoice ?? null)) {
-                        // latest_invoice is a string ID
+                        
                         $invoiceId = $stripeSub->latest_invoice;
                     }
                     
@@ -333,7 +331,7 @@ class StripeBillingController extends Controller
                     if ($pi && is_object($pi) && isset($pi->id)) {
                         $paymentIntentId = $pi->id;
                     } elseif ($invoice && is_object($invoice) && is_string($invoice->payment_intent ?? null)) {
-                        // payment_intent is a string ID
+                        
                         $paymentIntentId = $invoice->payment_intent;
                     }
 
@@ -388,7 +386,7 @@ class StripeBillingController extends Controller
                 'subscription_id' => $localSub->id,
             ]);
             
-            // Payment is still processing, return pending status
+            
             return response()->json([
                 'success' => true,
                 'requires_action' => false,
@@ -410,9 +408,7 @@ class StripeBillingController extends Controller
         }
     }
 
-    /**
-     * Get Stripe checkout URL for subscription purchase
-     */
+    
    public function getCheckoutUrl(Request $request): JsonResponse
 {
     try {
@@ -443,7 +439,7 @@ class StripeBillingController extends Controller
             ], 400);
         }
 
-        // Ensure Stripe customer exists
+        
         if (!$user->stripe_customer_id) {
             $customer = \Stripe\Customer::create([
                 'email' => $user->email,
@@ -454,8 +450,8 @@ class StripeBillingController extends Controller
             try {
             $customer = \Stripe\Customer::retrieve($user->stripe_customer_id);
             } catch (\Stripe\Exception\InvalidRequestException $e) {
-                // Customer ID exists in database but not in Stripe (e.g., from test account)
-                // Create a new customer and update the database
+                
+                
                 \Log::warning('Stripe customer not found, creating new one', [
                     'user_id' => $user->id,
                     'old_customer_id' => $user->stripe_customer_id,
@@ -472,7 +468,7 @@ class StripeBillingController extends Controller
 
         $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
 
-        // ✅ Remove cancel_at from checkout
+        
         $checkoutSession = \Stripe\Checkout\Session::create([
             'customer' => $customer->id,
             'payment_method_types' => ['card'],
@@ -488,7 +484,7 @@ class StripeBillingController extends Controller
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
                 'plan_name' => $plan->name,
-                'duration_months' => $plan->duration_months, // store for webhook
+                'duration_months' => $plan->duration_months, 
             ],
         ]);
 
@@ -511,10 +507,7 @@ class StripeBillingController extends Controller
     }
 }
 
-
-    /**
-     * Create subscription from checkout session (called when user returns from Stripe checkout)
-     */
+    
     public function createSubscriptionFromCheckout(Request $request): JsonResponse
     {
         Log::info('HHHHHHHHHHHHHHHHHHHHHHHHHHHH', [
@@ -541,7 +534,7 @@ class StripeBillingController extends Controller
                 'session_id' => $sessionId,
             ]);
 
-            // Retrieve the checkout session
+            
             $session = \Stripe\Checkout\Session::retrieve($sessionId, [
                 'expand' => ['subscription', 'subscription.latest_invoice.payment_intent']
             ]);
@@ -557,7 +550,7 @@ class StripeBillingController extends Controller
                 ? $session->subscription->id 
                 : $session->subscription;
 
-            // Check if subscription already exists
+            
             $existingSub = \App\Models\Subscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
             if ($existingSub) {
                 Log::info('Subscription already exists', [
@@ -571,14 +564,14 @@ class StripeBillingController extends Controller
                 ]);
             }
 
-            // Retrieve subscription from Stripe
+            
             $stripeSub = is_object($session->subscription)
                 ? $session->subscription
                 : \Stripe\Subscription::retrieve($stripeSubscriptionId, [
                     'expand' => ['latest_invoice.payment_intent']
                 ]);
 
-            // Get plan from metadata or subscription price
+            
             $planId = null;
             if (isset($session->metadata)) {
                 if (is_array($session->metadata) && isset($session->metadata['plan_id'])) {
@@ -589,7 +582,7 @@ class StripeBillingController extends Controller
             }
 
             if (!$planId) {
-                // Try to get plan from subscription price
+                
                 $priceId = $stripeSub->items->data[0]->price->id ?? null;
                 if ($priceId) {
                     $plan = \App\Models\SubscriptionPlan::where('stripe_price_id', $priceId)->first();
@@ -614,7 +607,7 @@ class StripeBillingController extends Controller
                 ], 404);
             }
 
-            // Check payment status
+            
             $paymentSuccessful = false;
             $invoiceStatus = null;
             $paymentIntentStatus = null;
@@ -672,7 +665,7 @@ class StripeBillingController extends Controller
 
             $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_' . $stripeSubscriptionId;
 
-            // Create transaction
+            
             $transaction = \App\Models\Transaction::create([
                 'user_id' => $user->id,
                 'stripe_payment_intent_id' => $transactionId,
@@ -687,7 +680,7 @@ class StripeBillingController extends Controller
                 'paid_at' => now(),
             ]);
 
-            // Create subscription
+            
             $subscription = \App\Models\Subscription::create([
                 'user_id' => $user->id,
                 'subscription_plan_id' => $plan->id,
@@ -703,11 +696,11 @@ class StripeBillingController extends Controller
                 'expires_at' => $currentPeriodEnd,
             ]);
 
-            // Calculate expiration date based on plan duration if not provided by Stripe
-            // This ensures user premium expires at the correct time according to the plan
+            
+            
             $premiumExpiresAt = $currentPeriodEnd;
             if (!$premiumExpiresAt) {
-                // Fallback: calculate from plan duration_months
+                
                 $premiumExpiresAt = \Carbon\Carbon::now()->addMonths($plan->duration_months);
                 Log::info('Using plan duration to calculate expiration', [
                     'plan_id' => $plan->id,
@@ -716,18 +709,18 @@ class StripeBillingController extends Controller
                 ]);
             }
 
-            // Ensure premiumExpiresAt is a Carbon instance
+            
             if (!$premiumExpiresAt instanceof \Carbon\Carbon) {
                 $premiumExpiresAt = \Carbon\Carbon::parse($premiumExpiresAt);
             }
 
-            // Update user premium flags according to plan
+            
             $user->update([
                 'has_premium' => true,
-                'premium_expires_at' => $premiumExpiresAt->format('Y-m-d H:i:s'), // Format as string for database
+                'premium_expires_at' => $premiumExpiresAt->format('Y-m-d H:i:s'), 
             ]);
             
-            // Refresh user to ensure casts are applied
+            
             $user->refresh();
 
             DB::commit();
@@ -768,11 +761,7 @@ class StripeBillingController extends Controller
         }
     }
 
-    /**
-     * Create subscription from checkout session (PUBLIC - no auth required)
-     * Validates via Stripe session metadata/customer_id
-     * Used as fallback when user is logged out after Stripe redirect
-     */
+    
     public function createSubscriptionFromCheckoutPublic(Request $request): JsonResponse
     {
         try {
@@ -787,7 +776,7 @@ class StripeBillingController extends Controller
                 'ip' => $request->ip(),
             ]);
 
-            // Retrieve the checkout session
+            
             $session = \Stripe\Checkout\Session::retrieve($sessionId, [
                 'expand' => ['subscription', 'subscription.latest_invoice.payment_intent']
             ]);
@@ -803,7 +792,7 @@ class StripeBillingController extends Controller
                 ? $session->subscription->id 
                 : $session->subscription;
 
-            // Check if subscription already exists
+            
             $existingSub = \App\Models\Subscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
             if ($existingSub) {
                 Log::info('Subscription already exists (public)', [
@@ -816,7 +805,7 @@ class StripeBillingController extends Controller
                 ]);
             }
 
-            // Get customer ID from session
+            
             $customerId = is_object($session->customer) 
                 ? $session->customer->id 
                 : $session->customer;
@@ -828,7 +817,7 @@ class StripeBillingController extends Controller
                 ], 400);
             }
 
-            // Find user by Stripe customer ID
+            
             $user = \App\Models\User::where('stripe_customer_id', $customerId)->first();
 
             if (!$user) {
@@ -841,7 +830,7 @@ class StripeBillingController extends Controller
                 ], 404);
             }
 
-            // Validate session metadata (if present)
+            
             $metadata = $session->metadata ?? null;
             $sessionUserId = null;
             
@@ -851,7 +840,7 @@ class StripeBillingController extends Controller
                 $sessionUserId = $metadata->user_id ?? null;
             }
 
-            // Verify user matches metadata (if present)
+            
             if ($sessionUserId && (string)$sessionUserId !== (string)$user->id) {
                 Log::warning('User ID mismatch in checkout session (public)', [
                     'session_user_id' => $sessionUserId,
@@ -863,14 +852,14 @@ class StripeBillingController extends Controller
                 ], 403);
             }
 
-            // Retrieve subscription from Stripe
+            
             $stripeSub = is_object($session->subscription)
                 ? $session->subscription
                 : \Stripe\Subscription::retrieve($stripeSubscriptionId, [
                     'expand' => ['latest_invoice.payment_intent']
                 ]);
 
-            // Get plan from metadata or subscription price
+            
             $planId = null;
             if (isset($session->metadata)) {
                 if (is_array($session->metadata) && isset($session->metadata['plan_id'])) {
@@ -881,7 +870,7 @@ class StripeBillingController extends Controller
             }
 
             if (!$planId) {
-                // Try to get plan from subscription price
+                
                 $priceId = $stripeSub->items->data[0]->price->id ?? null;
                 if ($priceId) {
                     $plan = \App\Models\SubscriptionPlan::where('stripe_price_id', $priceId)->first();
@@ -906,7 +895,7 @@ class StripeBillingController extends Controller
                 ], 404);
             }
 
-            // Check payment status
+            
             $paymentSuccessful = false;
             $invoiceStatus = null;
             $paymentIntentStatus = null;
@@ -964,7 +953,7 @@ class StripeBillingController extends Controller
 
             $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_' . $stripeSubscriptionId;
 
-            // Create transaction
+            
             $transaction = \App\Models\Transaction::create([
                 'user_id' => $user->id,
                 'stripe_payment_intent_id' => $transactionId,
@@ -979,7 +968,7 @@ class StripeBillingController extends Controller
                 'paid_at' => now(),
             ]);
 
-            // Create subscription
+            
             $subscription = \App\Models\Subscription::create([
                 'user_id' => $user->id,
                 'subscription_plan_id' => $plan->id,
@@ -995,7 +984,7 @@ class StripeBillingController extends Controller
                 'expires_at' => $currentPeriodEnd,
             ]);
 
-            // Calculate expiration date based on plan duration if not provided by Stripe
+            
             $premiumExpiresAt = $currentPeriodEnd;
             if (!$premiumExpiresAt) {
                 $premiumExpiresAt = \Carbon\Carbon::now()->addMonths($plan->duration_months);
@@ -1006,18 +995,18 @@ class StripeBillingController extends Controller
                 ]);
             }
 
-            // Ensure premiumExpiresAt is a Carbon instance
+            
             if (!$premiumExpiresAt instanceof \Carbon\Carbon) {
                 $premiumExpiresAt = \Carbon\Carbon::parse($premiumExpiresAt);
             }
 
-            // Update user premium flags
+            
             $user->update([
                 'has_premium' => true,
                 'premium_expires_at' => $premiumExpiresAt->format('Y-m-d H:i:s'),
             ]);
             
-            // Refresh user to ensure casts are applied
+            
             $user->refresh();
 
             DB::commit();
@@ -1058,9 +1047,7 @@ class StripeBillingController extends Controller
         }
     }
 
-    /**
-     * Get current subscription status (from local mirror)
-     */
+    
     public function getSubscriptionStatus(): JsonResponse
     {
         $user = auth()->user();
@@ -1068,10 +1055,10 @@ class StripeBillingController extends Controller
             return response()->json(['message' => 'User not authenticated'], 401);
         }
 
-        // Refresh user to ensure we have latest data and properly cast attributes
+        
         $user->refresh();
 
-        // Check for pending subscriptions and sync from Stripe
+        
         $pendingSub = Subscription::where('user_id', $user->id)
             ->where('status', Subscription::STATUS_PENDING)
             ->whereNotNull('stripe_subscription_id')
@@ -1086,9 +1073,9 @@ class StripeBillingController extends Controller
             
             try {
                 $this->syncPendingSubscription($pendingSub);
-                // Refresh the subscription after sync
+                
                 $pendingSub->refresh();
-                // Refresh user again after subscription sync
+                
                 $user->refresh();
             } catch (\Exception $e) {
                 Log::error('Failed to sync pending subscription', [
@@ -1099,11 +1086,11 @@ class StripeBillingController extends Controller
             }
         }
 
-        // If user doesn't have premium, check Stripe for active subscriptions
+        
         if (!$user->hasPremiumAccess() && $user->stripe_customer_id) {
             try {
                 $this->syncSubscriptionsFromStripe($user);
-                // Refresh user after sync
+                
                 $user->refresh();
             } catch (\Exception $e) {
                 Log::error('Failed to sync subscriptions from Stripe', [
@@ -1115,12 +1102,12 @@ class StripeBillingController extends Controller
 
         $active = $user->activeSubscription;
         
-        // Helper function to safely format date (handles both Carbon and string)
+        
         $formatDate = function($date) {
             if (!$date) {
                 return null;
             }
-            // Handle string dates
+            
             if (is_string($date)) {
                 try {
                     return \Carbon\Carbon::parse($date)->format('Y-m-d H:i:s');
@@ -1129,14 +1116,14 @@ class StripeBillingController extends Controller
                         'date' => $date,
                         'error' => $e->getMessage(),
                     ]);
-                    return $date; // Return as-is if parsing fails
+                    return $date; 
                 }
             }
-            // Handle Carbon instances
+            
             if ($date instanceof \Carbon\Carbon) {
                 return $date->format('Y-m-d H:i:s');
             }
-            // Handle DateTime instances
+            
             if ($date instanceof \DateTime) {
                 return $date->format('Y-m-d H:i:s');
             }
@@ -1188,9 +1175,7 @@ class StripeBillingController extends Controller
         }
     }
 
-    /**
-     * Sync a pending subscription with Stripe to check if payment was confirmed
-     */
+    
     private function syncPendingSubscription(Subscription $localSub): void
     {
         if (!$localSub->stripe_subscription_id) {
@@ -1213,7 +1198,7 @@ class StripeBillingController extends Controller
                 'stripe_status' => $stripeSub->status ?? 'unknown',
             ]);
 
-            // Only activate if Stripe status is 'active'
+            
             if ($stripeSub->status === 'active') {
                 DB::beginTransaction();
                 
@@ -1242,7 +1227,7 @@ class StripeBillingController extends Controller
                         'stripe_latest_invoice_id' => $invoiceId,
                     ]);
 
-                    // Update transaction status
+                    
                     if ($localSub->transaction_id) {
                         $transaction = Transaction::find($localSub->transaction_id);
                         if ($transaction) {
@@ -1253,7 +1238,7 @@ class StripeBillingController extends Controller
                         }
                     }
 
-                    // Update user premium flags
+                    
                     $user = $localSub->user;
                     if ($user) {
                         $user->update([
@@ -1274,7 +1259,7 @@ class StripeBillingController extends Controller
                     throw $e;
                 }
             } else {
-                // Update stripe_status even if not active yet
+                
                 $localSub->update([
                     'stripe_status' => $stripeSub->status,
                 ]);
@@ -1294,10 +1279,7 @@ class StripeBillingController extends Controller
         }
     }
 
-    /**
-     * Sync active subscriptions from Stripe to database
-     * Used when user doesn't have premium but may have paid subscriptions in Stripe
-     */
+    
     private function syncSubscriptionsFromStripe($user): void
     {
         if (!$user->stripe_customer_id) {
@@ -1314,7 +1296,7 @@ class StripeBillingController extends Controller
                 'has_premium' => $user->has_premium,
             ]);
 
-            // Get all active subscriptions from Stripe
+            
             $stripeSubscriptions = \Stripe\Subscription::all([
                 'customer' => $user->stripe_customer_id,
                 'status' => 'active',
@@ -1342,7 +1324,7 @@ class StripeBillingController extends Controller
             foreach ($stripeSubscriptions->data as $stripeSub) {
                 $stripeSubscriptionId = $stripeSub->id;
 
-                // Check if subscription already exists in database
+                
                 $existingSub = Subscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
 
                 if ($existingSub) {
@@ -1352,7 +1334,7 @@ class StripeBillingController extends Controller
                         'stripe_subscription_id' => $stripeSubscriptionId,
                     ]);
                     
-                    // Update expiration if this is the latest
+                    
                     $expiresAt = isset($stripeSub->current_period_end) 
                         ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_end) 
                         : null;
@@ -1363,7 +1345,7 @@ class StripeBillingController extends Controller
                     continue;
                 }
 
-                // Get plan from subscription price
+                
                 $priceId = $stripeSub->items->data[0]->price->id ?? null;
                 if (!$priceId) {
                     Log::warning('Could not get price ID from Stripe subscription', [
@@ -1383,7 +1365,7 @@ class StripeBillingController extends Controller
                     continue;
                 }
 
-                // Check payment status
+                
                 $paymentSuccessful = false;
                 $invoiceStatus = null;
                 $paymentIntentStatus = null;
@@ -1412,7 +1394,7 @@ class StripeBillingController extends Controller
                     continue;
                 }
 
-                // Calculate dates
+                
                 $currentPeriodEnd = isset($stripeSub->current_period_end) 
                     ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_end) 
                     : null;
@@ -1420,7 +1402,7 @@ class StripeBillingController extends Controller
                     ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_start) 
                     : null;
 
-                // Fallback: calculate from plan duration if not provided by Stripe
+                
                 $premiumExpiresAt = $currentPeriodEnd;
                 if (!$premiumExpiresAt) {
                     $premiumExpiresAt = \Carbon\Carbon::now()->addMonths($plan->duration_months);
@@ -1431,17 +1413,17 @@ class StripeBillingController extends Controller
                     ]);
                 }
 
-                // Ensure premiumExpiresAt is a Carbon instance
+                
                 if (!$premiumExpiresAt instanceof \Carbon\Carbon) {
                     $premiumExpiresAt = \Carbon\Carbon::parse($premiumExpiresAt);
                 }
 
-                // Track latest expiration
+                
                 if (!$latestExpiration || $premiumExpiresAt->gt($latestExpiration)) {
                     $latestExpiration = $premiumExpiresAt;
                 }
 
-                // Get invoice ID
+                
                 $invoiceId = null;
                 if ($stripeSub->latest_invoice) {
                     if (is_object($stripeSub->latest_invoice)) {
@@ -1451,7 +1433,7 @@ class StripeBillingController extends Controller
                     }
                 }
 
-                // Get payment intent ID
+                
                 $paymentIntentId = null;
                 if (isset($stripeSub->latest_invoice) && is_object($stripeSub->latest_invoice)) {
                     if (isset($stripeSub->latest_invoice->payment_intent)) {
@@ -1465,7 +1447,7 @@ class StripeBillingController extends Controller
 
                 $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_' . $stripeSubscriptionId;
 
-                // Create transaction
+                
                 $transaction = \App\Models\Transaction::create([
                     'user_id' => $user->id,
                     'stripe_payment_intent_id' => $transactionId,
@@ -1480,7 +1462,7 @@ class StripeBillingController extends Controller
                     'paid_at' => $currentPeriodStart ?? now(),
                 ]);
 
-                // Create subscription
+                
                 $subscription = Subscription::create([
                     'user_id' => $user->id,
                     'subscription_plan_id' => $plan->id,
@@ -1507,7 +1489,7 @@ class StripeBillingController extends Controller
                 ]);
             }
 
-            // Update user premium status if we synced any subscriptions
+            
             if ($syncedCount > 0 && $latestExpiration) {
                 $user->update([
                     'has_premium' => true,
@@ -1540,5 +1522,4 @@ class StripeBillingController extends Controller
         }
     }
 }
-
 

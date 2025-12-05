@@ -26,7 +26,7 @@ class CreatorBalance extends Model
         'total_withdrawn' => 'decimal:2',
     ];
 
-    // Relationships
+    
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'creator_id');
@@ -42,7 +42,7 @@ class CreatorBalance extends Model
         return $this->hasMany(JobPayment::class, 'creator_id', 'creator_id');
     }
 
-    // Methods
+    
     public function getTotalBalanceAttribute(): float
     {
         return $this->available_balance + $this->pending_balance;
@@ -95,14 +95,14 @@ class CreatorBalance extends Model
 
     public function movePendingToAvailable(float $amount): bool
     {
-        // Refresh the model to get the latest balance from database
+        
         $this->refresh();
         
         if ($this->pending_balance >= $amount) {
             $this->decrement('pending_balance', $amount);
             $this->increment('available_balance', $amount);
             
-            // Refresh again to verify the update
+            
             $this->refresh();
             
             \Illuminate\Support\Facades\Log::info('Moved pending to available balance', [
@@ -192,36 +192,33 @@ class CreatorBalance extends Model
             ->get();
     }
 
-    /**
-     * Recalculate balance from job payments and withdrawals
-     * This is useful when balance might be out of sync
-     */
+    
     public function recalculateFromPayments(): void
     {
-        // Get all job payments with contract relationship
+        
         $allPayments = $this->payments()
             ->with('contract')
             ->get();
 
-        // Separate payments by status
+        
         $completedPayments = $allPayments->where('status', 'completed');
         $pendingPayments = $allPayments->where('status', 'pending');
 
-        // Calculate total earned from completed payments
+        
         $totalEarned = $completedPayments->sum('creator_amount');
 
-        // Get all withdrawals
+        
         $withdrawals = $this->withdrawals()
             ->whereIn('status', ['completed', 'processing'])
             ->get();
 
         $totalWithdrawn = $withdrawals->sum('amount');
 
-        // Calculate pending balance from pending payments
+        
         $pendingBalance = $pendingPayments->sum('creator_amount');
 
-        // Calculate available balance
-        // Available = completed payments where contract workflow_status = 'payment_available' minus withdrawn
+        
+        
         $availableFromCompleted = $completedPayments
             ->filter(function ($payment) {
                 return $payment->contract && 
@@ -229,20 +226,20 @@ class CreatorBalance extends Model
             })
             ->sum('creator_amount');
 
-        // Also check contracts directly - if a contract has workflow_status = 'payment_available'
-        // but no payment record, we should still count it
+        
+        
         $contractsWithAvailablePayment = \App\Models\Contract::where('creator_id', $this->creator_id)
             ->where('workflow_status', 'payment_available')
             ->where('status', 'completed')
             ->get();
 
-        // Add creator_amount from contracts that have payment_available but might not have payment records
+        
         foreach ($contractsWithAvailablePayment as $contract) {
             $hasPaymentRecord = $allPayments->contains(function ($payment) use ($contract) {
                 return $payment->contract_id === $contract->id;
             });
             
-            // If contract has payment_available status but no payment record, use contract's creator_amount
+            
             if (!$hasPaymentRecord && $contract->creator_amount > 0) {
                 $availableFromCompleted += $contract->creator_amount;
                 $totalEarned += $contract->creator_amount;
@@ -255,10 +252,10 @@ class CreatorBalance extends Model
             }
         }
 
-        // Calculate available balance: payments available minus what's been withdrawn
+        
         $availableBalance = max(0, $availableFromCompleted - $totalWithdrawn);
 
-        // Update the balance
+        
         $this->update([
             'total_earned' => $totalEarned,
             'total_withdrawn' => $totalWithdrawn,
@@ -266,7 +263,7 @@ class CreatorBalance extends Model
             'available_balance' => $availableBalance,
         ]);
 
-        // Refresh to get updated values
+        
         $this->refresh();
 
         \Illuminate\Support\Facades\Log::info('Recalculated creator balance from payments', [
@@ -291,8 +288,8 @@ class CreatorBalance extends Model
 
     public function getBalanceHistory(int $days = 30)
     {
-        // This would typically come from a balance history table
-        // For now, we'll return basic stats
+        
+        
         return [
             'current_balance' => $this->total_balance,
             'available_balance' => $this->available_balance,

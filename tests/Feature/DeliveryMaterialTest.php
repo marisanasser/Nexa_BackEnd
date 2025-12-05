@@ -27,11 +27,11 @@ class DeliveryMaterialTest extends TestCase
 
     public function test_brand_can_approve_delivery_material()
     {
-        // Create test users
+        
         $brand = User::factory()->create(['role' => 'brand']);
         $creator = User::factory()->create(['role' => 'creator']);
         
-        // Create campaign and contract
+        
         $campaign = Campaign::factory()->create(['brand_id' => $brand->id]);
         $contract = Contract::factory()->create([
             'campaign_id' => $campaign->id,
@@ -40,7 +40,7 @@ class DeliveryMaterialTest extends TestCase
             'status' => 'active'
         ]);
         
-        // Create delivery material
+        
         $material = DeliveryMaterial::factory()->create([
             'contract_id' => $contract->id,
             'creator_id' => $creator->id,
@@ -64,11 +64,11 @@ class DeliveryMaterialTest extends TestCase
 
     public function test_brand_can_reject_delivery_material()
     {
-        // Create test users
+        
         $brand = User::factory()->create(['role' => 'brand']);
         $creator = User::factory()->create(['role' => 'creator']);
         
-        // Create campaign and contract
+        
         $campaign = Campaign::factory()->create(['brand_id' => $brand->id]);
         $contract = Contract::factory()->create([
             'campaign_id' => $campaign->id,
@@ -77,7 +77,7 @@ class DeliveryMaterialTest extends TestCase
             'status' => 'active'
         ]);
         
-        // Create delivery material
+        
         $material = DeliveryMaterial::factory()->create([
             'contract_id' => $contract->id,
             'creator_id' => $creator->id,
@@ -103,11 +103,11 @@ class DeliveryMaterialTest extends TestCase
 
     public function test_milestone_title_is_correct()
     {
-        // Create test users
+        
         $brand = User::factory()->create(['role' => 'brand']);
         $creator = User::factory()->create(['role' => 'creator']);
         
-        // Create campaign and contract
+        
         $campaign = Campaign::factory()->create(['brand_id' => $brand->id]);
         $contract = Contract::factory()->create([
             'campaign_id' => $campaign->id,
@@ -116,7 +116,7 @@ class DeliveryMaterialTest extends TestCase
             'status' => 'active'
         ]);
         
-        // Create timeline with milestones
+        
         $response = $this->actingAs($brand)
             ->postJson("/api/campaign-timeline/create-milestones", [
                 'contract_id' => $contract->id
@@ -124,7 +124,7 @@ class DeliveryMaterialTest extends TestCase
 
         $response->assertStatus(200);
         
-        // Check that video submission milestone has correct title
+        
         $this->assertDatabaseHas('campaign_timelines', [
             'contract_id' => $contract->id,
             'milestone_type' => 'video_submission',

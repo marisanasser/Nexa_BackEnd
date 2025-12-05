@@ -9,20 +9,18 @@ use App\Models\Step;
 
 class ComprehensiveGuideSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
+    
     public function run(): void
     {
-        // Clear existing guides and steps
+        
         Step::truncate();
         Guide::truncate();
 
-        // ========================================
-        // BRAND GUIDES
-        // ========================================
+        
+        
+        
 
-        // 1. Brand Registration Guide
+        
         $brandRegistrationGuide = Guide::create([
             'title' => 'Registro de Marca na Nexa',
             'audience' => 'Brand',
@@ -67,7 +65,7 @@ class ComprehensiveGuideSeeder extends Seeder
             ]);
         }
 
-        // 2. Create Campaign Guide
+        
         $createCampaignGuide = Guide::create([
             'title' => 'Como Criar uma Campanha Eficaz',
             'audience' => 'Brand',
@@ -117,7 +115,7 @@ class ComprehensiveGuideSeeder extends Seeder
             ]);
         }
 
-        // 3. Approve Creators Guide
+        
         $approveCreatorsGuide = Guide::create([
             'title' => 'Como Aprovar e Gerenciar Criadores',
             'audience' => 'Brand',
@@ -167,7 +165,7 @@ class ComprehensiveGuideSeeder extends Seeder
             ]);
         }
 
-        // 4. Chat Guide for Brands
+        
         $brandChatGuide = Guide::create([
             'title' => 'Comunicação Efetiva com Criadores',
             'audience' => 'Brand',
@@ -212,11 +210,11 @@ class ComprehensiveGuideSeeder extends Seeder
             ]);
         }
 
-        // ========================================
-        // CREATOR GUIDES
-        // ========================================
+        
+        
+        
 
-        // 1. Creator Registration Guide
+        
         $creatorRegistrationGuide = Guide::create([
             'title' => 'Registro de Criador na Nexa',
             'audience' => 'Creator',
@@ -266,7 +264,7 @@ class ComprehensiveGuideSeeder extends Seeder
             ]);
         }
 
-        // 2. Creator Campaign Application Guide
+        
         $creatorCampaignGuide = Guide::create([
             'title' => 'Como Se Candidatar a Campanhas',
             'audience' => 'Creator',
@@ -311,7 +309,7 @@ class ComprehensiveGuideSeeder extends Seeder
             ]);
         }
 
-        // 3. Creator Content Creation Guide
+        
         $creatorContentGuide = Guide::create([
             'title' => 'Criação e Entrega de Conteúdo',
             'audience' => 'Creator',
@@ -356,7 +354,7 @@ class ComprehensiveGuideSeeder extends Seeder
             ]);
         }
 
-        // 4. Creator Chat Communication Guide
+        
         $creatorChatGuide = Guide::create([
             'title' => 'Comunicação Profissional com Marcas',
             'audience' => 'Creator',
@@ -401,11 +399,11 @@ class ComprehensiveGuideSeeder extends Seeder
             ]);
         }
 
-        // ========================================
-        // GENERAL PLATFORM GUIDES
-        // ========================================
+        
+        
+        
 
-        // 5. Platform Navigation Guide
+        
         $platformGuide = Guide::create([
             'title' => 'Navegação na Plataforma Nexa',
             'audience' => 'General',

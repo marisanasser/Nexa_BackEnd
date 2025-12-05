@@ -24,7 +24,7 @@ class BrandBalance extends Model
         'total_spent' => 'decimal:2',
     ];
 
-    // Relationships
+    
     public function brand(): BelongsTo
     {
         return $this->belongsTo(User::class, 'brand_id');
@@ -36,7 +36,7 @@ class BrandBalance extends Model
             ->whereJsonContains('payment_data->type', 'platform_funding');
     }
 
-    // Methods
+    
     public function getFormattedAvailableBalanceAttribute(): string
     {
         return 'R$ ' . number_format($this->available_balance, 2, ',', '.');

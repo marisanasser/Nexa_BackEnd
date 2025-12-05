@@ -9,23 +9,13 @@ use Illuminate\Support\Facades\Log;
 
 class CheckMessages extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
+    
     protected $signature = 'messages:check {--room-id= : Check specific room ID}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    
     protected $description = 'Check the current state of messages and help debug chat history issues';
 
-    /**
-     * Execute the console command.
-     */
+    
     public function handle()
     {
         $this->info('Checking message statistics...');
@@ -42,13 +32,13 @@ class CheckMessages extends Command
         $this->info("File messages: {$fileMessages}");
         $this->info("Image messages: {$imageMessages}");
 
-        // Check for rooms with messages
+        
         $roomsWithMessages = ChatRoom::whereHas('messages')->count();
         $totalRooms = ChatRoom::count();
 
         $this->info("Rooms with messages: {$roomsWithMessages} / {$totalRooms}");
 
-        // Check specific room if provided
+        
         if ($roomId = $this->option('room-id')) {
             $this->info("Checking room: {$roomId}");
             
@@ -61,7 +51,7 @@ class CheckMessages extends Command
             $roomMessages = $room->messages()->count();
             $this->info("Messages in room {$roomId}: {$roomMessages}");
 
-            // Show recent messages
+            
             $recentMessages = $room->messages()
                 ->orderBy('created_at', 'desc')
                 ->limit(10)
@@ -73,7 +63,7 @@ class CheckMessages extends Command
             }
         }
 
-        // Log the statistics
+        
         Log::info('Message check completed', [
             'total_messages' => $totalMessages,
             'offer_messages' => $offerMessages,

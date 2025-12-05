@@ -14,10 +14,7 @@ use Illuminate\Support\Str;
 class GoogleController extends Controller
 {
 
-
-    /**
-     * Redirect the user to the Google authentication page.
-     */
+    
     public function redirectToGoogle(): JsonResponse
     {
         $url = Socialite::driver('google')->stateless()->redirect()->getTargetUrl();
@@ -28,13 +25,11 @@ class GoogleController extends Controller
         ]);
     }
 
-    /**
-     * Obtain the user information from Google.
-     */
+    
     public function handleGoogleCallback(Request $request): JsonResponse
     {
         try {
-            // Log the incoming request for debugging
+            
             \Log::info('Google OAuth callback received', [
                 'query_params' => $request->query(),
                 'has_code' => $request->has('code'),
@@ -46,28 +41,28 @@ class GoogleController extends Controller
             
             $googleUser = Socialite::driver('google')->stateless()->user();
             
-            // Get role from request or default to creator
+            
             $role = $request->input('role', 'creator');
             $isStudent = $request->boolean('is_student', false);
             
-            // Validate role
+            
             if (!in_array($role, ['creator', 'brand', 'student'])) {
-                $role = 'creator'; // Default to creator if invalid role
+                $role = 'creator'; 
             }
             
-            // If user wants to be a student, set role to 'student'
+            
             if ($isStudent) {
                 $role = 'student';
             }
             
-            // Check if user already exists by Google ID or email (including soft deleted users)
+            
             $user = User::withTrashed()
                        ->where('google_id', $googleUser->getId())
                        ->orWhere('email', $googleUser->getEmail())
                        ->first();
             
             if ($user) {
-                // Check if user is soft deleted (removed)
+                
                 if ($user->trashed()) {
                     return response()->json([
                         'success' => false,
@@ -75,7 +70,7 @@ class GoogleController extends Controller
                     ], 403);
                 }
 
-                // Check if user is blocked (not email verified)
+                
                 if (!$user->email_verified_at) {
                     return response()->json([
                         'success' => false,
@@ -83,10 +78,10 @@ class GoogleController extends Controller
                     ], 403);
                 }
 
-                // Prepare update data
+                
                 $updateData = [];
                 
-                // Update Google ID if not set
+                
                 if (!$user->google_id) {
                     $updateData = array_merge($updateData, [
                         'google_id' => $googleUser->getId(),
@@ -96,19 +91,19 @@ class GoogleController extends Controller
                     ]);
                 }
                 
-                // Update role if provided and different
+                
                 if ($role && $user->role !== $role) {
                     $updateData['role'] = $role;
                 }
                 
-                // If user wants to be a student, update role and give trial access
-                // They need to complete the education history form for full verification
+                
+                
                 if ($isStudent && !$user->student_verified) {
-                    $updateData['free_trial_expires_at'] = now()->addMonth(); // Grant 1 month free trial
-                    // Don't set student_verified = true yet - they need to complete the form first
+                    $updateData['free_trial_expires_at'] = now()->addMonth(); 
+                    
                 }
                 
-                // Apply updates if any
+                
                 if (!empty($updateData)) {
                     $user->update($updateData);
                 }
@@ -137,32 +132,32 @@ class GoogleController extends Controller
                     'message' => 'Login successful'
                 ], 200);
             } else {
-                // Prepare user data
+                
                 $userData = [
                     'name' => $googleUser->getName(),
                     'email' => $googleUser->getEmail(),
-                    'password' => Hash::make('12345678'), // Default password for OAuth users
-                    'role' => $role, // Use the provided role
+                    'password' => Hash::make('12345678'), 
+                    'role' => $role, 
                     'avatar_url' => $googleUser->getAvatar(),
                     'google_id' => $googleUser->getId(),
                     'google_token' => $googleUser->token,
                     'google_refresh_token' => $googleUser->refreshToken,
-                    'email_verified_at' => now(), // Google users are pre-verified
-                    'birth_date' => '1990-01-01', // Default birth date for OAuth users
-                    'gender' => 'other', // Default gender
+                    'email_verified_at' => now(), 
+                    'birth_date' => '1990-01-01', 
+                    'gender' => 'other', 
                 ];
                 
-                // If user is a student, set role to student and give trial access
-                // They need to complete the education history form for full verification
+                
+                
                 if ($isStudent) {
-                    $userData['free_trial_expires_at'] = now()->addMonth(); // Grant 1 month free trial
-                    // Don't set student_verified = true yet - they need to complete the form first
+                    $userData['free_trial_expires_at'] = now()->addMonth(); 
+                    
                 }
                 
-                // Create new user with the specified role
+                
                 $user = User::create($userData);
                 
-                // Notify admin of new user registration
+                
                 \App\Services\NotificationService::notifyAdminOfNewRegistration($user);
                 
                 $token = $user->createToken('auth_token')->plainTextToken;
@@ -205,9 +200,7 @@ class GoogleController extends Controller
         }
     }
 
-    /**
-     * Handle Google OAuth with role selection
-     */
+    
     public function handleGoogleWithRole(Request $request): JsonResponse
     {
         $request->validate([
@@ -217,13 +210,13 @@ class GoogleController extends Controller
         try {
             $googleUser = Socialite::driver('google')->stateless()->user();
             
-            // Check if user already exists by Google ID or email
+            
             $user = User::where('google_id', $googleUser->getId())
                        ->orWhere('email', $googleUser->getEmail())
                        ->first();
             
             if ($user) {
-                // Update Google ID if not set and update role if different
+                
                 $updateData = ['role' => $request->role];
                 
                 if (!$user->google_id) {
@@ -255,11 +248,11 @@ class GoogleController extends Controller
                     'message' => 'Login successful'
                 ], 200);
             } else {
-                // Create new user with specified role
+                
                 $user = User::create([
                     'name' => $googleUser->getName(),
                     'email' => $googleUser->getEmail(),
-                    'password' => Hash::make('12345678'), // Default password for OAuth users
+                    'password' => Hash::make('12345678'), 
                     'role' => $request->role,
                     'avatar_url' => $googleUser->getAvatar(),
                     'google_id' => $googleUser->getId(),
@@ -268,7 +261,7 @@ class GoogleController extends Controller
                     'email_verified_at' => now(),
                 ]);
                 
-                // Notify admin of new user registration
+                
                 \App\Services\NotificationService::notifyAdminOfNewRegistration($user);
                 
                 $token = $user->createToken('auth_token')->plainTextToken;
@@ -297,6 +290,5 @@ class GoogleController extends Controller
             ], 422);
         }
     }
-
 
 } 

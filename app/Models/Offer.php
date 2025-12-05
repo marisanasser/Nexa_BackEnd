@@ -41,7 +41,7 @@ class Offer extends Model
         'is_barter' => 'boolean',
     ];
 
-    // Relationships
+    
     public function brand(): BelongsTo
     {
         return $this->belongsTo(User::class, 'brand_id');
@@ -67,7 +67,7 @@ class Offer extends Model
         return $this->hasOne(Contract::class);
     }
 
-    // Scopes
+    
     public function scopePending($query)
     {
         return $query->where('status', 'pending');
@@ -100,7 +100,7 @@ class Offer extends Model
         return $query->where('status', 'cancelled');
     }
 
-    // Methods
+    
     public function isPending(): bool
     {
         return $this->status === 'pending';
@@ -161,7 +161,7 @@ class Offer extends Model
             'status' => 'cancelled',
         ]);
 
-        // Notify creator about cancellation
+        
         NotificationService::notifyUserOfOfferCancelled($this);
 
         return true;
@@ -174,7 +174,7 @@ class Offer extends Model
         }
 
         try {
-            // Start a database transaction
+            
             \Illuminate\Support\Facades\DB::beginTransaction();
 
             $this->update([
@@ -182,23 +182,23 @@ class Offer extends Model
                 'accepted_at' => now(),
             ]);
 
-            // For barter offers, no payment processing is needed
+            
             if ($this->isBarter()) {
-                // Create contract without payment processing
+                
                 $contract = Contract::create([
                     'offer_id' => $this->id,
                     'brand_id' => $this->brand_id,
                     'creator_id' => $this->creator_id,
                     'title' => $this->title ?? 'Contrato de Permuta',
                     'description' => $this->description ?? 'Contrato criado a partir de oferta de permuta',
-                    'budget' => 0, // No budget for barter
+                    'budget' => 0, 
                     'platform_fee' => 0,
                     'creator_amount' => 0,
                     'estimated_days' => $this->estimated_days,
                     'requirements' => $this->requirements ?? [],
                     'started_at' => now(),
                     'expected_completion_at' => now()->addDays($this->estimated_days),
-                    'status' => 'active', // Set to active for barter contracts
+                    'status' => 'active', 
                     'workflow_status' => 'active',
                 ]);
 
@@ -210,11 +210,11 @@ class Offer extends Model
                 return true;
             }
 
-            // Calculate platform fee (10%) and creator amount (90%) for cash offers
+            
             $platformFee = $this->budget * 0.10;
             $creatorAmount = $this->budget * 0.90;
 
-            // Create contract with better error handling
+            
             $contract = Contract::create([
                 'offer_id' => $this->id,
                 'brand_id' => $this->brand_id,
@@ -228,7 +228,7 @@ class Offer extends Model
                 'requirements' => $this->requirements ?? [],
                 'started_at' => now(),
                 'expected_completion_at' => now()->addDays($this->estimated_days),
-                'status' => 'pending', // Set to pending until payment is processed
+                'status' => 'pending', 
                 'workflow_status' => 'payment_pending',
             ]);
 
@@ -236,18 +236,18 @@ class Offer extends Model
                 throw new \Exception('Failed to create contract');
             }
 
-            // Process automatic payment
+            
             $paymentService = new \App\Services\AutomaticPaymentService();
             $paymentResult = $paymentService->processContractPayment($contract);
 
             if (!$paymentResult['success']) {
-                // If payment fails, update contract status
+                
                 $contract->update([
                     'status' => 'payment_failed',
                     'workflow_status' => 'payment_failed',
                 ]);
 
-                // Log the payment failure
+                
                 \Illuminate\Support\Facades\Log::error('Automatic payment failed for contract', [
                     'contract_id' => $contract->id,
                     'offer_id' => $this->id,
@@ -255,19 +255,19 @@ class Offer extends Model
                 ]);
             }
 
-            // Commit the transaction
+            
             \Illuminate\Support\Facades\DB::commit();
 
-            // Notify brand about acceptance
+            
             NotificationService::notifyUserOfOfferAccepted($this);
 
             return true;
 
         } catch (\Exception $e) {
-            // Rollback the transaction on error
+            
             \Illuminate\Support\Facades\DB::rollBack();
 
-            // Log the error
+            
             \Illuminate\Support\Facades\Log::error('Error accepting offer', [
                 'offer_id' => $this->id,
                 'brand_id' => $this->brand_id,
@@ -276,7 +276,7 @@ class Offer extends Model
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            // Revert offer status
+            
             $this->update([
                 'status' => 'pending',
                 'accepted_at' => null,
@@ -298,7 +298,7 @@ class Offer extends Model
             'rejection_reason' => $reason,
         ]);
 
-        // Notify brand about rejection
+        
         NotificationService::notifyUserOfOfferRejected($this, $reason);
 
         return true;
@@ -312,12 +312,12 @@ class Offer extends Model
     public function getDaysUntilExpiryAttribute(): int
     {
         if ($this->expires_at->isPast()) {
-            return 0; // Already expired
+            return 0; 
         }
         
         $diffInHours = now()->diffInHours($this->expires_at, false);
         if ($diffInHours < 24) {
-            return 1; // Less than 24 hours = 1 day
+            return 1; 
         }
         
         return now()->diffInDays($this->expires_at, false);
@@ -340,7 +340,7 @@ class Offer extends Model
 
     protected static function booted()
     {
-        // Auto-expire offers after 1 day
+        
         static::creating(function ($offer) {
             if (!$offer->expires_at) {
                 $offer->expires_at = now()->addDay();

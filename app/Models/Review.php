@@ -27,7 +27,7 @@ class Review extends Model
         'is_public' => 'boolean',
     ];
 
-    // Relationships
+    
     public function contract(): BelongsTo
     {
         return $this->belongsTo(Contract::class);
@@ -43,7 +43,7 @@ class Review extends Model
         return $this->belongsTo(User::class, 'reviewed_id');
     }
 
-    // Scopes
+    
     public function scopePublic($query)
     {
         return $query->where('is_public', true);
@@ -64,7 +64,7 @@ class Review extends Model
         return $query->where('rating', '>=', $minRating);
     }
 
-    // Methods
+    
     public function getAverageRatingAttribute(): float
     {
         if ($this->rating_categories && is_array($this->rating_categories)) {
@@ -154,7 +154,7 @@ class Review extends Model
     {
         static::created(function ($review) {
             try {
-                // Notify creator about new review
+                
                 NotificationService::notifyUserOfNewReview($review);
             } catch (\Exception $e) {
                 Log::error('Failed to notify user of new review', [
@@ -164,7 +164,7 @@ class Review extends Model
             }
             
             try {
-                // Update creator's average rating
+                
                 $review->updateCreatorAverageRating();
             } catch (\Exception $e) {
                 Log::error('Failed to update creator average rating', [

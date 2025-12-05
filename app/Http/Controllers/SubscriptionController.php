@@ -10,9 +10,7 @@ use Illuminate\Support\Facades\Log;
 
 class SubscriptionController extends Controller
 {
-    /**
-     * Get all available subscription plans
-     */
+    
     public function getPlans(): JsonResponse
     {
         try {
@@ -47,9 +45,7 @@ class SubscriptionController extends Controller
         }
     }
 
-    /**
-     * Get user's subscription history
-     */
+    
     public function getSubscriptionHistory(): JsonResponse
     {
         try {
@@ -98,9 +94,7 @@ class SubscriptionController extends Controller
         }
     }
 
-    /**
-     * Cancel user's active subscription
-     */
+    
     public function cancelSubscription(): JsonResponse
     {
         try {

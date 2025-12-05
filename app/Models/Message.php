@@ -86,12 +86,12 @@ class Message extends Model
     protected static function booted()
     {
         static::created(function ($message) {
-            // Update chat room's last_message_at timestamp
+            
             if ($message->chatRoom) {
                 $message->chatRoom->updateLastMessageTimestamp();
             }
 
-            // Notify recipient about new message
+            
             NotificationService::notifyUserOfNewMessage($message);
         });
     }

@@ -6,26 +6,24 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    
     public function up(): void
     {
         Schema::create('campaign_timelines', function (Blueprint $table) {
             $table->id();
             $table->foreignId('contract_id')->constrained()->onDelete('cascade');
-            $table->string('milestone_type'); // script_submission, script_approval, video_submission, final_approval
+            $table->string('milestone_type'); 
             $table->string('title');
             $table->text('description')->nullable();
             $table->datetime('deadline');
             $table->datetime('completed_at')->nullable();
-            $table->string('status')->default('pending'); // pending, approved, delayed, completed
+            $table->string('status')->default('pending'); 
             $table->text('comment')->nullable();
             $table->string('file_path')->nullable();
             $table->string('file_name')->nullable();
             $table->string('file_size')->nullable();
             $table->string('file_type')->nullable();
-            $table->text('justification')->nullable(); // For delayed milestones
+            $table->text('justification')->nullable(); 
             $table->boolean('is_delayed')->default(false);
             $table->datetime('delay_notified_at')->nullable();
             $table->timestamps();
@@ -35,9 +33,7 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
         Schema::dropIfExists('campaign_timelines');

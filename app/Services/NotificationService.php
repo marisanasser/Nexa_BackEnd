@@ -16,13 +16,11 @@ use Illuminate\Support\Facades\Mail;
 
 class NotificationService
 {
-    /**
-     * Send notification to admin about new login
-     */
+    
     public static function notifyAdminOfNewLogin(User $user, array $loginData = []): void
     {
         try {
-            // Get all admin users
+            
             $adminUsers = User::where('role', 'admin')->get();
             
             foreach ($adminUsers as $admin) {
@@ -33,7 +31,7 @@ class NotificationService
                     'user_role' => $user->role,
                 ]));
                 
-                // Send real-time notification via Socket.IO
+                
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
@@ -44,13 +42,11 @@ class NotificationService
         }
     }
 
-    /**
-     * Send notification to admin about new user registration
-     */
+    
     public static function notifyAdminOfNewRegistration(User $user): void
     {
         try {
-            // Get all admin users
+            
             $adminUsers = User::where('role', 'admin')->get();
             
             foreach ($adminUsers as $admin) {
@@ -62,7 +58,7 @@ class NotificationService
                     'registration_time' => now()->toISOString(),
                 ]);
                 
-                // Send real-time notification via Socket.IO
+                
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
@@ -73,13 +69,11 @@ class NotificationService
         }
     }
 
-    /**
-     * Send notification to admin about new campaign creation
-     */
+    
     public static function notifyAdminOfNewCampaign(Campaign $campaign): void
     {
         try {
-            // Get all admin users
+            
             $adminUsers = User::where('role', 'admin')->get();
             
             foreach ($adminUsers as $admin) {
@@ -95,7 +89,7 @@ class NotificationService
                     'created_at' => $campaign->created_at->toISOString(),
                 ]);
                 
-                // Send real-time notification via Socket.IO
+                
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
@@ -106,15 +100,13 @@ class NotificationService
         }
     }
 
-    /**
-     * Send email notification to brand about successful campaign creation
-     */
+    
     public static function notifyBrandOfCampaignCreated(Campaign $campaign): void
     {
         try {
             $campaign->load(['brand']);
             
-            // Send email notification via AWS SES
+            
             Mail::to($campaign->brand->email)->send(new \App\Mail\CampaignCreated($campaign));
             
             Log::info('Campaign creation email sent successfully', [
@@ -130,13 +122,11 @@ class NotificationService
         }
     }
 
-    /**
-     * Send notification to admin about new campaign application
-     */
+    
     public static function notifyAdminOfNewApplication(CampaignApplication $application): void
     {
         try {
-            // Get all admin users
+            
             $adminUsers = User::where('role', 'admin')->get();
             
             foreach ($adminUsers as $admin) {
@@ -153,7 +143,7 @@ class NotificationService
                     'created_at' => $application->created_at->toISOString(),
                 ]);
                 
-                // Send real-time notification via Socket.IO
+                
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
@@ -164,15 +154,13 @@ class NotificationService
         }
     }
 
-    /**
-     * Send email notification to brand about new application received
-     */
+    
     public static function notifyBrandOfNewApplication(CampaignApplication $application): void
     {
         try {
             $application->load(['campaign', 'campaign.brand', 'creator']);
             
-            // Send email notification via AWS SES to the brand
+            
             Mail::to($application->campaign->brand->email)->send(new \App\Mail\ApplicationReceived($application));
             
             Log::info('Application received email sent successfully to brand', [
@@ -192,13 +180,11 @@ class NotificationService
         }
     }
 
-    /**
-     * Send notification to admin about new bid submission
-     */
+    
     public static function notifyAdminOfNewBid(Bid $bid): void
     {
         try {
-            // Get all admin users
+            
             $adminUsers = User::where('role', 'admin')->get();
             
             foreach ($adminUsers as $admin) {
@@ -215,7 +201,7 @@ class NotificationService
                     'created_at' => $bid->created_at->toISOString(),
                 ]);
                 
-                // Send real-time notification via Socket.IO
+                
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
@@ -226,13 +212,11 @@ class NotificationService
         }
     }
 
-    /**
-     * Send notification to admin about payment activity
-     */
+    
     public static function notifyAdminOfPaymentActivity(User $user, string $paymentType, array $paymentData = []): void
     {
         try {
-            // Get all admin users
+            
             $adminUsers = User::where('role', 'admin')->get();
             
             foreach ($adminUsers as $admin) {
@@ -245,7 +229,7 @@ class NotificationService
                     'activity_time' => now()->toISOString(),
                 ]));
                 
-                // Send real-time notification via Socket.IO
+                
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
@@ -257,13 +241,11 @@ class NotificationService
         }
     }
 
-    /**
-     * Send notification to admin about portfolio update
-     */
+    
     public static function notifyAdminOfPortfolioUpdate(User $user, string $updateType, array $updateData = []): void
     {
         try {
-            // Get all admin users
+            
             $adminUsers = User::where('role', 'admin')->get();
             
             foreach ($adminUsers as $admin) {
@@ -275,7 +257,7 @@ class NotificationService
                     'update_time' => now()->toISOString(),
                 ]));
                 
-                // Send real-time notification via Socket.IO
+                
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
@@ -287,13 +269,11 @@ class NotificationService
         }
     }
 
-    /**
-     * Send notification to admin about system activity
-     */
+    
     public static function notifyAdminOfSystemActivity(string $activityType, array $activityData = []): void
     {
         try {
-            // Get all admin users
+            
             $adminUsers = User::where('role', 'admin')->get();
             
             foreach ($adminUsers as $admin) {
@@ -302,7 +282,7 @@ class NotificationService
                     'activity_time' => now()->toISOString(),
                 ]));
                 
-                // Send real-time notification via Socket.IO
+                
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
@@ -313,13 +293,11 @@ class NotificationService
         }
     }
 
-    /**
-     * Send notification to admin about new student verification
-     */
+    
     public static function notifyAdminOfNewStudentVerification(User $user, array $studentData = []): void
     {
         try {
-            // Get all admin users
+            
             $adminUsers = User::where('role', 'admin')->get();
             
             foreach ($adminUsers as $admin) {
@@ -331,7 +309,7 @@ class NotificationService
                     'student_verification_time' => now()->toISOString(),
                 ]));
                 
-                // Send real-time notification via Socket.IO
+                
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
@@ -342,9 +320,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify user about student verification approval
-     */
+    
     public static function notifyUserOfStudentVerificationApproval(User $user, array $approvalData = []): void
     {
         try {
@@ -355,7 +331,7 @@ class NotificationService
                 'expires_at' => $approvalData['expires_at'] ?? null,
             ]));
             
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($user->id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of student verification approval', [
@@ -365,9 +341,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify user about student verification rejection
-     */
+    
     public static function notifyUserOfStudentVerificationRejection(User $user, array $rejectionData = []): void
     {
         try {
@@ -377,7 +351,7 @@ class NotificationService
                 'rejection_reason' => $rejectionData['rejection_reason'] ?? null,
             ]));
             
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($user->id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of student verification rejection', [
@@ -387,13 +361,11 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify creators about new project
-     */
+    
     public static function notifyCreatorsOfNewProject(Campaign $campaign): void
     {
         try {
-            // Get all creator users
+            
             $creators = User::where('role', 'creator')->get();
             
             foreach ($creators as $creator) {
@@ -403,7 +375,7 @@ class NotificationService
                     $campaign->title
                 );
                 
-                // Send real-time notification via Socket.IO
+                
                 self::sendSocketNotification($creator->id, $notification);
             }
         } catch (\Exception $e) {
@@ -414,9 +386,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify brand about project approval/rejection
-     */
+    
     public static function notifyBrandOfProjectStatus(Campaign $campaign, string $status, string $reason = null): void
     {
         try {
@@ -435,10 +405,10 @@ class NotificationService
                 );
             }
             
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($campaign->brand_id, $notification);
 
-            // Send email notification
+            
             try {
                 $campaign->load(['brand']);
                 if ($status === 'approved') {
@@ -463,9 +433,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify creator about proposal approval/rejection
-     */
+    
     public static function notifyCreatorOfProposalStatus(Bid $bid, string $status, string $reason = null): void
     {
         try {
@@ -489,7 +457,7 @@ class NotificationService
                 );
             }
             
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($bid->user_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify creator of proposal status', [
@@ -500,19 +468,17 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify user about new message
-     */
+    
     public static function notifyUserOfNewMessage(Message $message): void
     {
         try {
             $chatRoom = $message->chatRoom;
             $sender = $message->sender;
             
-            // Determine recipient
+            
             $recipientId = $chatRoom->brand_id === $sender->id ? $chatRoom->creator_id : $chatRoom->brand_id;
             
-            // Create message preview (truncate if too long)
+            
             $messagePreview = strlen($message->message) > 50 
                 ? substr($message->message, 0, 50) . '...' 
                 : $message->message;
@@ -525,7 +491,7 @@ class NotificationService
                 'campaign'
             );
             
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($recipientId, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of new message', [
@@ -535,19 +501,17 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify user about new direct message
-     */
+    
     public static function notifyUserOfNewDirectMessage(DirectMessage $message): void
     {
         try {
             $chatRoom = $message->directChatRoom;
             $sender = $message->sender;
             
-            // Determine recipient
+            
             $recipientId = $chatRoom->brand_id === $sender->id ? $chatRoom->creator_id : $chatRoom->brand_id;
             
-            // Create message preview (truncate if too long)
+            
             $messagePreview = strlen($message->message) > 50 
                 ? substr($message->message, 0, 50) . '...' 
                 : $message->message;
@@ -560,7 +524,7 @@ class NotificationService
                 'direct'
             );
             
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($recipientId, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of new direct message', [
@@ -570,21 +534,19 @@ class NotificationService
         }
     }
 
-    /**
-     * Send notification via Socket.IO
-     */
+    
     public static function sendSocketNotification(int $userId, Notification $notification): void
     {
         try {
-            // Get the socket server instance from global scope
+            
             $socketServer = null;
             
-            // Try to get from Laravel service container first
+            
             if (app()->bound('socket.server')) {
                 $socketServer = app('socket.server');
             }
             
-            // If not available in container, try global scope
+            
             if (!$socketServer && isset($GLOBALS['socket_server'])) {
                 $socketServer = $GLOBALS['socket_server'];
             }
@@ -623,9 +585,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Get unread notification count for user
-     */
+    
     public static function getUnreadCount(int $userId): int
     {
         return Notification::where('user_id', $userId)
@@ -633,9 +593,7 @@ class NotificationService
             ->count();
     }
 
-    /**
-     * Mark notification as read
-     */
+    
     public static function markAsRead(int $notificationId, int $userId): bool
     {
         $notification = Notification::where('id', $notificationId)
@@ -649,9 +607,7 @@ class NotificationService
         return false;
     }
 
-    /**
-     * Mark all notifications as read for user
-     */
+    
     public static function markAllAsRead(int $userId): int
     {
         return Notification::where('user_id', $userId)
@@ -662,9 +618,7 @@ class NotificationService
             ]);
     }
 
-    /**
-     * Notify creator about new offer
-     */
+    
     public static function notifyUserOfNewOffer($offer): void
     {
         try {
@@ -683,7 +637,7 @@ class NotificationService
                 'is_read' => false,
             ]);
             
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($offer->creator_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of new offer', [
@@ -693,9 +647,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify brand about offer acceptance
-     */
+    
     public static function notifyUserOfOfferAccepted($offer): void
     {
         try {
@@ -714,7 +666,7 @@ class NotificationService
                 'is_read' => false,
             ]);
             
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($offer->brand_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of offer acceptance', [
@@ -724,9 +676,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify brand about offer rejection
-     */
+    
     public static function notifyUserOfOfferRejected($offer, string $reason = null): void
     {
         try {
@@ -744,7 +694,7 @@ class NotificationService
                 'is_read' => false,
             ]);
             
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($offer->brand_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of offer rejection', [
@@ -754,13 +704,11 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify creator about offer cancellation
-     */
+    
     public static function notifyUserOfOfferCancelled($offer): void
     {
         try {
-            // Notify creator about cancelled offer
+            
             $notification = Notification::createOfferCancelled($offer->creator_id, [
                 'offer_id' => $offer->id,
                 'offer_title' => $offer->title,
@@ -769,7 +717,7 @@ class NotificationService
                 'cancelled_at' => now()->toISOString(),
             ]);
             
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($offer->creator_id, $notification);
             
         } catch (\Exception $e) {
@@ -780,9 +728,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Send notification to brand about review requirement
-     */
+    
     public static function notifyBrandOfReviewRequired($contract): void
     {
         try {
@@ -794,7 +740,7 @@ class NotificationService
                 'completed_at' => $contract->completed_at->toISOString(),
             ]);
             
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($contract->brand_id, $notification);
             
         } catch (\Exception $e) {
@@ -805,9 +751,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Send notification to creator about contract completion
-     */
+    
     public static function notifyCreatorOfContractCompleted($contract): void
     {
         try {
@@ -819,7 +763,7 @@ class NotificationService
                 'completed_at' => $contract->completed_at->toISOString(),
             ]);
             
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($contract->creator_id, $notification);
             
         } catch (\Exception $e) {
@@ -830,9 +774,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Send notification to user about new review
-     */
+    
     public static function notifyUserOfNewReview($review): void
     {
         try {
@@ -847,7 +789,7 @@ class NotificationService
                 'created_at' => $review->created_at->toISOString(),
             ]);
             
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($review->reviewed_id, $notification);
             
         } catch (\Exception $e) {
@@ -858,13 +800,11 @@ class NotificationService
         }
     }
 
-    /**
-     * Send notification to user about contract termination
-     */
+    
     public static function notifyUserOfContractTerminated($contract, string $reason = null): void
     {
         try {
-            // Notify both brand and creator
+            
             $users = [$contract->brand_id, $contract->creator_id];
             
             foreach ($users as $userId) {
@@ -875,7 +815,7 @@ class NotificationService
                     'reason' => $reason,
                 ]);
                 
-                // Send real-time notification via Socket.IO
+                
                 self::sendSocketNotification($userId, $notification);
             }
             
@@ -887,9 +827,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Send notification to creator about payment available
-     */
+    
     public static function notifyCreatorOfPaymentAvailable($contract): void
     {
         try {
@@ -917,9 +855,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify brand of successful payment
-     */
+    
     public static function notifyBrandOfPaymentSuccessful($contract): void
     {
         try {
@@ -947,9 +883,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify creator of payment received
-     */
+    
     public static function notifyCreatorOfPaymentReceived($contract): void
     {
         try {
@@ -977,9 +911,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify brand of payment failure
-     */
+    
     public static function notifyBrandOfPaymentFailed($contract): void
     {
         try {
@@ -1007,9 +939,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify creator of payment pending
-     */
+    
     public static function notifyCreatorOfPaymentPending($contract): void
     {
         try {
@@ -1037,9 +967,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify brand of new delivery material
-     */
+    
     public static function notifyBrandOfNewDeliveryMaterial($material): void
     {
         try {
@@ -1070,9 +998,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify creator of delivery material approval
-     */
+    
     public static function notifyCreatorOfDeliveryMaterialApproval($material): void
     {
         try {
@@ -1095,7 +1021,7 @@ class NotificationService
 
             self::sendSocketNotification($material->creator_id, $notification);
 
-            // Send email notification
+            
             try {
                 $material->load(['contract', 'creator', 'brand']);
                 Mail::to($material->creator->email)->send(new \App\Mail\DeliveryMaterialApproved($material));
@@ -1115,9 +1041,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify creator of delivery material rejection
-     */
+    
     public static function notifyCreatorOfDeliveryMaterialRejection($material): void
     {
         try {
@@ -1141,7 +1065,7 @@ class NotificationService
 
             self::sendSocketNotification($material->creator_id, $notification);
 
-            // Send email notification
+            
             try {
                 $material->load(['contract', 'creator', 'brand']);
                 Mail::to($material->creator->email)->send(new \App\Mail\DeliveryMaterialRejected($material));
@@ -1161,9 +1085,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify brand of delivery material approval/rejection action
-     */
+    
     public static function notifyBrandOfDeliveryMaterialAction($material, $action): void
     {
         try {
@@ -1192,7 +1114,7 @@ class NotificationService
 
             self::sendSocketNotification($material->brand_id, $notification);
 
-            // Send email notification to brand
+            
             try {
                 $material->load(['contract', 'creator', 'brand']);
                 if ($action === 'approved') {
@@ -1218,9 +1140,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify creator of milestone approval
-     */
+    
     public static function notifyCreatorOfMilestoneApproval($milestone): void
     {
         try {
@@ -1245,7 +1165,7 @@ class NotificationService
 
             self::sendSocketNotification($milestone->contract->creator_id, $notification);
 
-            // Send email notification
+            
             try {
                 Mail::to($milestone->contract->creator->email)->send(new \App\Mail\MilestoneApproved($milestone));
             } catch (\Exception $emailError) {
@@ -1264,9 +1184,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify creator of milestone rejection
-     */
+    
     public static function notifyCreatorOfMilestoneRejection($milestone): void
     {
         try {
@@ -1291,7 +1209,7 @@ class NotificationService
 
             self::sendSocketNotification($milestone->contract->creator_id, $notification);
 
-            // Send email notification
+            
             try {
                 Mail::to($milestone->contract->creator->email)->send(new \App\Mail\MilestoneRejected($milestone));
             } catch (\Exception $emailError) {
@@ -1310,9 +1228,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify creator of milestone delay warning
-     */
+    
     public static function notifyCreatorOfMilestoneDelay($milestone): void
     {
         try {
@@ -1338,7 +1254,7 @@ class NotificationService
 
             self::sendSocketNotification($milestone->contract->creator_id, $notification);
 
-            // Send email notification
+            
             try {
                 Mail::to($milestone->contract->creator->email)->send(new \App\Mail\MilestoneDelayWarning($milestone));
             } catch (\Exception $emailError) {
@@ -1357,9 +1273,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify user about payment completed
-     */
+    
     public static function notifyUserOfPaymentCompleted($jobPayment): void
     {
         try {
@@ -1379,7 +1293,7 @@ class NotificationService
                 'is_read' => false,
             ]);
             
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($jobPayment->creator_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of payment completed', [
@@ -1389,9 +1303,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify user about payment failed
-     */
+    
     public static function notifyUserOfPaymentFailed($jobPayment, string $reason = null): void
     {
         try {
@@ -1410,7 +1322,7 @@ class NotificationService
                 'is_read' => false,
             ]);
             
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($jobPayment->creator_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of payment failed', [
@@ -1420,9 +1332,7 @@ class NotificationService
         }
     }
 
-    /**
-     * Notify creator about proposal approval
-     */
+    
     public static function notifyCreatorOfProposalApproval(CampaignApplication $application): void
     {
         try {
@@ -1446,10 +1356,10 @@ class NotificationService
                 'read_at' => null,
             ]);
 
-            // Send real-time notification via Socket.IO
+            
             self::sendSocketNotification($application->creator_id, $notification);
 
-            // Send email notification
+            
             try {
                 Mail::to($application->creator->email)->send(new \App\Mail\ProposalApproved($application));
             } catch (\Exception $emailError) {

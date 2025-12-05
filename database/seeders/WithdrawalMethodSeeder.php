@@ -8,9 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 class WithdrawalMethodSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
+    
     public function run(): void
     {
         $methods = [
@@ -23,8 +21,8 @@ class WithdrawalMethodSeeder extends Seeder
                 'processing_time' => '1-2 dias úteis',
                 'fee' => 0.00,
                 'is_active' => true,
-                'required_fields' => json_encode([]), // No additional fields needed since bank account is already registered
-                'field_config' => json_encode([]), // No additional configuration needed
+                'required_fields' => json_encode([]), 
+                'field_config' => json_encode([]), 
                 'sort_order' => 1,
             ],
             [

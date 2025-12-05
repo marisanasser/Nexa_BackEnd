@@ -8,12 +8,10 @@ use Illuminate\Support\Facades\DB;
 
 class SubscriptionPlanSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
+    
     public function run(): void
     {
-        // Clear existing subscription plans
+        
         DB::table('subscription_plans')->truncate();
         $plans = [
             [

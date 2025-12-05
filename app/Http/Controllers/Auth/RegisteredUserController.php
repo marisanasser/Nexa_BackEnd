@@ -19,14 +19,10 @@ use Illuminate\Validation\Rule;
 
 class RegisteredUserController extends Controller
 {
-    /**
-     * Handle an incoming registration request.
-     *
-     * @throws \Illuminate\Validation\ValidationException
-     */
+    
     public function store(Request $request)
     {
-        // Debug: Log all request data
+        
         Log::info('Registration request received', [
             'content_type' => $request->header('Content-Type'),
             'has_files' => !empty($request->allFiles()),
@@ -37,7 +33,7 @@ class RegisteredUserController extends Controller
             'all_data' => $request->all(),
         ]);
 
-        // Check if email exists in soft-deleted users before validation
+        
         $softDeletedUser = User::withTrashed()
             ->where('email', strtolower(trim($request->email)))
             ->whereNotNull('deleted_at')
@@ -102,7 +98,7 @@ class RegisteredUserController extends Controller
                 'nullable', 
                 'image', 
                 'mimes:jpeg,png,jpg,gif,webp',
-                'max:2048', // 2MB max file size
+                'max:2048', 
                 'dimensions:min_width=100,min_height=100,max_width=1024,max_height=1024'
             ],
             'bio' => [
@@ -136,7 +132,7 @@ class RegisteredUserController extends Controller
                 'max:10',
                 Rule::in(['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'zh', 'ja', 'ko', 'ar'])
             ],
-            // has_premium is intentionally not accepted from client for security reasons
+            
             'isStudent' => [
                 'nullable',
                 'boolean'
@@ -169,12 +165,12 @@ class RegisteredUserController extends Controller
             'has_premium.boolean' => 'O status premium deve ser verdadeiro ou falso.',
         ]);
 
-        // Additional custom validation logic
+        
         $this->validateCustomRules($request);
         
         Log::info('Validation passed successfully');
 
-        // Handle avatar upload
+        
         $avatarUrl = null;
         if ($request->hasFile('avatar_url')) {
             Log::info('Avatar file detected', [
@@ -196,10 +192,10 @@ class RegisteredUserController extends Controller
             'birth_date' => $request->birth_date ?? null,
         ]);
         
-        // Determine if user is a student
+        
         $isStudent = $request->isStudent ?? false;
         
-        // Set free trial only for students (1 year), creators and brands get no free trial
+        
         $freeTrialExpiresAt = $isStudent ? now()->addYear() : null;
         
         $user = User::create([
@@ -211,30 +207,30 @@ class RegisteredUserController extends Controller
             'avatar_url' => $avatarUrl,
             'bio' => $request->bio ? trim($request->bio) : null,
             'company_name' => $request->company_name ? trim($request->company_name) : null,
-            'student_verified' => false, // Will be set to true after verification
+            'student_verified' => false, 
             'student_expires_at' => null,
             'gender' => $request->gender ?? 'other',
             'birth_date' => $request->birth_date ?? null,
             'state' => $request->state ? trim($request->state) : null,
             'language' => 'en',
-            // Never trust client input for premium status at registration
+            
             'has_premium' => false,
             'premium_expires_at' => null,
             'free_trial_expires_at' => $freeTrialExpiresAt,
-            'email_verified_at' => now(), // Automatically mark email as verified
+            'email_verified_at' => now(), 
         ]);
         
         Log::info('User created successfully', ['user_id' => $user->id]);
 
-        // Notify admin of new user registration
+        
         \App\Services\NotificationService::notifyAdminOfNewRegistration($user);
         
-        // Generate token for immediate login
+        
         $token = $user->createToken('auth_token')->plainTextToken;
 
         $frontend = config('app.frontend_url', env('APP_FRONTEND_URL', 'http://localhost:5000'));
         $link = "{$frontend}/{$user->role}?token={$token}";
-        // Send email (queued if you prefer)
+        
         try {
             Mail::to($user->email)->send(new SignupMail($user, $link));
         } catch (\Exception $e) {
@@ -269,7 +265,7 @@ class RegisteredUserController extends Controller
             ]
         ], 201);
     }
-    //AWS Send Email
+    
      public function magicLogin(Request $request)
     {
         $tokenParam = $request->query('token');
@@ -283,11 +279,11 @@ class RegisteredUserController extends Controller
         if ($record->used) return response()->json(['error' => 'Token already used'], 400);
         if ($record->expires_at->isPast()) return response()->json(['error' => 'Token expired'], 400);
 
-        // mark used
+        
         $record->update(['used' => true]);
 
         $user = $record->user;
-        // return token for frontend auth - example using Sanctum personal token
+        
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
@@ -296,21 +292,19 @@ class RegisteredUserController extends Controller
             'user' => $user
         ]);
     }
-    /**
-     * Upload avatar image and return the URL
-     */
+    
     private function uploadAvatar($file): string
     {
         try {
-            // Generate a unique filename
+            
             $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
             Log::info('Generated filename: ' . $filename);
             
-            // Store the file in the public/avatars directory
+            
             $path = $file->storeAs('avatars', $filename, 'public');
             Log::info('File stored at path: ' . $path);
             
-            // Return the full URL to the uploaded file
+            
             $url = Storage::url($path);
             Log::info('Storage URL: ' . $url);
             
@@ -321,12 +315,10 @@ class RegisteredUserController extends Controller
         }
     }
 
-    /**
-     * Custom validation rules
-     */
+    
     private function validateCustomRules(Request $request): void    
     {
-        // Validate email domain if needed
+        
         if ($request->email) {
             $domain = substr(strrchr($request->email, "@"), 1);
             $disallowedDomains = ['tempmail.com', '10minutemail.com', 'guerrillamail.com'];
@@ -338,7 +330,7 @@ class RegisteredUserController extends Controller
             }
         }
 
-        // Validate password strength
+        
         if ($request->password) {
             $password = $request->password;
             $errors = [];
@@ -363,7 +355,7 @@ class RegisteredUserController extends Controller
             }
         }
 
-        // Validate phone number format
+        
         if ($request->whatsapp) {
             $phone = $this->formatPhoneNumber($request->whatsapp);
             if (strlen($phone) < 10 || strlen($phone) > 15) {
@@ -373,7 +365,7 @@ class RegisteredUserController extends Controller
             }
         }
 
-        // Validate bio content
+        
         if ($request->bio) {
             $bio = $request->bio;
             $forbiddenWords = ['spam', 'advertisement', 'promote'];
@@ -388,15 +380,13 @@ class RegisteredUserController extends Controller
         }
     }
 
-    /**
-     * Format phone number to standard format
-     */
+    
     private function formatPhoneNumber(string $phone): string
     {
-        // Remove all non-digit characters except +
+        
         $phone = preg_replace('/[^\d+]/', '', $phone);
         
-        // Ensure it starts with +
+        
         if (!str_starts_with($phone, '+')) {
             $phone = '+' . $phone;
         }

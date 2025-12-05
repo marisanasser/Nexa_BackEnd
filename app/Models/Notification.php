@@ -26,13 +26,13 @@ class Notification extends Model
         'read_at' => 'datetime',
     ];
 
-    // Relationships
+    
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    // Scopes
+    
     public function scopeUnread($query)
     {
         return $query->where('is_read', false);
@@ -53,7 +53,7 @@ class Notification extends Model
         return $query->where('user_id', $userId);
     }
 
-    // Methods
+    
     public function markAsRead(): bool
     {
         return $this->update([
@@ -70,7 +70,7 @@ class Notification extends Model
         ]);
     }
 
-    // Static methods for creating notifications
+    
     public static function createLoginDetected($userId, $loginData = []): self
     {
         return self::create([
@@ -298,7 +298,6 @@ class Notification extends Model
             "data" => $contractData,
         ]);
     }
-
 
     public static function createPaymentAvailable($userId, $paymentData = []): self
     {

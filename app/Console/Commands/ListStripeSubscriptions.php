@@ -22,7 +22,7 @@ class ListStripeSubscriptions extends Command
         
         try {
             if ($email) {
-                // Find customer by email
+                
                 $customers = Customer::all([
                     'email' => $email,
                     'limit' => 10,
@@ -38,7 +38,7 @@ class ListStripeSubscriptions extends Command
                 foreach ($customers->data as $customer) {
                     $this->info("\nCustomer: {$customer->id} ({$customer->email})");
                     
-                    // Get subscriptions for this customer
+                    
                     $subscriptions = StripeSubscription::all([
                         'customer' => $customer->id,
                         'limit' => $limit,
@@ -55,7 +55,7 @@ class ListStripeSubscriptions extends Command
                         $this->line("    Created: " . date('Y-m-d H:i:s', $sub->created));
                         $this->line("    Current period: " . date('Y-m-d', $sub->current_period_start) . " to " . date('Y-m-d', $sub->current_period_end));
                         
-                        // Check if exists in local DB
+                        
                         $localSub = \App\Models\Subscription::where('stripe_subscription_id', $sub->id)->first();
                         if ($localSub) {
                             $this->info("    ✅ Exists in local DB (ID: {$localSub->id})");
@@ -65,7 +65,7 @@ class ListStripeSubscriptions extends Command
                     }
                 }
             } else {
-                // List recent subscriptions
+                
                 $subscriptions = StripeSubscription::all([
                     'limit' => $limit,
                     'status' => 'all',
@@ -80,14 +80,14 @@ class ListStripeSubscriptions extends Command
                     $this->line("  Status: {$sub->status}");
                     $this->line("  Created: " . date('Y-m-d H:i:s', $sub->created));
                     
-                    // Check if exists in local DB
+                    
                     $localSub = \App\Models\Subscription::where('stripe_subscription_id', $sub->id)->first();
                     if ($localSub) {
                         $this->info("  ✅ Exists in local DB (ID: {$localSub->id}, User: {$localSub->user_id})");
                     } else {
                         $this->warn("  ❌ NOT in local DB");
                         
-                        // Try to find user by customer email
+                        
                         $user = User::where('email', $customer->email)->first();
                         if ($user) {
                             $this->info("  User found: ID {$user->id} ({$user->email})");
@@ -103,6 +103,4 @@ class ListStripeSubscriptions extends Command
         }
     }
 }
-
-
 

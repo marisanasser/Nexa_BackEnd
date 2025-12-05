@@ -8,23 +8,13 @@ use Exception;
 
 class CheckSESStatus extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
+    
     protected $signature = 'ses:status {email?}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    
     protected $description = 'Check verification status of emails in AWS SES';
 
-    /**
-     * Execute the console command.
-     */
+    
     public function handle()
     {
         $email = $this->argument('email');
@@ -59,9 +49,7 @@ class CheckSESStatus extends Command
         return 0;
     }
 
-    /**
-     * Check status of a single email
-     */
+    
     private function checkSingleEmail(SesClient $ses, string $email)
     {
         $this->info("Checking status for: {$email}");
@@ -110,9 +98,7 @@ class CheckSESStatus extends Command
         }
     }
 
-    /**
-     * Check status of all emails
-     */
+    
     private function checkAllEmails(SesClient $ses)
     {
         $this->info('Checking all email identities in SES...');
@@ -139,9 +125,7 @@ class CheckSESStatus extends Command
         }
     }
 
-    /**
-     * Check if AWS SES is properly configured
-     */
+    
     private function isSESConfigured(): bool
     {
         return !empty(env('AWS_ACCESS_KEY_ID')) && 

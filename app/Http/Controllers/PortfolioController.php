@@ -30,15 +30,13 @@ class PortfolioController extends Controller
         'video/x-flv',
         'video/3gpp',
         'video/x-ms-wmv',
-        'application/octet-stream' // Fallback for files where MIME type detection fails
+        'application/octet-stream' 
     ];
     
-    const MAX_FILE_SIZE =  2 * 1024 * 1024 * 1024; // 2GB for large video files 
-    const MAX_TOTAL_FILES = 200; // 200 files
+    const MAX_FILE_SIZE =  2 * 1024 * 1024 * 1024; 
+    const MAX_TOTAL_FILES = 200; 
 
-    /**
-     * Get portfolio data
-     */
+    
     public function show(): JsonResponse
     {
         $user = Auth::user();
@@ -50,7 +48,7 @@ class PortfolioController extends Controller
             ], 403);
         }
 
-        // Students can have portfolios as well
+        
 
         $portfolio = $user->portfolio()->with(['items' => function ($query) {
             $query->orderBy('order');
@@ -113,9 +111,7 @@ class PortfolioController extends Controller
         ]);
     }
 
-    /**
-     * Update portfolio profile
-     */
+    
     public function updateProfile(Request $request): JsonResponse
     {
         $user = Auth::user();
@@ -127,9 +123,9 @@ class PortfolioController extends Controller
             ], 403);
         }
 
-        // Students can update portfolios
+        
 
-        // Log all incoming data for debugging
+        
         Log::info('Portfolio update request received', [
             'user_id' => $user->id,
             'all_data' => $request->all(),
@@ -146,15 +142,15 @@ class PortfolioController extends Controller
         $validator = Validator::make($request->all(), [
             'title' => 'nullable|string|max:255',
             'bio' => 'nullable|string|max:500',
-            'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg|max:5120', // 5MB
+            'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg|max:5120', 
             'project_links' => 'nullable|string',
         ]);
 
-        // Custom validation for project_links
+        
         if ($request->has('project_links') && !empty($request->input('project_links'))) {
             $projectLinks = $request->input('project_links');
             
-            // Try to decode JSON
+            
             if (is_string($projectLinks)) {
                 $decoded = json_decode($projectLinks, true);
                 if (json_last_error() !== JSON_ERROR_NONE) {
@@ -169,7 +165,7 @@ class PortfolioController extends Controller
             if (is_array($projectLinks)) {
                 foreach ($projectLinks as $index => $link) {
                     if (is_array($link)) {
-                        // New object structure
+                        
                         $url = trim($link['url'] ?? '');
                         if (!empty($url) && !filter_var($url, FILTER_VALIDATE_URL)) {
                             return response()->json([
@@ -179,7 +175,7 @@ class PortfolioController extends Controller
                             ], 422);
                         }
                     } else {
-                        // Legacy string structure
+                        
                         $url = trim($link);
                         if (!empty($url) && !filter_var($url, FILTER_VALIDATE_URL)) {
                             return response()->json([
@@ -208,7 +204,7 @@ class PortfolioController extends Controller
         }
 
         try {
-            // CRITICAL DEBUG: Check user authentication and portfolio ownership
+            
             Log::info('CRITICAL DEBUG - User and Portfolio Check', [
                 'authenticated_user_id' => $user->id,
                 'authenticated_user_email' => $user->email,
@@ -216,7 +212,7 @@ class PortfolioController extends Controller
                 'user_role' => $user->role,
             ]);
             
-            // Check if user already has a portfolio
+            
             $existingPortfolio = $user->portfolio;
             if ($existingPortfolio) {
                 Log::info('CRITICAL DEBUG - Existing Portfolio Found', [
@@ -233,7 +229,7 @@ class PortfolioController extends Controller
             
             $portfolio = $user->portfolio()->firstOrCreate();
             
-            // CRITICAL DEBUG: Verify portfolio ownership after creation/retrieval
+            
             Log::info('CRITICAL DEBUG - Portfolio After firstOrCreate', [
                 'portfolio_id' => $portfolio->id,
                 'portfolio_user_id' => $portfolio->user_id,
@@ -243,7 +239,7 @@ class PortfolioController extends Controller
                 'current_bio' => $portfolio->bio,
             ]);
             
-            // Get raw input data
+            
             $rawTitle = $request->input('title');
             $rawBio = $request->input('bio');
 
@@ -255,16 +251,16 @@ class PortfolioController extends Controller
                 'bio_type' => gettype($rawBio),
             ]);
 
-            // Use the raw input data directly instead of request->only()
+            
             $data = [];
 
-            // Always update fields that are present in the request, even if empty
-            // This allows users to clear their title/bio by sending empty strings
+            
+            
             if ($request->has('title')) {
-                $data['title'] = $rawTitle ?: null; // Convert empty string to null
+                $data['title'] = $rawTitle ?: null; 
             }
             if ($request->has('bio')) {
-                $data['bio'] = $rawBio ?: null; // Convert empty string to null
+                $data['bio'] = $rawBio ?: null; 
             }
             
             Log::info('Updating portfolio profile', [
@@ -279,13 +275,13 @@ class PortfolioController extends Controller
                 'all_request_data' => $request->all()
             ]);
 
-            // Handle project_links (preserve se ausente ou string vazia)
+            
             if ($request->has('project_links')) {
                 $projectLinksRaw = $request->input('project_links');
 
-                // Se vier string vazia, não atualiza (preserva valor atual)
+                
                 if (is_string($projectLinksRaw) && trim($projectLinksRaw) === '') {
-                    // skip
+                    
                 } else {
                     $projectLinks = $projectLinksRaw;
                     if (is_string($projectLinks)) {
@@ -305,7 +301,7 @@ class PortfolioController extends Controller
                         $validLinks = [];
                         foreach ($projectLinks as $link) {
                             if (is_array($link)) {
-                                // New object structure
+                                
                                 if (!empty(trim($link['title'] ?? '')) && !empty(trim($link['url'] ?? ''))) {
                                     $validLinks[] = [
                                         'title' => trim($link['title']),
@@ -313,7 +309,7 @@ class PortfolioController extends Controller
                                     ];
                                 }
                             } else {
-                                // Legacy string structure - convert to object
+                                
                                 if (!empty(trim($link))) {
                                     $validLinks[] = [
                                         'title' => 'Link',
@@ -322,17 +318,17 @@ class PortfolioController extends Controller
                                 }
                             }
                         }
-                        // Só atualiza se houver algo válido; se vier array vazio, interpreta como limpar explicitamente
+                        
                         $data['project_links'] = count($validLinks) > 0 ? $validLinks : [];
                     }
                 }
             } else {
-                // Se campo não veio, preserva valor existente
+                
             }
 
-            // Handle profile picture upload
+            
             if ($request->hasFile('profile_picture')) {
-                // Delete old profile picture
+                
                 if ($portfolio->profile_picture) {
                     Storage::disk('public')->delete($portfolio->profile_picture);
                 }
@@ -351,7 +347,7 @@ class PortfolioController extends Controller
                 'current_bio' => $portfolio->bio
             ]);
             
-            // CRITICAL SAFETY CHECK: Ensure portfolio belongs to authenticated user
+            
             if ($portfolio->user_id !== $user->id) {
                 Log::error('CRITICAL SECURITY ISSUE - Portfolio ownership mismatch', [
                     'portfolio_user_id' => $portfolio->user_id,
@@ -365,7 +361,7 @@ class PortfolioController extends Controller
                 ], 403);
             }
             
-            // Only update if there's data to update
+            
             if (!empty($data)) {
                 Log::info('CRITICAL DEBUG - About to update portfolio', [
                     'portfolio_id' => $portfolio->id,
@@ -388,7 +384,7 @@ class PortfolioController extends Controller
                     'raw_title' => $rawTitle,
                     'raw_bio' => $rawBio
                 ]);
-                $updateResult = true; // No update needed
+                $updateResult = true; 
             }
             
             Log::info('Portfolio update result', [
@@ -397,10 +393,10 @@ class PortfolioController extends Controller
                 'update_result' => $updateResult
             ]);
             
-            // Refresh the portfolio to get updated data
+            
             $portfolio->refresh();
             
-            // CRITICAL VERIFICATION: Check if data was actually saved
+            
             Log::info('CRITICAL VERIFICATION - Portfolio data after update', [
                 'user_id' => $user->id,
                 'portfolio_id' => $portfolio->id,
@@ -415,7 +411,7 @@ class PortfolioController extends Controller
                 'updated_at' => $portfolio->updated_at,
             ]);
             
-            // If data doesn't match, this is a critical bug
+            
             if ($portfolio->title !== $rawTitle || $portfolio->bio !== $rawBio) {
                 Log::error('CRITICAL BUG - Data mismatch after update', [
                     'expected_title' => $rawTitle,
@@ -460,14 +456,12 @@ class PortfolioController extends Controller
         }
     }
 
-    /**
-     * Test endpoint for debugging portfolio updates
-     */
+    
     public function testUpdate(Request $request): JsonResponse
     {
         $user = Auth::user();
         
-        // Get all possible ways to access the data
+        
         $allData = $request->all();
         $titleInput = $request->input('title');
         $bioInput = $request->input('bio');
@@ -505,9 +499,7 @@ class PortfolioController extends Controller
         ]);
     }
 
-    /**
-     * Test endpoint for debugging file uploads
-     */
+    
     public function testUpload(Request $request): JsonResponse
     {
         Log::info('Test upload request', [
@@ -528,9 +520,7 @@ class PortfolioController extends Controller
         ]);
     }
 
-    /**
-     * Upload portfolio media files
-     */
+    
     public function uploadMedia(Request $request): JsonResponse
     {
         $user = Auth::user();
@@ -543,23 +533,23 @@ class PortfolioController extends Controller
         }
 
         try {
-            // Get uploaded files - handle both 'files' and 'files[]' notation
+            
             $uploadedFiles = $request->file('files');
             
-            // If files is null or empty, check allFiles() for 'files' key
+            
             if (empty($uploadedFiles)) {
                 $allFiles = $request->allFiles();
                 $uploadedFiles = $allFiles['files'] ?? [];
             }
             
-            // Ensure it's always an array
+            
             if ($uploadedFiles && !is_array($uploadedFiles)) {
                 $uploadedFiles = [$uploadedFiles];
             }
             
-            // If still empty, check if files were sent with different notation
+            
             if (empty($uploadedFiles)) {
-                // Try checking for any files in the request
+                
                 $allFiles = $request->allFiles();
                 Log::warning('No files found with standard methods', [
                     'user_id' => $user->id,
@@ -569,7 +559,7 @@ class PortfolioController extends Controller
                 ]);
                 
                 if (!empty($allFiles)) {
-                    // If there are files but not under 'files', log them
+                    
                     foreach ($allFiles as $key => $file) {
                         if (is_array($file)) {
                             $uploadedFiles = array_merge($uploadedFiles ?? [], $file);
@@ -596,7 +586,7 @@ class PortfolioController extends Controller
                             'is_valid' => $file->isValid(),
                         ];
                         
-                        // Only try to get size and MIME type if file is valid and readable
+                        
                         if ($file->isValid()) {
                             try {
                                 $fileInfo['size'] = $file->getSize();
@@ -608,7 +598,7 @@ class PortfolioController extends Controller
                                 $fileInfo['mime'] = $file->getMimeType();
                             } catch (\Exception $e) {
                                 $fileInfo['mime_error'] = $e->getMessage();
-                                // Try to get MIME type from client if available
+                                
                                 if (method_exists($file, 'getClientMimeType')) {
                                     $fileInfo['client_mime'] = $file->getClientMimeType();
                                 }
@@ -626,7 +616,7 @@ class PortfolioController extends Controller
                 }, $uploadedFiles) : []
             ]);
 
-            // Basic validation
+            
             Log::info('Starting file validation checks', [
                 'user_id' => $user->id,
                 'uploaded_files_count' => is_array($uploadedFiles) ? count($uploadedFiles) : 0,
@@ -668,7 +658,7 @@ class PortfolioController extends Controller
             $uploadedItems = [];
 
             foreach ($uploadedFiles as $index => $file) {
-                // Safely get file info for logging
+                
                 $logMimeType = null;
                 $logFileSize = null;
                 $mimeTypeError = null;
@@ -728,7 +718,7 @@ class PortfolioController extends Controller
                     ], 422);
                 }
 
-                // Check file type - with error handling
+                
                 try {
                     $mimeType = $file->getMimeType();
                 } catch (\Exception $e) {
@@ -739,11 +729,11 @@ class PortfolioController extends Controller
                         'original_name' => $file->getClientOriginalName(),
                     ]);
                     
-                    // Try to get MIME type from client if available
+                    
                     $mimeType = null;
                     if (method_exists($file, 'getClientMimeType')) {
                         $clientMimeType = $file->getClientMimeType();
-                        // Only use client MIME type if it's in accepted types
+                        
                         if ($clientMimeType && in_array($clientMimeType, self::ACCEPTED_TYPES)) {
                             $mimeType = $clientMimeType;
                             Log::info('Using client MIME type as fallback', [
@@ -761,7 +751,7 @@ class PortfolioController extends Controller
                         }
                     }
                     
-                    // If client MIME type didn't work, use extension-based detection
+                    
                     if (!$mimeType) {
                         $extension = strtolower(pathinfo($file->getClientOriginalName(), PATHINFO_EXTENSION));
                         $mimeTypeMap = [
@@ -816,7 +806,7 @@ class PortfolioController extends Controller
                     ], 422);
                 }
 
-                // Check file size
+                
                 $fileSize = null;
                 try {
                     $fileSize = $file->getSize();
@@ -853,7 +843,7 @@ class PortfolioController extends Controller
                     ], 422);
                 }
 
-                // Determine media type
+                
                 Log::info('Determining media type', [
                     'user_id' => $user->id,
                     'index' => $index,
@@ -867,7 +857,7 @@ class PortfolioController extends Controller
                 } elseif (str_starts_with($mimeType, 'video/')) {
                     $mediaType = 'video';
                 } else {
-                    // For files with misdetected MIME types, try to determine from file extension
+                    
                     $extension = strtolower(pathinfo($file->getClientOriginalName(), PATHINFO_EXTENSION));
                     $videoExtensions = ['mp4', 'mov', 'avi', 'mpeg', 'mpg', 'wmv', 'webm', 'ogg', 'mkv', 'flv', '3gp'];
                     $mediaType = in_array($extension, $videoExtensions) ? 'video' : 'image';
@@ -886,7 +876,7 @@ class PortfolioController extends Controller
                     'media_type' => $mediaType,
                 ]);
                 
-                // Generate unique filename
+                
                 $originalExtension = $file->getClientOriginalExtension();
                 $filename = time() . '_' . uniqid() . '.' . $originalExtension;
                 
@@ -899,7 +889,7 @@ class PortfolioController extends Controller
                     'filename_length' => strlen($filename),
                 ]);
                 
-                // Check if storage directory exists
+                
                 $storagePath = 'portfolio/' . $user->id;
                 $fullStoragePath = storage_path('app/public/' . $storagePath);
                 $directoryExists = is_dir($fullStoragePath);
@@ -914,7 +904,7 @@ class PortfolioController extends Controller
                     'directory_writable' => $directoryWritable,
                 ]);
                 
-                // Store file
+                
                 try {
                     Log::info('Attempting to store file', [
                         'user_id' => $user->id,
@@ -944,7 +934,7 @@ class PortfolioController extends Controller
                     throw $storageException;
                 }
                 
-                // Prepare data for database insertion
+                
                 $title = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
                 $order = $portfolio->items()->count();
                 
@@ -968,7 +958,7 @@ class PortfolioController extends Controller
                     'title_length' => strlen($title),
                 ]);
                 
-                // Create portfolio item
+                
                 try {
                     $item = $portfolio->items()->create($itemData);
                     
@@ -991,7 +981,7 @@ class PortfolioController extends Controller
                         'item_data' => $itemData,
                     ]);
                     
-                    // Try to clean up stored file if database insert failed
+                    
                     try {
                         if (isset($storedPath) && Storage::disk('public')->exists($storedPath)) {
                             Storage::disk('public')->delete($storedPath);
@@ -1063,9 +1053,7 @@ class PortfolioController extends Controller
         }
     }
 
-    /**
-     * Update portfolio item
-     */
+    
     public function updateItem(Request $request, PortfolioItem $item): JsonResponse
     {
         $user = Auth::user();
@@ -1077,7 +1065,7 @@ class PortfolioController extends Controller
             ], 403);
         }
 
-        // Students can't update portfolio items, return success with no changes
+        
         if ($user->isStudent()) {
             return response()->json([
                 'success' => true,
@@ -1085,7 +1073,7 @@ class PortfolioController extends Controller
             ]);
         }
 
-        // Check if user owns this portfolio item
+        
         if ($item->portfolio->user_id !== $user->id) {
             return response()->json([
                 'success' => false,
@@ -1122,9 +1110,7 @@ class PortfolioController extends Controller
         }
     }
 
-    /**
-     * Delete portfolio item
-     */
+    
     public function deleteItem(PortfolioItem $item): JsonResponse
     {
         $user = Auth::user();
@@ -1138,7 +1124,7 @@ class PortfolioController extends Controller
 
         
 
-        // Check if user owns this portfolio item
+        
         if ($item->portfolio->user_id !== $user->id) {
             return response()->json([
                 'success' => false,
@@ -1147,7 +1133,7 @@ class PortfolioController extends Controller
         }
 
         try {
-            // Delete file from storage
+            
             if ($item->file_path) {
                 Storage::disk('public')->delete($item->file_path);
             }
@@ -1168,9 +1154,7 @@ class PortfolioController extends Controller
         }
     }
 
-    /**
-     * Reorder portfolio items
-     */
+    
     public function reorderItems(Request $request): JsonResponse
     {
         $user = Auth::user();
@@ -1182,7 +1166,7 @@ class PortfolioController extends Controller
             ], 403);
         }
 
-        // Students can't reorder portfolio items, return success with no changes
+        
         if ($user->isStudent()) {
             return response()->json([
                 'success' => true,
@@ -1234,9 +1218,7 @@ class PortfolioController extends Controller
         }
     }
 
-    /**
-     * Get portfolio statistics
-     */
+    
     public function statistics(): JsonResponse
     {
         $user = Auth::user();
@@ -1248,7 +1230,7 @@ class PortfolioController extends Controller
             ], 403);
         }
 
-        // Students don't have portfolio statistics, return empty data
+        
         if ($user->isStudent()) {
             return response()->json([
                 'success' => true,
@@ -1281,13 +1263,11 @@ class PortfolioController extends Controller
         ]);
     }
 
-    /**
-     * Get creator profile for brands (public view)
-     */
+    
     public function getCreatorProfile($creatorId): JsonResponse
     {
         try {
-            // Check if user is authenticated
+            
             $user = Auth::user();
             if (!$user) {
                 return response()->json([
@@ -1296,7 +1276,7 @@ class PortfolioController extends Controller
                 ], 401);
             }
 
-            // Find the creator or student
+            
             $creator = User::find($creatorId);
             if (!$creator || (!$creator->isCreator() && !$creator->isStudent())) {
                 return response()->json([

@@ -12,26 +12,16 @@ use Stripe\Exception\StripeException;
 
 class SetupStripePrices extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
+    
     protected $signature = 'stripe:setup-prices {--force : Force update existing prices}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    
     protected $description = 'Set up Stripe products and prices for subscription plans';
 
-    /**
-     * Execute the console command.
-     */
+    
     public function handle()
     {
-        // Set Stripe API key
+        
         Stripe::setApiKey(config('services.stripe.secret'));
 
         if (empty(config('services.stripe.secret'))) {
@@ -55,7 +45,7 @@ class SetupStripePrices extends Command
 
         foreach ($plans as $plan) {
             try {
-                // Check if plan already has stripe_price_id
+                
                 if ($plan->stripe_price_id && !$this->option('force')) {
                     $this->newLine();
                     $this->warn("Plan '{$plan->name}' already has a Stripe price ID: {$plan->stripe_price_id}");
@@ -64,7 +54,7 @@ class SetupStripePrices extends Command
                     continue;
                 }
 
-                // If force and price exists, delete old price first
+                
                 if ($this->option('force') && $plan->stripe_price_id) {
                     try {
                         $oldPrice = Price::retrieve($plan->stripe_price_id);
@@ -77,13 +67,13 @@ class SetupStripePrices extends Command
                     }
                 }
 
-                // Create or retrieve product
+                
                 $product = $this->createOrRetrieveProduct($plan);
                 
-                // Create price
+                
                 $price = $this->createPrice($plan, $product->id);
 
-                // Update plan with Stripe IDs
+                
                 $plan->update([
                     'stripe_product_id' => $product->id,
                     'stripe_price_id' => $price->id,
@@ -117,21 +107,19 @@ class SetupStripePrices extends Command
         return 0;
     }
 
-    /**
-     * Create or retrieve a Stripe product
-     */
+    
     private function createOrRetrieveProduct(SubscriptionPlan $plan): Product
     {
-        // Check if product already exists
+        
         if ($plan->stripe_product_id) {
             try {
                 return Product::retrieve($plan->stripe_product_id);
             } catch (\Exception $e) {
-                // Product doesn't exist, create new one
+                
             }
         }
 
-        // Create new product
+        
         return Product::create([
             'name' => $plan->name,
             'description' => $plan->description,
@@ -142,25 +130,21 @@ class SetupStripePrices extends Command
         ]);
     }
 
-    /**
-     * Create a Stripe price for the plan
-     * All plans are now monthly recurring (interval_count: 1)
-     * The duration_months is used to set cancel_at when creating the subscription
-     */
+    
     private function createPrice(SubscriptionPlan $plan, string $productId): Price
     {
-        // Convert price to cents (monthly price)
+        
         $priceInCents = (int) round($plan->price * 100);
 
-        // All subscription plans are now monthly recurring
-        // The total duration (duration_months) will be handled via cancel_at when creating subscriptions
+        
+        
         return Price::create([
             'product' => $productId,
             'unit_amount' => $priceInCents,
-            'currency' => 'brl', // Brazilian Real
+            'currency' => 'brl', 
             'recurring' => [
                 'interval' => 'month',
-                'interval_count' => 1, // Always monthly, regardless of plan duration
+                'interval_count' => 1, 
             ],
             'metadata' => [
                 'plan_id' => $plan->id,

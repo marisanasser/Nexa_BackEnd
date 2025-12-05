@@ -29,7 +29,7 @@ class DirectMessage extends Model
         'read_at' => 'datetime',
     ];
 
-    // Relationships
+    
     public function directChatRoom(): BelongsTo
     {
         return $this->belongsTo(DirectChatRoom::class);
@@ -40,7 +40,7 @@ class DirectMessage extends Model
         return $this->belongsTo(User::class, 'sender_id');
     }
 
-    // Accessors
+    
     public function getFileUrlAttribute(): ?string
     {
         if ($this->file_path) {
@@ -65,7 +65,7 @@ class DirectMessage extends Model
         return round($bytes, 2) . ' ' . $units[$i];
     }
 
-    // Methods
+    
     public function isFile(): bool
     {
         return in_array($this->message_type, ['file', 'image']);
@@ -89,7 +89,7 @@ class DirectMessage extends Model
     protected static function booted()
     {
         static::created(function ($message) {
-            // Notify recipient about new direct message
+            
             NotificationService::notifyUserOfNewDirectMessage($message);
         });
     }

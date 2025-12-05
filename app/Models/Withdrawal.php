@@ -34,13 +34,13 @@ class Withdrawal extends Model
         'processed_at' => 'datetime',
     ];
 
-    // Relationships
+    
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'creator_id');
     }
 
-    // Scopes
+    
     public function scopePending($query)
     {
         return $query->where('status', 'pending');
@@ -71,7 +71,7 @@ class Withdrawal extends Model
         return $query->where('created_at', '>=', now()->subDays($days));
     }
 
-    // Methods
+    
     public function isPending(): bool
     {
         return $this->status === 'pending';
@@ -118,7 +118,7 @@ class Withdrawal extends Model
         ]);
 
         try {
-            // Process withdrawal through payment gateway
+            
             $this->processWithdrawal();
             
             $this->update([
@@ -126,13 +126,13 @@ class Withdrawal extends Model
                 'processed_at' => now(),
             ]);
 
-            // Update creator balance
+            
             $this->updateCreatorBalance();
 
-            // Create transaction record for successful withdrawal
+            
             $this->createTransactionRecord();
 
-            // Notify creator about successful withdrawal
+            
             self::createWithdrawalNotification('completed');
 
             return true;
@@ -142,10 +142,10 @@ class Withdrawal extends Model
                 'failure_reason' => $e->getMessage(),
             ]);
 
-            // Refund the amount back to creator's available balance
+            
             $this->refundToCreator();
 
-            // Notify about withdrawal failure
+            
             self::createWithdrawalNotification('failed', $e->getMessage());
 
             return false;
@@ -156,7 +156,7 @@ class Withdrawal extends Model
     {
         try {
             if ($status === 'completed') {
-                // Use the new static method for completed withdrawals with detailed information
+                
                 $withdrawalMethod = WithdrawalMethod::findByCode($this->withdrawal_method);
                 $methodName = $withdrawalMethod ? $withdrawalMethod->name : $this->withdrawal_method_label;
                 
@@ -168,7 +168,7 @@ class Withdrawal extends Model
                     'processed_at' => $this->processed_at ? $this->processed_at->toDateTimeString() : null,
                 ];
                 
-                // Add withdrawal details if available
+                
                 if ($this->withdrawal_details) {
                     $withdrawalData = array_merge($withdrawalData, $this->withdrawal_details);
                 }
@@ -181,7 +181,7 @@ class Withdrawal extends Model
                     $withdrawalData
                 );
             } else {
-                // For failed/cancelled withdrawals, use the original format
+                
                 $notification = Notification::create([
                     'user_id' => $this->creator_id,
                     'type' => 'withdrawal_' . $status,
@@ -200,7 +200,7 @@ class Withdrawal extends Model
                 ]);
             }
 
-            // Send real-time notification
+            
             NotificationService::sendSocketNotification($this->creator_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to create withdrawal notification', [
@@ -213,7 +213,7 @@ class Withdrawal extends Model
 
     private function processWithdrawal(): void
     {
-        // Handle different withdrawal methods
+        
         switch ($this->withdrawal_method) {
             case 'stripe_connect':
             case 'stripe_connect_bank_account':
@@ -233,32 +233,29 @@ class Withdrawal extends Model
         }
     }
 
-    /**
-     * Find a source charge for the creator to use as source_transaction in Stripe Transfer
-     * This is required for transfers involving Brazil
-     */
+    
     private function findSourceChargeForCreator(int $creatorId): ?string
     {
-        // Strategy 1: Try to find a charge from JobPayment records
-        // JobPayments are created when contracts are completed and payments are made
-        // Note: transaction_id can be a string (like "TXN_...") or a numeric ID
+        
+        
+        
         $jobPayment = \App\Models\JobPayment::where('creator_id', $creatorId)
             ->whereNotNull('transaction_id')
             ->orderBy('created_at', 'desc')
             ->get()
             ->first(function ($jobPayment) {
-                // Only try to load transaction if transaction_id is numeric
+                
                 return is_numeric($jobPayment->transaction_id);
             });
 
         if ($jobPayment && is_numeric($jobPayment->transaction_id)) {
-            // Load the transaction relationship only if transaction_id is numeric
+            
             $jobPayment->load('transaction');
             
             if ($jobPayment->transaction) {
                 $transaction = $jobPayment->transaction;
                 
-                // Check if transaction has a stripe_charge_id
+                
                 if ($transaction->stripe_charge_id) {
                     Log::info('Found source charge from JobPayment transaction', [
                         'withdrawal_id' => $this->id,
@@ -272,8 +269,8 @@ class Withdrawal extends Model
             }
         }
 
-        // Strategy 2: Try to find a charge from Contract -> Transaction relationship
-        // Check if contract_id column exists in transactions table
+        
+        
         if (Schema::hasColumn('transactions', 'contract_id')) {
             $contractTransaction = \App\Models\Transaction::whereHas('contract', function ($query) use ($creatorId) {
                 $query->where('creator_id', $creatorId);
@@ -293,7 +290,7 @@ class Withdrawal extends Model
             }
         }
 
-        // Strategy 3: Try to find any transaction for this creator with a stripe_charge_id
+        
         $anyTransaction = \App\Models\Transaction::where('user_id', $creatorId)
             ->whereNotNull('stripe_charge_id')
             ->orderBy('created_at', 'desc')
@@ -309,32 +306,32 @@ class Withdrawal extends Model
             return $anyTransaction->stripe_charge_id;
         }
 
-        // Strategy 4: Development/Test fallback - Try to get a charge from Stripe API with available balance
-        // This is useful when the local database doesn't have transaction records
+        
+        
         if (app()->environment(['local', 'testing'])) {
             try {
                 $stripeSecret = config('services.stripe.secret');
                 if ($stripeSecret) {
                     \Stripe\Stripe::setApiKey($stripeSecret);
                     
-                    // Calculate required amount (withdrawal amount - fixed fee, in cents)
+                    
                     $requiredAmount = (int) round(($this->amount - 5.00) * 100);
                     
-                    // Get recent charges from the platform account
+                    
                     $charges = \Stripe\Charge::all([
-                        'limit' => 10, // Fetch more charges to find one with enough balance
+                        'limit' => 10, 
                         'expand' => ['data.balance_transaction'],
                     ]);
                     
-                    // Find a charge with enough available balance
+                    
                     foreach ($charges->data as $charge) {
                         if ($charge->amount < $requiredAmount) {
-                            continue; // Charge doesn't have enough value
+                            continue; 
                         }
                         
-                        // Check how much of this charge has been used in transfers
+                        
                         $transfers = \Stripe\Transfer::all([
-                            'limit' => 100, // Fetch enough transfers to check against this charge
+                            'limit' => 100, 
                         ]);
                         
                         $usedAmount = 0;
@@ -360,7 +357,7 @@ class Withdrawal extends Model
                         }
                     }
                     
-                    // If no charge with enough balance found, log warning
+                    
                     Log::warning('No charge with sufficient available balance found', [
                         'withdrawal_id' => $this->id,
                         'creator_id' => $creatorId,
@@ -386,13 +383,13 @@ class Withdrawal extends Model
 
     private function processStripeConnectWithdrawal(): void
     {
-        // Ensure creator has a connected account
+        
         $creator = User::find($this->creator_id);
         if (!$creator || empty($creator->stripe_account_id)) {
             throw new \Exception('Conta Stripe Connect não configurada para este criador.');
         }
 
-        // Ensure Stripe is configured
+        
         $stripeSecret = config('services.stripe.secret');
         if (empty($stripeSecret)) {
             throw new \Exception('Stripe não configurado.');
@@ -400,14 +397,14 @@ class Withdrawal extends Model
 
         \Stripe\Stripe::setApiKey($stripeSecret);
 
-        // Compute net amount = requested amount - fixed fee (R$5)
+        
         $netAmount = max(0, ($this->amount - 5.00));
         $amountInCents = (int) round($netAmount * 100);
         if ($amountInCents <= 0) {
             throw new \Exception('Valor líquido inválido para transferência.');
         }
 
-        // Find source charge for this creator (required for Brazil transfers)
+        
         $sourceChargeId = $this->findSourceChargeForCreator($this->creator_id);
         
         if (!$sourceChargeId) {
@@ -415,16 +412,16 @@ class Withdrawal extends Model
                 'withdrawal_id' => $this->id,
                 'creator_id' => $this->creator_id,
             ]);
-            // For Brazil, source_transaction is mandatory, so we must fail
+            
             throw new \Exception('Não foi possível encontrar uma transação de origem válida para o saque. Entre em contato com o suporte.');
         }
 
-        // Prepare transfer parameters
+        
         $transferParams = [
             'amount' => $amountInCents,
             'currency' => 'brl',
             'destination' => $creator->stripe_account_id,
-            'source_transaction' => $sourceChargeId, // Required for Brazil transfers
+            'source_transaction' => $sourceChargeId, 
             'metadata' => [
                 'withdrawal_id' => (string) $this->id,
                 'creator_id' => (string) $this->creator_id,
@@ -433,10 +430,10 @@ class Withdrawal extends Model
             ],
         ];
 
-        // Create transfer to connected account
+        
         $transfer = \Stripe\Transfer::create($transferParams);
 
-        // Store transfer id in transaction_id (generic field)
+        
         $this->update([
             'transaction_id' => $transfer->id,
         ]);
@@ -444,8 +441,8 @@ class Withdrawal extends Model
 
     private function processPagarMeWithdrawal(): void
     {
-        // Process Pagar.me withdrawal
-        sleep(2); // Simulate processing time
+        
+        sleep(2); 
         
         $this->update([
             'transaction_id' => 'PAGARME_' . time() . '_' . $this->id,
@@ -454,8 +451,8 @@ class Withdrawal extends Model
 
     private function processBankTransfer(): void
     {
-        // Process traditional bank transfer
-        sleep(3); // Simulate longer processing time
+        
+        sleep(3); 
         
         $this->update([
             'transaction_id' => 'BANK_' . time() . '_' . $this->id,
@@ -464,8 +461,8 @@ class Withdrawal extends Model
 
     private function processPixWithdrawal(): void
     {
-        // Process PIX withdrawal
-        sleep(1); // Simulate fast PIX processing
+        
+        sleep(1); 
         
         $this->update([
             'transaction_id' => 'PIX_' . time() . '_' . $this->id,
@@ -488,14 +485,12 @@ class Withdrawal extends Model
         }
     }
 
-    /**
-     * Create transaction record for completed withdrawal
-     */
+    
     private function createTransactionRecord(): void
     {
         try {
-            // Check if transaction already exists for this withdrawal
-            // Check both payment_data and metadata for withdrawal_id
+            
+            
             $existingTransaction = Transaction::where('user_id', $this->creator_id)
                 ->where(function($query) {
                     $query->whereJsonContains('payment_data->withdrawal_id', (string)$this->id)
@@ -513,11 +508,11 @@ class Withdrawal extends Model
                 return;
             }
 
-            // Get withdrawal method details
+            
             $withdrawalMethod = WithdrawalMethod::findByCode($this->withdrawal_method);
             $methodName = $withdrawalMethod ? $withdrawalMethod->name : $this->withdrawal_method_label;
 
-            // Prepare payment data
+            
             $paymentData = [
                 'withdrawal_id' => $this->id,
                 'withdrawal_method' => $this->withdrawal_method,
@@ -531,21 +526,21 @@ class Withdrawal extends Model
                 'processed_at' => $this->processed_at ? $this->processed_at->toDateTimeString() : null,
             ];
 
-            // Add withdrawal details if available
+            
             if ($this->withdrawal_details) {
                 $paymentData = array_merge($paymentData, $this->withdrawal_details);
             }
 
-            // Determine payment method for transaction record
+            
             $paymentMethod = 'withdrawal';
             $stripePaymentIntentId = null;
             $stripeChargeId = null;
 
             if ($this->withdrawal_method === 'stripe_connect' || $this->withdrawal_method === 'stripe_card') {
                 $paymentMethod = 'stripe_withdrawal';
-                // For Stripe withdrawals, transaction_id might be a transfer ID
+                
                 if ($this->transaction_id && strpos($this->transaction_id, 'tr_') === 0) {
-                    // This is a Stripe transfer ID
+                    
                     $stripePaymentIntentId = $this->transaction_id;
                 }
             } elseif ($this->withdrawal_method === 'pagarme_bank_transfer') {
@@ -556,26 +551,26 @@ class Withdrawal extends Model
                 $paymentMethod = 'bank_transfer_withdrawal';
             }
 
-            // Get bank account details from withdrawal_details if available (for Stripe Connect withdrawals)
+            
             $cardBrand = null;
             $cardLast4 = null;
             $cardHolderName = null;
 
             if ($this->withdrawal_details) {
-                // For Stripe Connect bank account withdrawals, use bank account info
+                
                 if ($this->withdrawal_method === 'stripe_connect_bank_account') {
                     $cardBrand = $this->withdrawal_details['bank_name'] ?? null;
                     $cardLast4 = $this->withdrawal_details['bank_last4'] ?? null;
                     $cardHolderName = $this->withdrawal_details['account_holder_name'] ?? null;
                 } else {
-                    // Fallback to card details for other methods
+                    
                     $cardBrand = $this->withdrawal_details['card_brand'] ?? null;
                     $cardLast4 = $this->withdrawal_details['card_last4'] ?? null;
                     $cardHolderName = $this->withdrawal_details['card_holder_name'] ?? null;
                 }
             }
 
-            // Create transaction record
+            
             $transaction = Transaction::create([
                 'user_id' => $this->creator_id,
                 'stripe_payment_intent_id' => $stripePaymentIntentId,
@@ -606,7 +601,7 @@ class Withdrawal extends Model
             ]);
 
         } catch (\Exception $e) {
-            // Log error but don't fail the withdrawal
+            
             Log::error('Failed to create transaction record for withdrawal', [
                 'withdrawal_id' => $this->id,
                 'creator_id' => $this->creator_id,
@@ -627,10 +622,10 @@ class Withdrawal extends Model
             'failure_reason' => $reason,
         ]);
 
-        // Refund the amount back to creator's available balance
+        
         $this->refundToCreator();
 
-        // Notify creator about cancellation
+        
         self::createWithdrawalNotification('cancelled', $reason);
 
         return true;
@@ -641,9 +636,7 @@ class Withdrawal extends Model
         return 'R$ ' . number_format($this->amount, 2, ',', '.');
     }
 
-    /**
-     * Calculate the percentage fee based on withdrawal method
-     */
+    
     public function getPercentageFeeAttribute(): float
     {
         $withdrawalMethod = WithdrawalMethod::findByCode($this->withdrawal_method);
@@ -653,81 +646,61 @@ class Withdrawal extends Model
         return (float) $withdrawalMethod->fee;
     }
 
-    /**
-     * Calculate the percentage fee amount
-     */
+    
     public function getPercentageFeeAmountAttribute(): float
     {
         return ($this->amount * $this->percentage_fee) / 100;
     }
 
-    /**
-     * Calculate the platform fee amount (5% of withdrawal amount)
-     */
+    
     public function getPlatformFeeAmountAttribute(): float
     {
         return ($this->amount * $this->platform_fee) / 100;
     }
 
-    /**
-     * Calculate the total fees (percentage + platform fee + fixed fee)
-     */
+    
     public function getTotalFeesAttribute(): float
     {
         return $this->percentage_fee_amount + $this->platform_fee_amount + $this->fixed_fee;
     }
 
-    /**
-     * Calculate the net amount after all fees
-     */
+    
     public function getNetAmountAttribute(): float
     {
         return $this->amount - $this->total_fees;
     }
 
-    /**
-     * Get formatted platform fee percentage
-     */
+    
     public function getFormattedPlatformFeeAttribute(): string
     {
         return number_format($this->platform_fee, 2) . '%';
     }
 
-    /**
-     * Get formatted platform fee amount
-     */
+    
     public function getFormattedPlatformFeeAmountAttribute(): string
     {
         return 'R$ ' . number_format($this->platform_fee_amount, 2, ',', '.');
     }
 
-    /**
-     * Get formatted fixed fee amount
-     */
+    
     public function getFormattedFixedFeeAttribute(): string
     {
         return 'R$ ' . number_format($this->fixed_fee, 2, ',', '.');
     }
 
-    /**
-     * Get formatted percentage fee amount
-     */
+    
     public function getFormattedPercentageFeeAmountAttribute(): string
     {
         return 'R$ ' . number_format($this->percentage_fee_amount, 2, ',', '.');
     }
 
-    /**
-     * Get formatted total fees
-     */
+    
     public function getFormattedTotalFeesAttribute(): string
     {
         return 'R$ ' . number_format($this->total_fees, 2, ',', '.');
     }
 
-    /**
-     * Get formatted net amount
-     */
+    
     public function getFormattedNetAmountAttribute(): string
     {
         return 'R$ ' . number_format($this->net_amount, 2, ',', '.');

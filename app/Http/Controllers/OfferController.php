@@ -20,9 +20,7 @@ use Stripe\Checkout\Session;
 
 class OfferController extends Controller
 {
-    /**
-     * Create a new offer
-     */
+    
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -42,7 +40,7 @@ class OfferController extends Controller
 
         $user = Auth::user();
         
-        // Check if user is a brand
+        
         if (!$user->isBrand()) {
             return response()->json([
                 'success' => false,
@@ -50,7 +48,7 @@ class OfferController extends Controller
             ], 403);
         }
 
-        // Step 1: Check if brand has Stripe account configured
+        
         $hasStripeAccount = false;
         $stripeAccountStatus = null;
         
@@ -88,10 +86,10 @@ class OfferController extends Controller
             ]);
         }
 
-        // Step 2: Check if brand has payment methods configured
+        
         $hasPaymentMethod = false;
         
-        // Check for Stripe payment method (direct Stripe integration on user model)
+        
         if ($user->stripe_customer_id && $user->stripe_payment_method_id) {
             $hasPaymentMethod = true;
             Log::info('Brand has direct Stripe payment method when sending offer', [
@@ -101,7 +99,7 @@ class OfferController extends Controller
             ]);
         }
         
-        // Check for BrandPaymentMethod records (active payment methods)
+        
         if (!$hasPaymentMethod) {
             $activePaymentMethods = \App\Models\BrandPaymentMethod::where('user_id', $user->id)
                 ->where('is_active', true)
@@ -116,7 +114,7 @@ class OfferController extends Controller
             }
         }
 
-        // If no Stripe account exists, redirect to Stripe Connect onboarding
+        
         if (!$hasStripeAccount) {
             Log::info('Brand has no Stripe account when sending offer, redirecting to Stripe Connect setup', [
                 'user_id' => $user->id,
@@ -133,10 +131,10 @@ class OfferController extends Controller
                 'requires_stripe_account' => true,
                 'requires_funding' => true,
                 'redirect_url' => $redirectUrl,
-            ], 402); // 402 Payment Required
+            ], 402); 
         }
 
-        // If no payment method exists, create Stripe checkout session for payment method setup
+        
         if (!$hasPaymentMethod) {
             Log::info('Brand has no payment method when sending offer, creating checkout session for setup', [
                 'user_id' => $user->id,
@@ -148,7 +146,7 @@ class OfferController extends Controller
             try {
                 Stripe::setApiKey(config('services.stripe.secret'));
 
-                // Ensure Stripe customer exists
+                
                 $customerId = $user->stripe_customer_id;
                 
                 if (!$customerId) {
@@ -181,7 +179,7 @@ class OfferController extends Controller
 
                 $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
 
-                // Create Checkout Session in setup mode for payment method configuration
+                
                 $checkoutSession = Session::create([
                     'customer' => $customerId,
                     'mode' => 'setup',
@@ -211,7 +209,7 @@ class OfferController extends Controller
                     'requires_funding' => true,
                     'redirect_url' => $checkoutSession->url,
                     'checkout_session_id' => $checkoutSession->id,
-                ], 402); // 402 Payment Required
+                ], 402); 
 
             } catch (\Exception $e) {
                 Log::error('Failed to create Stripe Checkout Session for offer funding', [
@@ -221,7 +219,7 @@ class OfferController extends Controller
                     'trace' => $e->getTraceAsString(),
                 ]);
 
-                // Fallback to frontend redirect if Stripe fails
+                
                 $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
                 $redirectUrl = $frontendUrl . '/brand?component=Pagamentos&requires_funding=true&action=send_offer';
                 
@@ -234,7 +232,7 @@ class OfferController extends Controller
             }
         }
 
-        // Check if creator exists and is a creator or student
+        
         $creator = User::find($request->creator_id);
         if (!$creator || (!$creator->isCreator() && !$creator->isStudent())) {
             return response()->json([
@@ -243,7 +241,7 @@ class OfferController extends Controller
             ], 404);
         }
 
-        // Check if chat room exists and user is part of it
+        
         $chatRoom = ChatRoom::where('room_id', $request->chat_room_id)
             ->where('brand_id', $user->id)
             ->where('creator_id', $creator->id)
@@ -256,11 +254,11 @@ class OfferController extends Controller
             ], 404);
         }
 
-        // Check if there's already a pending offer
+        
         $existingOffer = Offer::where('brand_id', $user->id)
             ->where('creator_id', $creator->id)
             ->where('status', 'pending')
-            ->where('expires_at', '>', now()) // Only check for non-expired offers
+            ->where('expires_at', '>', now()) 
             ->first();
 
         if ($existingOffer) {
@@ -276,18 +274,18 @@ class OfferController extends Controller
                 'brand_id' => $user->id,
                 'creator_id' => $creator->id,
                 'chat_room_id' => $chatRoom->id,
-                'title' => 'Oferta de Projeto', // Default title
-                'description' => 'Oferta enviada via chat', // Default description
+                'title' => 'Oferta de Projeto', 
+                'description' => 'Oferta enviada via chat', 
                 'budget' => $request->budget,
                 'estimated_days' => $request->estimated_days,
-                'requirements' => [], // Empty requirements array
-                'expires_at' => now()->addDays(1), // Changed from 3 to 1 day
+                'requirements' => [], 
+                'expires_at' => now()->addDays(1), 
             ]);
 
-            // Notify creator about new offer
+            
             NotificationService::notifyUserOfNewOffer($offer);
 
-            // Create chat message for the offer
+            
             $this->createOfferChatMessage($chatRoom, 'offer_created', [
                 'sender_id' => $user->id,
                 'message' => "Oferta enviada: {$offer->formatted_budget}",
@@ -298,7 +296,7 @@ class OfferController extends Controller
                     'budget' => $offer->budget,
                     'formatted_budget' => $offer->formatted_budget,
                     'estimated_days' => $offer->estimated_days,
-                    'status' => 'pending', // Explicitly set status to pending
+                    'status' => 'pending', 
                     'expires_at' => $offer->expires_at->format('Y-m-d H:i:s'),
                     'days_until_expiry' => $offer->days_until_expiry,
                     'sender' => [
@@ -309,7 +307,7 @@ class OfferController extends Controller
                 ],
             ]);
 
-            // Emit Socket.IO event for real-time updates
+            
             $this->emitSocketEvent('offer_created', [
                 'roomId' => $chatRoom->room_id,
                 'offerData' => [
@@ -363,15 +361,13 @@ class OfferController extends Controller
         }
     }
 
-    /**
-     * Create a chat message for offer events
-     */
+    
     private function createOfferChatMessage(ChatRoom $chatRoom, string $messageType, array $data = []): void
     {
         try {
             $messageData = [
                 'chat_room_id' => $chatRoom->id,
-                'sender_id' => $data['sender_id'] ?? null, // System message
+                'sender_id' => $data['sender_id'] ?? null, 
                 'message' => $data['message'] ?? '',
                 'message_type' => 'offer',
                 'offer_data' => json_encode($data['offer_data'] ?? []),
@@ -387,9 +383,7 @@ class OfferController extends Controller
         }
     }
 
-    /**
-     * Emit Socket.IO event for real-time updates
-     */
+    
     private function emitSocketEvent(string $event, array $data): void
     {
         try {
@@ -405,14 +399,12 @@ class OfferController extends Controller
         }
     }
 
-    /**
-     * Get offers for the authenticated user
-     */
+    
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $type = $request->get('type', 'received'); // 'sent' or 'received'
-        $status = $request->get('status'); // 'pending', 'accepted', 'rejected', 'expired'
+        $type = $request->get('type', 'received'); 
+        $status = $request->get('status'); 
 
         try {
             $query = $user->isBrand() 
@@ -471,9 +463,7 @@ class OfferController extends Controller
         }
     }
 
-    /**
-     * Get a specific offer
-     */
+    
     public function show(int $id): JsonResponse
     {
         $user = Auth::user();
@@ -535,14 +525,12 @@ class OfferController extends Controller
         }
     }
 
-    /**
-     * Accept an offer
-     */
+    
     public function accept(int $id): JsonResponse
     {
         $user = Auth::user();
 
-        // Check if user is a creator or student
+        
         if (!$user->isCreator() && !$user->isStudent()) {
             return response()->json([
                 'success' => false,
@@ -578,7 +566,7 @@ class OfferController extends Controller
                 'can_be_accepted' => $offer->canBeAccepted(),
             ]);
 
-            // Check if offer is already accepted
+            
             if ($offer->status === 'accepted') {
                 return response()->json([
                     'success' => false,
@@ -586,7 +574,7 @@ class OfferController extends Controller
                 ], 400);
             }
 
-            // Check if offer is rejected
+            
             if ($offer->status === 'rejected') {
                 return response()->json([
                     'success' => false,
@@ -594,7 +582,7 @@ class OfferController extends Controller
                 ], 400);
             }
 
-            // Check if offer is cancelled
+            
             if ($offer->status === 'cancelled') {
                 return response()->json([
                     'success' => false,
@@ -602,7 +590,7 @@ class OfferController extends Controller
                 ], 400);
             }
 
-            // Check if offer is expired
+            
             if ($offer->isExpired()) {
                 return response()->json([
                     'success' => false,
@@ -630,14 +618,14 @@ class OfferController extends Controller
             ]);
 
             if ($offer->accept()) {
-                // Get the chat room
+                
                 $chatRoom = ChatRoom::find($offer->chat_room_id);
                 
                 if ($chatRoom) {
-                    // Get the created contract
+                    
                     $contract = $offer->contract;
                     
-                    // Update application workflow status to finalized
+                    
                     $application = CampaignApplication::where('campaign_id', $chatRoom->campaign_id)
                         ->where('creator_id', $chatRoom->creator_id)
                         ->where('status', 'approved')
@@ -660,7 +648,7 @@ class OfferController extends Controller
                         'workflow_status' => $contract->workflow_status ?? 'null',
                     ]);
                     
-                    // Create chat message for offer acceptance
+                    
                     $this->createOfferChatMessage($chatRoom, 'offer_accepted', [
                         'sender_id' => $user->id,
                         'message' => "Oferta aceita! Contrato criado.",
@@ -683,16 +671,15 @@ class OfferController extends Controller
                         ],
                     ]);
 
-
-                    // Add system message to notify brand that creator accepted the offer
+                    
                     Message::create([
                         'chat_room_id' => $chatRoom->id,
-                        'sender_id' => null, // System message
+                        'sender_id' => null, 
                         'message' => 'A criadora aceitou a oferta.',
                         'message_type' => 'system',
                         'is_system_message' => true,
                     ]);
-                    // Emit Socket.IO event for real-time updates
+                    
                     $this->emitSocketEvent('offer_accepted', [
                         'roomId' => $chatRoom->room_id,
                         'offerData' => [
@@ -785,9 +772,7 @@ class OfferController extends Controller
         }
     }
 
-    /**
-     * Reject an offer
-     */
+    
     public function reject(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -804,7 +789,7 @@ class OfferController extends Controller
 
         $user = Auth::user();
 
-        // Check if user is a creator or student
+        
         if (!$user->isCreator() && !$user->isStudent()) {
             return response()->json([
                 'success' => false,
@@ -832,11 +817,11 @@ class OfferController extends Controller
             }
 
             if ($offer->reject($request->reason)) {
-                // Get the chat room
+                
                 $chatRoom = ChatRoom::find($offer->chat_room_id);
                 
                 if ($chatRoom) {
-                    // Create chat message for offer rejection
+                    
                     $this->createOfferChatMessage($chatRoom, 'offer_rejected', [
                         'sender_id' => $user->id,
                         'message' => "Oferta rejeitada" . ($request->reason ? ": {$request->reason}" : ""),
@@ -857,7 +842,7 @@ class OfferController extends Controller
                         ],
                     ]);
 
-                    // Emit Socket.IO event for real-time updates
+                    
                     $this->emitSocketEvent('offer_rejected', [
                         'roomId' => $chatRoom->room_id,
                         'offerData' => [
@@ -913,14 +898,12 @@ class OfferController extends Controller
         }
     }
 
-    /**
-     * Cancel an offer (brand only)
-     */
+    
     public function cancel(int $id): JsonResponse
     {
         $user = Auth::user();
 
-        // Check if user is a brand
+        
         if (!$user->isBrand()) {
             return response()->json([
                 'success' => false,
@@ -944,11 +927,11 @@ class OfferController extends Controller
                 'status' => 'cancelled',
             ]);
 
-            // Get the chat room
+            
             $chatRoom = ChatRoom::find($offer->chat_room_id);
             
             if ($chatRoom) {
-                // Create chat message for offer cancellation
+                
                 $this->createOfferChatMessage($chatRoom, 'offer_cancelled', [
                     'sender_id' => $user->id,
                     'message' => "Oferta cancelada",
@@ -968,7 +951,7 @@ class OfferController extends Controller
                     ],
                 ]);
 
-                // Emit Socket.IO event for real-time updates
+                
                 $this->emitSocketEvent('offer_cancelled', [
                     'roomId' => $chatRoom->room_id,
                     'offerData' => [
@@ -987,7 +970,7 @@ class OfferController extends Controller
                 ]);
             }
 
-            // Notify creator about cancelled offer
+            
             NotificationService::notifyUserOfOfferCancelled($offer);
 
             Log::info('Offer cancelled successfully', [
@@ -1019,14 +1002,12 @@ class OfferController extends Controller
         }
     }
 
-    /**
-     * Get offers for a specific chat room
-     */
+    
     public function getOffersForChatRoom(Request $request, string $roomId): JsonResponse
     {
         $user = Auth::user();
         
-        // Find the chat room and verify user has access
+        
         $chatRoom = ChatRoom::where('room_id', $roomId)
             ->where(function ($query) use ($user) {
                 $query->where('brand_id', $user->id)
@@ -1041,7 +1022,7 @@ class OfferController extends Controller
             ], 404);
         }
 
-        // Get offers for this chat room
+        
         $offers = Offer::where('chat_room_id', $chatRoom->id)
             ->with(['brand', 'creator'])
             ->orderBy('created_at', 'desc')

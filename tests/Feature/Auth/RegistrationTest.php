@@ -97,7 +97,7 @@ class RegistrationTest extends TestCase
             'has_premium' => false,
         ]);
 
-        // Check that avatar was uploaded
+        
         $user = User::where('email', 'john@example.com')->first();
         $this->assertNotNull($user->avatar_url);
         Storage::disk('public')->assertExists(str_replace('/storage/', '', $user->avatar_url));

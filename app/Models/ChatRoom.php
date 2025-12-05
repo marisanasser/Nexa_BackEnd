@@ -55,9 +55,7 @@ class ChatRoom extends Model
         return $this->hasMany(Message::class)->latest();
     }
 
-    /**
-     * Update the last message timestamp
-     */
+    
     public function updateLastMessageTimestamp(): void
     {
         $this->update(['last_message_at' => now()]);
@@ -81,7 +79,7 @@ class ChatRoom extends Model
             [
                 'room_id' => $roomId,
                 'is_active' => true,
-                'last_message_at' => now(), // Set to current time for new rooms
+                'last_message_at' => now(), 
             ]
         );
     }

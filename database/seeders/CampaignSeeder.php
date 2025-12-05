@@ -8,25 +8,23 @@ use App\Models\User;
 
 class CampaignSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
+    
     public function run(): void
     {
-        // Create some brand users if they don't exist
+        
         $brands = User::where('role', 'brand')->take(3)->get();
         
         if ($brands->count() < 3) {
-            // Create additional brands if needed
+            
             $neededBrands = 3 - $brands->count();
             $newBrands = User::factory($neededBrands)->create(['role' => 'brand']);
             $brands = $brands->merge($newBrands);
         }
 
-        // Ensure we have at least 3 brands
+        
         $brands = $brands->take(3);
 
-        // Create campaigns with some featured ones
+        
         $campaigns = [
             [
                 'brand_id' => $brands->get(0)->id,
@@ -42,7 +40,7 @@ class CampaignSeeder extends Seeder
                 'deadline' => now()->addDays(30),
                 'max_bids' => 15,
                 'is_active' => true,
-                'is_featured' => true, // Featured campaign
+                'is_featured' => true, 
             ],
             [
                 'brand_id' => $brands->get(0)->id,
@@ -58,7 +56,7 @@ class CampaignSeeder extends Seeder
                 'deadline' => now()->addDays(25),
                 'max_bids' => 10,
                 'is_active' => true,
-                'is_featured' => true, // Featured campaign
+                'is_featured' => true, 
             ],
             [
                 'brand_id' => $brands->get(1)->id,
@@ -74,7 +72,7 @@ class CampaignSeeder extends Seeder
                 'deadline' => now()->addDays(40),
                 'max_bids' => 8,
                 'is_active' => true,
-                'is_featured' => false, // Regular campaign
+                'is_featured' => false, 
             ],
             [
                 'brand_id' => $brands->get(2)->id,
@@ -90,7 +88,7 @@ class CampaignSeeder extends Seeder
                 'deadline' => now()->addDays(20),
                 'max_bids' => 12,
                 'is_active' => true,
-                'is_featured' => false, // Regular campaign
+                'is_featured' => false, 
             ],
         ];
 

@@ -61,7 +61,7 @@ class CampaignTimeline extends Model
         'formatted_file_size',
     ];
 
-    // Relationships
+    
     public function contract(): BelongsTo
     {
         return $this->belongsTo(Contract::class);
@@ -72,7 +72,7 @@ class CampaignTimeline extends Model
         return $this->hasMany(DeliveryMaterial::class, 'milestone_id');
     }
 
-    // Milestone types
+    
     const MILESTONE_TYPES = [
         'script_submission' => 'Envio do Roteiro',
         'script_approval' => 'Aprovação do Roteiro',
@@ -80,7 +80,7 @@ class CampaignTimeline extends Model
         'final_approval' => 'Aprovação Final',
     ];
 
-    // Status types
+    
     const STATUSES = [
         'pending' => 'Pendente',
         'approved' => 'Aprovado',
@@ -88,7 +88,7 @@ class CampaignTimeline extends Model
         'completed' => 'Concluído',
     ];
 
-    // Methods
+    
     public function isPending(): bool
     {
         return $this->status === 'pending';
@@ -268,9 +268,7 @@ class CampaignTimeline extends Model
         return true;
     }
 
-    /**
-     * Extend timeline deadline
-     */
+    
     public function extendTimeline(int $days, string $reason, int $extendedBy): bool
     {
         $this->update([
@@ -279,40 +277,32 @@ class CampaignTimeline extends Model
             'extended_at' => now(),
             'extended_by' => $extendedBy,
             'deadline' => $this->deadline->addDays($days),
-            'is_delayed' => false, // Reset delay status
+            'is_delayed' => false, 
             'status' => $this->status === 'delayed' ? 'pending' : $this->status,
         ]);
 
         return true;
     }
 
-    /**
-     * Check if timeline has been extended
-     */
+    
     public function isExtended(): bool
     {
         return $this->extension_days > 0;
     }
 
-    /**
-     * Get total extension days
-     */
+    
     public function getTotalExtensionDays(): int
     {
         return $this->extension_days;
     }
 
-    /**
-     * Get extended deadline (original + extensions)
-     */
+    
     public function getExtendedDeadline(): \Carbon\Carbon
     {
         return $this->deadline;
     }
 
-    /**
-     * Check if can be extended (only brand can extend)
-     */
+    
     public function canBeExtended(): bool
     {
         try {
@@ -353,7 +343,7 @@ class CampaignTimeline extends Model
         return $this->delay_notified_at ? $this->delay_notified_at->format('M d, Y H:i') : null;
     }
 
-    // Accessor methods for computed properties
+    
     public function getCanUploadFileAttribute(): bool
     {
         return $this->isPending() && in_array($this->milestone_type, ['script_submission', 'video_submission']);

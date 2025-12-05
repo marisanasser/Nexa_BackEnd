@@ -10,23 +10,13 @@ use App\Models\User;
 
 class TestEmail extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
+    
     protected $signature = 'email:test {email} {--provider=all}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    
     protected $description = 'Test email configuration with different providers';
 
-    /**
-     * Execute the console command.
-     */
+    
     public function handle()
     {
         $email = $this->argument('email');
@@ -36,12 +26,12 @@ class TestEmail extends Command
         $this->info("Provider: {$provider}");
         $this->newLine();
 
-        // Create a test user
+        
         $user = new User();
         $user->email = $email;
         $user->name = 'Test User';
 
-        // Test different providers
+        
         if ($provider === 'all' || $provider === 'ses') {
             $this->testSES($user);
         }
@@ -57,9 +47,7 @@ class TestEmail extends Command
         $this->info('Email testing completed. Check logs for details.');
     }
 
-    /**
-     * Test AWS SES
-     */
+    
     private function testSES(User $user)
     {
         $this->info('Testing AWS SES...');
@@ -79,15 +67,13 @@ class TestEmail extends Command
         $this->newLine();
     }
 
-    /**
-     * Test SMTP
-     */
+    
     private function testSMTP(User $user)
     {
         $this->info('Testing SMTP...');
         
         try {
-            // Configure mail to use SMTP
+            
             config([
                 'mail.default' => 'smtp',
                 'mail.mailers.smtp.transport' => 'smtp',
@@ -113,15 +99,13 @@ class TestEmail extends Command
         $this->newLine();
     }
 
-    /**
-     * Test Log
-     */
+    
     private function testLog(User $user)
     {
         $this->info('Testing Log...');
         
         try {
-            // Actually test our EmailVerificationService
+            
             $result = EmailVerificationService::sendVerificationEmail($user);
             
             if ($result['success']) {

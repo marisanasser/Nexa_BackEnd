@@ -8,15 +8,13 @@ use Illuminate\Support\Facades\Log;
 
 trait OfferChatMessageTrait
 {
-    /**
-     * Create a chat message for offer-related events
-     */
+    
     private function createOfferChatMessage(ChatRoom $chatRoom, string $messageType, array $data = []): ?Message
     {
         try {
             $messageData = [
                 'chat_room_id' => $chatRoom->id,
-                'sender_id' => $data['sender_id'] ?? null, // System message
+                'sender_id' => $data['sender_id'] ?? null, 
                 'message' => $data['message'] ?? '',
                 'message_type' => 'offer',
                 'offer_data' => json_encode($data['offer_data'] ?? []),
@@ -24,13 +22,13 @@ trait OfferChatMessageTrait
 
             $message = Message::create($messageData);
 
-            // Update chat room's last_message_at to ensure proper ordering
+            
             $chatRoom->update(['last_message_at' => now()]);
 
-            // Load sender relationship for socket event
+            
             $message->load('sender');
 
-            // Emit socket event for real-time delivery
+            
             $socketData = [
                 'roomId' => $chatRoom->room_id,
                 'messageId' => $message->id,
@@ -60,15 +58,13 @@ trait OfferChatMessageTrait
         }
     }
 
-    /**
-     * Create a system message for contract-related events
-     */
+    
     private function createSystemMessage(ChatRoom $chatRoom, string $message, array $data = []): ?Message
     {
         try {
             $messageData = [
                 'chat_room_id' => $chatRoom->id,
-                'sender_id' => null, // System message
+                'sender_id' => null, 
                 'message' => $message,
                 'message_type' => 'system',
                 'offer_data' => json_encode($data),
@@ -76,10 +72,10 @@ trait OfferChatMessageTrait
 
             $systemMessage = Message::create($messageData);
 
-            // Update chat room's last_message_at to ensure proper ordering
+            
             $chatRoom->update(['last_message_at' => now()]);
 
-            // Emit socket event for real-time delivery
+            
             $socketData = [
                 'roomId' => $chatRoom->room_id,
                 'messageId' => $systemMessage->id,
@@ -109,13 +105,11 @@ trait OfferChatMessageTrait
         }
     }
 
-    /**
-     * Emit Socket.IO event for real-time updates
-     */
+    
     private function emitSocketEvent(string $event, array $data): void
     {
         try {
-            // Use HTTP POST to Node.js socket server
+            
             \Illuminate\Support\Facades\Http::post('http://localhost:3000/emit', [
                 'event' => $event,
                 'data' => $data,

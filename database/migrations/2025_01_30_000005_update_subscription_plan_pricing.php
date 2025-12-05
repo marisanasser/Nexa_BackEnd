@@ -7,12 +7,10 @@ use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    
     public function up(): void
     {
-        // Update the subscription plans with new pricing
+        
         DB::table('subscription_plans')->where('name', 'Plano Mensal')->update([
             'name' => 'Plano Mensal',
             'description' => 'Assinatura de 1 mês do Nexa Premium',
@@ -60,12 +58,10 @@ return new class extends Migration
         ]);
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
-        // Revert to original pricing
+        
         DB::table('subscription_plans')->where('name', 'Plano Mensal')->update([
             'price' => 29.99,
             'updated_at' => now(),

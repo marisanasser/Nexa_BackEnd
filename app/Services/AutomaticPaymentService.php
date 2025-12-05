@@ -9,9 +9,7 @@ use Illuminate\Support\Facades\Log;
 
 class AutomaticPaymentService
 {
-    /**
-     * Process payment for a contract
-     */
+    
     public function processContractPayment(Contract $contract): array
     {
         try {
@@ -25,19 +23,19 @@ class AutomaticPaymentService
                 'simulation_mode' => PaymentSimulator::isSimulationMode(),
             ]);
 
-            // Validate contract
+            
             if (!$contract->exists) {
                 throw new \Exception('Contract does not exist');
             }
 
-            // Check if simulation mode is enabled
+            
             if (PaymentSimulator::isSimulationMode()) {
                 Log::info('SIMULATION: Processing automatic payment in simulation mode', [
                     'contract_id' => $contract->id,
                     'simulation_mode' => true
                 ]);
 
-                // Use PaymentSimulator to process the contract payment
+                
                 $simulationResult = PaymentSimulator::simulateContractPayment([
                     'amount' => $contract->budget,
                     'contract_id' => $contract->id,
@@ -48,7 +46,7 @@ class AutomaticPaymentService
                     throw new \Exception($simulationResult['message'] ?? 'Simulation failed');
                 }
 
-                // Create a payment record
+                
                 $payment = JobPayment::create([
                     'contract_id' => $contract->id,
                     'brand_id' => $contract->brand_id,
@@ -66,7 +64,7 @@ class AutomaticPaymentService
                     throw new \Exception('Failed to create payment record');
                 }
 
-                // Update contract status to active
+                
                 $contract->update([
                     'status' => 'active',
                     'workflow_status' => 'active',
@@ -90,10 +88,10 @@ class AutomaticPaymentService
                     'simulation' => true,
                 ];
             } else {
-                // For now, we'll simulate a successful payment
-                // In a real implementation, this would integrate with a payment gateway
                 
-                // Create a payment record
+                
+                
+                
                 $payment = JobPayment::create([
                     'contract_id' => $contract->id,
                     'brand_id' => $contract->brand_id,
@@ -101,8 +99,8 @@ class AutomaticPaymentService
                     'total_amount' => $contract->budget,
                     'creator_amount' => $contract->creator_amount,
                     'platform_fee' => $contract->platform_fee,
-                    'payment_method' => 'credit_card', // Default payment method
-                    'status' => 'completed', // Simulate successful payment
+                    'payment_method' => 'credit_card', 
+                    'status' => 'completed', 
                     'processed_at' => now(),
                 ]);
 
@@ -110,7 +108,7 @@ class AutomaticPaymentService
                     throw new \Exception('Failed to create payment record');
                 }
 
-                // Update contract status to active
+                
                 $contract->update([
                     'status' => 'active',
                     'workflow_status' => 'active',
@@ -148,9 +146,7 @@ class AutomaticPaymentService
         }
     }
 
-    /**
-     * Retry payment for failed contracts
-     */
+    
     public function retryPayment(Contract $contract): array
     {
         return $this->processContractPayment($contract);

@@ -6,9 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    
     public function up(): void
     {
         Schema::create('withdrawals', function (Blueprint $table) {
@@ -17,10 +15,10 @@ return new class extends Migration
             $table->decimal('amount', 10, 2);
             $table->decimal('platform_fee', 5, 2)->default(5.00)->comment('Platform fee percentage (e.g., 5.00 for 5%)');
             $table->decimal('fixed_fee', 10, 2)->default(5.00)->comment('Fixed platform fee amount (e.g., 5.00 for R$5)');
-            $table->string('withdrawal_method'); // bank_transfer, pagarme_account, etc.
-            $table->json('withdrawal_details'); // Bank account details, etc.
+            $table->string('withdrawal_method'); 
+            $table->json('withdrawal_details'); 
             $table->enum('status', ['pending', 'processing', 'completed', 'failed', 'cancelled'])->default('pending');
-            $table->string('transaction_id')->nullable(); // External withdrawal transaction ID
+            $table->string('transaction_id')->nullable(); 
             $table->timestamp('processed_at')->nullable();
             $table->text('failure_reason')->nullable();
             $table->timestamps();
@@ -32,9 +30,7 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
         Schema::dropIfExists('withdrawals');

@@ -6,19 +6,13 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class StoreCampaignRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
+    
     public function authorize(): bool
     {
         return auth()->check() && auth()->user()->isBrand();
     }
 
-    /**
-     * 
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
+    
     public function rules(): array
     {
         return [
@@ -32,10 +26,10 @@ class StoreCampaignRequest extends FormRequest
             'category' => ['nullable', 'string', 'max:255'],
             'campaign_type' => ['nullable', 'string', 'max:255'],
             'image_url' => ['nullable', 'url', 'max:2048'],
-            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'], // 5MB max
-            'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'], // 5MB max
+            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'], 
+            'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'], 
             'attach_file' => ['nullable'],
-            'attach_file.*' => ['nullable', 'file', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar,jpg,jpeg,png,gif,webp', 'max:10240'], // 10MB max, now allows images too
+            'attach_file.*' => ['nullable', 'file', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar,jpg,jpeg,png,gif,webp', 'max:10240'], 
             'deadline' => ['required', 'date'],
             'max_bids' => ['nullable', 'integer', 'min:1', 'max:100'],
             'min_age' => ['nullable', 'integer', 'min:18', 'max:100'],
@@ -47,11 +41,7 @@ class StoreCampaignRequest extends FormRequest
         ];
     }
 
-    /**
-     * Get custom messages for validator errors.
-     *
-     * @return array
-     */
+    
     public function messages(): array
     {
         return [
@@ -96,27 +86,18 @@ class StoreCampaignRequest extends FormRequest
         ];
     }
 
-    /**
-     * Get custom attributes for validator errors.
-     *
-     * @return array
-     */
+    
     public function attributes(): array
     {
         return [
         ];
     }
 
-    /**
-     * Configure the validator instance.
-     *
-     * @param  \Illuminate\Validation\Validator  $validator
-     * @return void
-     */
+    
     public function withValidator($validator)
     {
         $validator->after(function ($validator) {
-            // Ensure only one of image_url or image is provided
+            
             if ($this->filled('image_url') && $this->hasFile('image')) {
                 $validator->errors()->add('image', 'Please provide either an image URL or upload an image file, not both.');
             }

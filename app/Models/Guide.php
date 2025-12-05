@@ -21,7 +21,7 @@ class Guide extends Model
         'screenshots' => 'array',
     ];
 
-    // append virtual attribute if you want direct url in model arrays
+    
     protected $appends = ['video_url', 'screenshot_urls'];
 
     public function getVideoUrlAttribute()
@@ -29,7 +29,7 @@ class Guide extends Model
         if (! $this->video_path) {
             return null;
         }
-        // Storage::url uses the default disk; for 'public' disk it will generate /storage/...
+        
         return Storage::url($this->video_path);
     }
 
@@ -44,13 +44,13 @@ class Guide extends Model
         }, $this->screenshots);
     }
 
-    // optional: relationship to user if you store created_by
+    
     public function creator()
     {
         return $this->belongsTo(\App\Models\User::class, 'created_by');
     }
 
-    // relationship to steps
+    
     public function steps()
     {
         return $this->hasMany(\App\Models\Step::class);

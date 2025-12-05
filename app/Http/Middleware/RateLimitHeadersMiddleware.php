@@ -9,16 +9,12 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RateLimitHeadersMiddleware
 {
-    /**
-     * Handle an incoming request.
-     *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
-     */
+    
     public function handle(Request $request, Closure $next): Response
     {
         $response = $next($request);
 
-        // Add rate limiting headers if enabled in config
+        
         if (config('rate_limiting.include_headers', true)) {
             $this->addRateLimitHeaders($request, $response);
         }
@@ -26,12 +22,10 @@ class RateLimitHeadersMiddleware
         return $response;
     }
 
-    /**
-     * Add rate limiting headers to the response
-     */
+    
     private function addRateLimitHeaders(Request $request, Response $response): void
     {
-        // Get the current route's rate limiter
+        
         $route = $request->route();
         if (!$route) {
             return;
@@ -46,10 +40,10 @@ class RateLimitHeadersMiddleware
             return;
         }
 
-        // Extract the throttle name
+        
         $throttleName = str_replace('throttle:', '', $throttleMiddleware);
         
-        // Get rate limiting info
+        
         $key = $this->getThrottleKey($request, $throttleName);
         if ($key) {
             $remaining = RateLimiter::remaining($key, $this->getMaxAttempts($throttleName));
@@ -67,9 +61,7 @@ class RateLimitHeadersMiddleware
         }
     }
 
-    /**
-     * Get the throttle key for the request
-     */
+    
     private function getThrottleKey(Request $request, string $throttleName): ?string
     {
         switch ($throttleName) {
@@ -90,9 +82,7 @@ class RateLimitHeadersMiddleware
         }
     }
 
-    /**
-     * Get the maximum attempts for a throttle
-     */
+    
     private function getMaxAttempts(string $throttleName): int
     {
         switch ($throttleName) {

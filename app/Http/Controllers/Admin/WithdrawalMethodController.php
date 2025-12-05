@@ -11,9 +11,7 @@ use Illuminate\Support\Facades\Log;
 
 class WithdrawalMethodController extends Controller
 {
-    /**
-     * Get all withdrawal methods
-     */
+    
     public function index(): JsonResponse
     {
         try {
@@ -35,9 +33,7 @@ class WithdrawalMethodController extends Controller
         }
     }
 
-    /**
-     * Store a new withdrawal method
-     */
+    
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -82,9 +78,7 @@ class WithdrawalMethodController extends Controller
         }
     }
 
-    /**
-     * Update a withdrawal method
-     */
+    
     public function update(Request $request, int $id): JsonResponse
     {
         $method = WithdrawalMethod::find($id);
@@ -139,9 +133,7 @@ class WithdrawalMethodController extends Controller
         }
     }
 
-    /**
-     * Delete a withdrawal method
-     */
+    
     public function destroy(int $id): JsonResponse
     {
         $method = WithdrawalMethod::find($id);
@@ -173,9 +165,7 @@ class WithdrawalMethodController extends Controller
         }
     }
 
-    /**
-     * Toggle active status
-     */
+    
     public function toggleActive(int $id): JsonResponse
     {
         $method = WithdrawalMethod::find($id);

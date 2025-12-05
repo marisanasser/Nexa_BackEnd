@@ -14,10 +14,7 @@ use Illuminate\Support\Facades\Log;
 class ProfileController extends Controller
 {
 
-
-    /**
-     * Get the current user's profile
-     */
+    
     public function show(): JsonResponse
     {
         try {
@@ -52,10 +49,10 @@ class ProfileController extends Controller
                     'twitter_handle' => $user->twitter_handle,
                     'industry' => $user->industry,
                     'niche' => $user->niche,
-                    'state' => $user->state, // Return state directly instead of mapping to location
+                    'state' => $user->state, 
                     'language' => $user->language,
                     'languages' => $user->languages ?: ($user->language ? [$user->language] : []),
-                    'categories' => ['General'], // Default categories
+                    'categories' => ['General'], 
                     'has_premium' => $user->has_premium,
                     'student_verified' => $user->student_verified,
                     'premium_expires_at' => $user->premium_expires_at,
@@ -73,12 +70,10 @@ class ProfileController extends Controller
         }
     }
 
-    /**
-     * Update the current user's profile
-     */
+    
     public function update(Request $request): JsonResponse
     {
-        // Enhanced debug logging for FormData
+        
         error_log("Content-Type: " . $request->header('Content-Type'));
         error_log("Request method: " . $request->method());
         error_log("Request role: " . $request->input('role'));
@@ -97,19 +92,19 @@ class ProfileController extends Controller
                 ], 401);
             }
 
-            // Check if this is a multipart form data request
+            
             $contentType = $request->header('Content-Type');
             $isMultipart = strpos($contentType, 'multipart/form-data') !== false;
             
             error_log("Is multipart: " . ($isMultipart ? 'true' : 'false'));
 
-            // If it's multipart but no data is parsed, try manual parsing
+            
             if ($isMultipart && empty($request->all()) && !empty($request->getContent())) {
                 error_log("Attempting manual multipart parsing");
                 $parsedData = $this->parseMultipartData($request);
                 error_log("Manually parsed data: " . json_encode($parsedData));
                 
-                // Merge manually parsed data with request
+                
                 foreach ($parsedData as $key => $value) {
                     if ($key !== 'avatar') {
                         $request->merge([$key => $value]);
@@ -117,7 +112,7 @@ class ProfileController extends Controller
                 }
             }
 
-            // Build validation rules dynamically
+            
             $validationRules = [
                 'name' => 'sometimes|string|max:255',
                 'email' => [
@@ -140,14 +135,14 @@ class ProfileController extends Controller
                 'industry' => 'sometimes|string|max:255',
                 'profession' => 'sometimes|string|max:255',
                 'niche' => 'sometimes|string|max:255',
-                'state' => 'sometimes|string|max:255', // Accept state directly instead of location
+                'state' => 'sometimes|string|max:255', 
                 'language' => 'sometimes|string|max:50',
-                'languages' => 'sometimes|string', // JSON string for multiple languages
-                'categories' => 'sometimes|string', // JSON string for categories
+                'languages' => 'sometimes|string', 
+                'categories' => 'sometimes|string', 
                 'avatar' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:10240',
             ];
 
-            // Handle Instagram validation based on creator type
+            
             $creatorType = $request->input('creator_type') ?? $user->creator_type ?? null;
             
             if ($creatorType === 'influencer' || $creatorType === 'both') {
@@ -158,7 +153,7 @@ class ProfileController extends Controller
 
             $validator = Validator::make($request->all(), $validationRules);
 
-            // Handle avatar upload
+            
             $hasAvatarFile = false;
             $avatarFile = null;
             
@@ -167,7 +162,7 @@ class ProfileController extends Controller
                 $avatarFile = $request->file('avatar');
                 error_log("Avatar file found via hasFile()");
             } else {
-                // Try manual multipart parsing for avatar
+                
                 if ($isMultipart && !empty($request->getContent())) {
                     $parsedData = $this->parseMultipartData($request);
                     if (isset($parsedData['avatar']) && $parsedData['avatar'] instanceof \Illuminate\Http\UploadedFile) {
@@ -188,9 +183,9 @@ class ProfileController extends Controller
 
             $data = $validator->validated();
 
-            // Handle avatar upload
+            
             if ($hasAvatarFile && $avatarFile) {
-                // Delete old avatar if exists
+                
                 try {
                     if ($user->avatar_url) {
                         $oldPath = str_replace('/storage/', '', $user->avatar_url);
@@ -199,27 +194,27 @@ class ProfileController extends Controller
                         }
                     }
                 } catch (\Throwable $e) {
-                    // ignore delete errors in local env
+                    
                 }
 
-                // Store new avatar
+                
                 $avatarPath = $avatarFile->store('avatars', 'public');
                 $data['avatar_url'] = '/storage/' . $avatarPath;
             }
 
-            // Handle languages and categories
+            
             if (isset($data['languages'])) {
                 $languages = json_decode($data['languages'], true);
                 if (is_array($languages) && !empty($languages)) {
                     $data['languages'] = $languages;
-                    $data['language'] = $languages[0]; // Set first language as primary
+                    $data['language'] = $languages[0]; 
                 } else {
                     $data['languages'] = [];
                     $data['language'] = null;
                 }
             }
 
-            // Map gender values from frontend to backend
+            
             if (isset($data['gender'])) {
                 $genderMapping = [
                     'Female' => 'female',
@@ -230,24 +225,24 @@ class ProfileController extends Controller
                 $data['gender'] = $genderMapping[$data['gender']] ?? $data['gender'];
             }
 
-            // NUNCA permitir update de role via profile update; protege contra UIs que enviam 'role' por engano
+            
             if (array_key_exists('role', $data)) {
                 unset($data['role']);
             }
 
-            // Handle state field - use input() for FormData
+            
             $state = $request->input('state');
             if ($state) {
                 $data['state'] = $state;
             }
             
-            // Remove fields that shouldn't be updated directly  
-            unset($data['categories']); // Keep languages for updating
+            
+            unset($data['categories']); 
 
-            // Update user
+            
             $user->update($data);
 
-            // Refresh user data from database
+            
             $user->refresh();
 
             return response()->json([
@@ -293,9 +288,7 @@ class ProfileController extends Controller
         }
     }
 
-    /**
-     * Delete current user's avatar
-     */
+    
     public function deleteAvatar(): JsonResponse
     {
         try {
@@ -332,9 +325,7 @@ class ProfileController extends Controller
         }
     }
 
-    /**
-     * Upload avatar only (multipart FormData with 'avatar')
-     */
+    
     public function uploadAvatar(Request $request): JsonResponse
     {
         try {
@@ -365,7 +356,7 @@ class ProfileController extends Controller
                 ], 422);
             }
 
-            // Delete old avatar if exists
+            
             try {
                 if ($user->avatar_url) {
                     $oldPath = str_replace('/storage/', '', $user->avatar_url);
@@ -397,10 +388,7 @@ class ProfileController extends Controller
         }
     }
 
-    /**
-     * Upload avatar via base64 (JSON) - fallback para ambientes com issues de multipart
-     * Body esperado: { "avatar_base64": "data:image/jpeg;base64,..." }
-     */
+    
     public function uploadAvatarBase64(Request $request): JsonResponse
     {
         try {
@@ -438,7 +426,7 @@ class ProfileController extends Controller
                 ], 422);
             }
 
-            // Tamanho máximo ~10MB
+            
             if (strlen($binary) > 10 * 1024 * 1024) {
                 return response()->json([
                     'success' => false,
@@ -446,7 +434,7 @@ class ProfileController extends Controller
                 ], 422);
             }
 
-            // Remove anterior
+            
             try {
                 if ($user->avatar_url) {
                     $oldPath = str_replace('/storage/', '', $user->avatar_url);
@@ -456,7 +444,7 @@ class ProfileController extends Controller
                 }
             } catch (\Throwable $e) {}
 
-            // Salva novo
+            
             $filename = 'avatar_' . $user->id . '_' . time() . '.' . $ext;
             $path = 'avatars/' . $filename;
             Storage::disk('public')->put($path, $binary);
@@ -481,15 +469,13 @@ class ProfileController extends Controller
         }
     }
 
-    /**
-     * Parse multipart form data manually
-     */
+    
     private function parseMultipartData(Request $request): array
     {
         $rawContent = $request->getContent();
         $contentType = $request->header('Content-Type');
         
-        // Extract boundary
+        
         if (!preg_match('/boundary=(.+)$/', $contentType, $matches)) {
             return [];
         }
@@ -503,7 +489,7 @@ class ProfileController extends Controller
                 continue;
             }
             
-            // Parse headers
+            
             $headerEnd = strpos($part, "\r\n\r\n");
             if ($headerEnd === false) {
                 continue;
@@ -513,20 +499,20 @@ class ProfileController extends Controller
             $content = substr($part, $headerEnd + 4);
             $content = rtrim($content, "\r\n-");
             
-            // Extract field name
+            
             if (preg_match('/name="([^"]+)"/', $headers, $matches)) {
                 $fieldName = $matches[1];
                 
-                // Check if it's a file
+                
                 if (preg_match('/filename="([^"]+)"/', $headers, $matches)) {
                     $filename = $matches[1];
                     
                     if (!empty($content)) {
-                        // Create temporary file
+                        
                         $tempPath = tempnam(sys_get_temp_dir(), 'upload_');
                         file_put_contents($tempPath, $content);
                         
-                        // Create UploadedFile object
+                        
                         $parsedData[$fieldName] = new \Illuminate\Http\UploadedFile(
                             $tempPath,
                             $filename,
@@ -536,7 +522,7 @@ class ProfileController extends Controller
                         );
                     }
                 } else {
-                    // Regular field
+                    
                     $parsedData[$fieldName] = $content;
                 }
             }

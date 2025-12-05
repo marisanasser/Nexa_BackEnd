@@ -14,9 +14,7 @@ use App\Services\NotificationService;
 
 class ReviewController extends Controller
 {
-    /**
-     * Create a review for a completed contract
-     */
+    
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -48,7 +46,7 @@ class ReviewController extends Controller
             ], 401);
         }
 
-        // Log user role for debugging
+        
         Log::info('Review creation attempt', [
             'user_id' => $user->id,
             'user_role' => $user->role,
@@ -58,8 +56,8 @@ class ReviewController extends Controller
         ]);
 
         try {
-            // Find contract and check if user is involved (as brand or creator)
-            // This allows users to review if they're involved in the contract, regardless of role field
+            
+            
             $contract = Contract::where('status', 'completed')
                 ->where(function($query) use ($user) {
                     $query->where('brand_id', $user->id)
@@ -67,7 +65,7 @@ class ReviewController extends Controller
                 })
                     ->find($request->contract_id);
             
-            // If contract not found, user is not involved in this contract
+            
             if (!$contract) {
                 Log::warning('Review creation blocked - user is not involved in contract', [
                     'user_id' => $user->id,
@@ -97,7 +95,7 @@ class ReviewController extends Controller
                 ], 404);
             }
 
-            // Check if review already exists
+            
             $existingReview = Review::where('contract_id', $contract->id)
                 ->where('reviewer_id', $user->id)
                 ->first();
@@ -115,7 +113,7 @@ class ReviewController extends Controller
                 ], 400);
             }
 
-            // Check if both parties have already reviewed each other
+            
             if ($contract->hasBothReviews()) {
                 Log::warning('Both parties already reviewed attempt blocked', [
                     'user_id' => $user->id,
@@ -128,8 +126,8 @@ class ReviewController extends Controller
                 ], 400);
             }
 
-            // Determine who is being reviewed based on user's involvement in contract
-            // If user is the brand, they're reviewing the creator, and vice versa
+            
+            
             $reviewedId = ($contract->brand_id === $user->id) ? $contract->creator_id : $contract->brand_id;
             
             Log::info('Creating review', [
@@ -149,9 +147,9 @@ class ReviewController extends Controller
                 'is_public' => $request->get('is_public', true),
             ]);
 
-            // Note: Review statistics are automatically updated via the Review model's booted method
+            
 
-            // Update contract review status
+            
             try {
                 $contract->updateReviewStatus();
             } catch (\Exception $e) {
@@ -162,7 +160,7 @@ class ReviewController extends Controller
                 ]);
             }
 
-            // Process payment after review is submitted
+            
             if ($contract->processPaymentAfterReview()) {
                 Log::info('Payment processed after review submission', [
                     'contract_id' => $contract->id,
@@ -212,9 +210,7 @@ class ReviewController extends Controller
         }
     }
 
-    /**
-     * Get reviews for a creator
-     */
+    
     public function index(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -282,14 +278,14 @@ class ReviewController extends Controller
                 ];
             });
 
-            // Get rating distribution first
+            
             $ratingDistribution = $this->getRatingDistribution($user->id, $publicOnly === 'true' || $publicOnly === '1' || $publicOnly === true);
             
-            // Calculate total reviews from distribution
+            
             $totalReviewsFromDistribution = array_sum($ratingDistribution);
             
             
-            // Get user stats - use distribution total if it's different from cached value
+            
             $stats = [
                 'average_rating' => $user->average_rating ?? 0,
                 'total_reviews' => $totalReviewsFromDistribution > 0 ? $totalReviewsFromDistribution : ($user->total_reviews ?? 0),
@@ -317,9 +313,7 @@ class ReviewController extends Controller
         }
     }
 
-    /**
-     * Get a specific review
-     */
+    
     public function show(int $id): JsonResponse
     {
         try {
@@ -379,9 +373,7 @@ class ReviewController extends Controller
         }
     }
 
-    /**
-     * Update a review
-     */
+    
     public function update(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -453,9 +445,7 @@ class ReviewController extends Controller
         }
     }
 
-    /**
-     * Delete a review
-     */
+    
     public function destroy(int $id): JsonResponse
     {
         $user = Auth::user();
@@ -497,9 +487,7 @@ class ReviewController extends Controller
         }
     }
 
-    /**
-     * Get contract review status
-     */
+    
     public function getContractReviewStatus(int $contractId): JsonResponse
     {
         try {
@@ -513,7 +501,7 @@ class ReviewController extends Controller
                 ], 404);
             }
 
-            // Check if user is involved in this contract
+            
             if ($contract->brand_id !== $user->id && $contract->creator_id !== $user->id) {
                 return response()->json([
                     'success' => false,
@@ -530,7 +518,7 @@ class ReviewController extends Controller
                 'review_message' => '',
             ];
 
-            // Determine if current user can review
+            
             if ($user->id === $contract->brand_id) {
                 $data['can_review'] = !$contract->hasBrandReview() && $contract->status === 'completed';
                 $data['review_message'] = $contract->hasBrandReview() 
@@ -562,9 +550,7 @@ class ReviewController extends Controller
         }
     }
 
-    /**
-     * Get rating distribution for a creator
-     */
+    
     private function getRatingDistribution(int $creatorId, bool $publicOnly = true): array
     {
         $query = Review::where('reviewed_id', $creatorId);
@@ -587,48 +573,46 @@ class ReviewController extends Controller
         return $result;
     }
 
-    /**
-     * Send NEXA review request message when both parties have reviewed
-     */
-    // private function sendNexaReviewRequest($contract): void
-    // {
-    //     try {
-    //         $chatRoom = $contract->offer->chatRoom;
-    //         $brand = $contract->brand;
-    //         $creator = $contract->creator;
+    
+    
+    
+    
+    
+    
+    
 
-    //         // Message asking for NEXA review
-    //         $nexaReviewMessage = "🌟 Thank you for completing this campaign!\n\n" .
-    //             "Both parties have submitted their reviews and the payment has been processed successfully. " .
-    //             "We hope you had a great experience working together!\n\n" .
-    //             "To help us improve our platform and provide better service to all users, " .
-    //             "we would greatly appreciate if you could take a moment to review NEXA on your preferred platform:\n\n" .
-    //             "• Google Play Store\n" .
-    //             "• App Store\n" .
-    //             "• Trustpilot\n" .
-    //             "• Your social media channels\n\n" .
-    //             "Your feedback helps us grow and serve our community better. Thank you for being part of NEXA! 🚀";
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
-    //         \App\Models\Message::create([
-    //             'chat_room_id' => $chatRoom->id,
-    //             'sender_id' => $brand->id,
-    //             'message' => $nexaReviewMessage,
-    //             'message_type' => 'text',
-    //             'is_system_message' => true,
-    //         ]);
+    
+    
+    
+    
+    
+    
+    
 
-    //         Log::info('NEXA review request sent successfully', [
-    //             'contract_id' => $contract->id,
-    //             'chat_room_id' => $chatRoom->id,
-    //             'brand_id' => $brand->id,
-    //             'creator_id' => $creator->id,
-    //         ]);
+    
+    
+    
+    
+    
+    
 
-    //     } catch (\Exception $e) {
-    //         Log::error('Failed to send NEXA review request', [
-    //             'contract_id' => $contract->id,
-    //             'error' => $e->getMessage(),
-    //         ]);
-    //     }
-    // }
+    
+    
+    
+    
+    
+    
+    
 } 

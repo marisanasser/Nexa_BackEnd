@@ -6,9 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    
     public function up(): void
     {
         Schema::create('campaigns', function (Blueprint $table) {
@@ -20,9 +18,9 @@ return new class extends Migration
             $table->decimal('final_price', 10, 2)->nullable();
             $table->string('location')->nullable();
             $table->text('requirements')->nullable();
-            $table->json('target_states')->nullable(); // JSON array of states
+            $table->json('target_states')->nullable(); 
             $table->string('category')->nullable();
-            $table->string('campaign_type')->nullable(); // instagram, tiktok, youtube, etc.
+            $table->string('campaign_type')->nullable(); 
             $table->string('image_url')->nullable();
             $table->enum('status', ['pending', 'approved', 'rejected', 'completed', 'cancelled'])->default('pending');
             $table->date('deadline');
@@ -35,9 +33,7 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
         Schema::dropIfExists('campaigns');

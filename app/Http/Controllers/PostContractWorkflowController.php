@@ -14,9 +14,7 @@ use App\Services\NotificationService;
 
 class PostContractWorkflowController extends Controller
 {
-    /**
-     * Get contracts waiting for review (brand only)
-     */
+    
     public function getContractsWaitingForReview(): JsonResponse
     {
         $user = Auth::user();
@@ -70,9 +68,7 @@ class PostContractWorkflowController extends Controller
         }
     }
 
-    /**
-     * Get contracts with payment available (creator only)
-     */
+    
     public function getContractsWithPaymentAvailable(): JsonResponse
     {
         $user = Auth::user();
@@ -136,9 +132,7 @@ class PostContractWorkflowController extends Controller
         }
     }
 
-    /**
-     * Get work history for a user
-     */
+    
     public function getWorkHistory(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -198,7 +192,7 @@ class PostContractWorkflowController extends Controller
                 ];
             });
 
-            // Calculate statistics
+            
             $stats = $this->calculateWorkHistoryStats($user, $type);
 
             return response()->json([
@@ -223,9 +217,7 @@ class PostContractWorkflowController extends Controller
         }
     }
 
-    /**
-     * Calculate work history statistics
-     */
+    
     private function calculateWorkHistoryStats(User $user, string $type): array
     {
         $query = Contract::where('status', 'completed')
@@ -240,7 +232,7 @@ class PostContractWorkflowController extends Controller
         $totalContracts = $query->count();
         $totalEarnings = $type === 'creator' ? $query->sum('creator_amount') : $query->sum('budget');
         
-        // Calculate average rating
+        
         $reviews = $query->with('review')->get()->pluck('review')->filter();
         $averageRating = $reviews->count() > 0 ? $reviews->avg('rating') : 0;
 

@@ -8,23 +8,13 @@ use Illuminate\Support\Facades\Log;
 
 class ProcessPayments extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
+    
     protected $signature = 'payments:process';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    
     protected $description = 'Process pending job payments';
 
-    /**
-     * Execute the console command.
-     */
+    
     public function handle()
     {
         $this->info('Starting payment processing...');

@@ -9,11 +9,7 @@ use Illuminate\Support\Facades\Log;
 
 class VerifyWithdrawals extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
+    
     protected $signature = 'withdrawals:verify 
                             {--id= : Verify specific withdrawal by ID}
                             {--status= : Filter by status (pending, processing, completed, failed, cancelled)}
@@ -22,23 +18,17 @@ class VerifyWithdrawals extends Command
                             {--end-date= : End date for verification (Y-m-d)}
                             {--detailed : Show detailed verification information}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    
     protected $description = 'Verify withdrawal accuracy and bank account details';
 
-    /**
-     * Execute the console command.
-     */
+    
     public function handle()
     {
         $this->info('Starting withdrawal verification...');
 
         $query = Withdrawal::with(['creator']);
 
-        // Apply filters
+        
         if ($this->option('id')) {
             $query->where('id', $this->option('id'));
         }
@@ -90,7 +80,7 @@ class VerifyWithdrawals extends Command
         $currentBankAccount = BankAccount::where('user_id', $withdrawal->creator_id)->first();
         $verificationStatus = $this->getOverallVerificationStatus($withdrawal, $currentBankAccount);
 
-        // Update summary
+        
         switch ($verificationStatus) {
             case 'passed':
                 $summary['passed']++;
@@ -125,7 +115,7 @@ class VerifyWithdrawals extends Command
             $this->line("   Transaction ID: {$withdrawal->transaction_id}");
         }
 
-        // Bank account verification
+        
         $bankDetailsMatch = $this->compareBankDetails($withdrawal, $currentBankAccount);
         $bankIcon = $bankDetailsMatch ? '✓' : '✗';
         $bankColor = $bankDetailsMatch ? 'green' : 'red';
@@ -143,7 +133,7 @@ class VerifyWithdrawals extends Command
     {
         $this->line("   <fg=yellow>Detailed Bank Information:</>");
 
-        // Withdrawal bank details
+        
         $withdrawalDetails = $this->extractBankDetailsFromWithdrawal($withdrawal);
         if ($withdrawalDetails) {
             $this->line("   <fg=blue>Withdrawal Bank Details:</>");
@@ -154,7 +144,7 @@ class VerifyWithdrawals extends Command
             $this->line("     Name: {$withdrawalDetails['name']}");
         }
 
-        // Current bank account
+        
         if ($currentBankAccount) {
             $this->line("   <fg=blue>Current Bank Account:</>");
             $this->line("     Bank Code: {$currentBankAccount->bank_code}");
@@ -239,7 +229,7 @@ class VerifyWithdrawals extends Command
             return false;
         }
 
-        // Compare key fields
+        
         $fieldsToCompare = ['bank_code', 'agencia', 'agencia_dv', 'conta', 'conta_dv', 'cpf'];
         
         foreach ($fieldsToCompare as $field) {

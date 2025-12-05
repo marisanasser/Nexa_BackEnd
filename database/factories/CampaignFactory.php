@@ -6,23 +6,12 @@ use App\Models\Campaign;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
-/**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Campaign>
- */
 class CampaignFactory extends Factory
 {
-    /**
-     * The name of the factory's corresponding model.
-     *
-     * @var string
-     */
+    
     protected $model = Campaign::class;
 
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
+    
     public function definition(): array
     {
         return [
@@ -42,9 +31,7 @@ class CampaignFactory extends Factory
         ];
     }
 
-    /**
-     * Indicate that the campaign is approved.
-     */
+    
     public function approved(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -53,9 +40,7 @@ class CampaignFactory extends Factory
         ]);
     }
 
-    /**
-     * Indicate that the campaign is rejected.
-     */
+    
     public function rejected(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -63,9 +48,7 @@ class CampaignFactory extends Factory
         ]);
     }
 
-    /**
-     * Indicate that the campaign is active.
-     */
+    
     public function active(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -73,9 +56,7 @@ class CampaignFactory extends Factory
         ]);
     }
 
-    /**
-     * Indicate that the campaign is inactive.
-     */
+    
     public function inactive(): static
     {
         return $this->state(fn (array $attributes) => [

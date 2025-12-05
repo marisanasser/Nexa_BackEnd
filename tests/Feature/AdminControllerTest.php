@@ -15,14 +15,14 @@ class AdminControllerTest extends TestCase
     {
         parent::setUp();
         
-        // Create an admin user
+        
         $this->admin = User::factory()->admin()->create([
             'name' => 'Admin User',
             'email' => 'admin@example.com',
             'password' => bcrypt('password'),
         ]);
 
-        // Create some test users
+        
         $this->creator = User::factory()->create([
             'name' => 'Creator User',
             'email' => 'creator@example.com',
@@ -59,7 +59,7 @@ class AdminControllerTest extends TestCase
                 ]);
 
         $this->assertTrue($response->json('success'));
-        $this->assertCount(3, $response->json('data')); // admin + creator + brand
+        $this->assertCount(3, $response->json('data')); 
     }
 
     public function test_admin_can_get_creators(): void
@@ -75,7 +75,7 @@ class AdminControllerTest extends TestCase
                 ]);
 
         $this->assertTrue($response->json('success'));
-        $this->assertCount(1, $response->json('data')); // only creator
+        $this->assertCount(1, $response->json('data')); 
     }
 
     public function test_admin_can_get_brands(): void
@@ -91,7 +91,7 @@ class AdminControllerTest extends TestCase
                 ]);
 
         $this->assertTrue($response->json('success'));
-        $this->assertCount(1, $response->json('data')); // only brand
+        $this->assertCount(1, $response->json('data')); 
     }
 
     public function test_admin_can_get_user_statistics(): void
@@ -217,14 +217,14 @@ class AdminControllerTest extends TestCase
 
         $this->assertTrue($response->json('success'));
         
-        // Verify that user count excludes admin users
+        
         $userCount = $response->json('data.allUserCount');
-        $this->assertEquals(2, $userCount); // Only creator and brand, not admin
+        $this->assertEquals(2, $userCount); 
     }
 
     public function test_admin_can_get_pending_campaigns(): void
     {
-        // Create a pending campaign
+        
         Campaign::factory()->create([
             'brand_id' => $this->brand->id,
             'status' => 'pending',
@@ -271,7 +271,7 @@ class AdminControllerTest extends TestCase
 
         $this->assertTrue($response->json('success'));
         
-        // Verify that admin users are excluded from the response
+        
         $data = $response->json('data');
         foreach ($data as $user) {
             $this->assertNotEquals('admin', $user['role']);

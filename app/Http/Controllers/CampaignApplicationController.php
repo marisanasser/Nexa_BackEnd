@@ -16,34 +16,32 @@ use Stripe\Account;
 
 class CampaignApplicationController extends Controller
 {
-    /**
-     * Display a listing of applications based on user role
-     */
+    
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
         $query = CampaignApplication::with(['campaign', 'creator', 'reviewer'])
-            ->whereHas('creator'); // Only include applications where creator still exists
+            ->whereHas('creator'); 
 
         if ($user->isCreator()) {
-            // Creators see their own applications
+            
             $query->byCreator($user->id);
         } elseif ($user->isStudent()) {
-            // Students see their own applications (they can apply)
+            
             $query->byCreator($user->id);
         } elseif ($user->isBrand()) {
-            // Brands see applications for their campaigns
+            
             $query->whereHas('campaign', function ($q) use ($user) {
                 $q->where('brand_id', $user->id);
             });
         } elseif ($user->isAdmin()) {
-            // Admins see all applications
-            // No additional filtering needed
+            
+            
         } else {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        // Filter by status if provided
+        
         if ($request->has('status')) {
             $status = $request->get('status');
             if (in_array($status, ['pending', 'approved', 'rejected'])) {
@@ -51,7 +49,7 @@ class CampaignApplicationController extends Controller
             }
         }
 
-        // Filter by campaign if provided
+        
         if ($request->has('campaign_id')) {
             $query->byCampaign($request->get('campaign_id'));
         }
@@ -64,24 +62,22 @@ class CampaignApplicationController extends Controller
         ]);
     }
 
-    /**
-     * Store a newly created application
-     */
+    
     public function store(Request $request, Campaign $campaign): JsonResponse
     {
         $user = Auth::user();
 
-        // Only creators and students can apply
+        
         if (!$user->isCreator() && !$user->isStudent()) {
             return response()->json(['message' => 'Only creators and students can apply to campaigns'], 403);
         }
 
-        // Check if campaign is active and approved
+        
         if (!$campaign->isApproved() || !$campaign->is_active) {
             return response()->json(['message' => 'Campaign is not available for applications'], 400);
         }
 
-        // Check if creator already applied
+        
         if ($campaign->applications()->where('creator_id', $user->id)->exists()) {
             return response()->json(['message' => 'You have already applied to this campaign'], 400);
         }
@@ -111,10 +107,10 @@ class CampaignApplicationController extends Controller
             'status' => 'pending'
         ]);
 
-        // Notify admin of new application
+        
         \App\Services\NotificationService::notifyAdminOfNewApplication($application);
 
-        // Send email notification to brand about new application received
+        
         \App\Services\NotificationService::notifyBrandOfNewApplication($application);
 
         return response()->json([
@@ -124,14 +120,12 @@ class CampaignApplicationController extends Controller
         ], 201);
     }
 
-    /**
-     * Display the specified application
-     */
+    
     public function show(CampaignApplication $application): JsonResponse
     {
         $user = Auth::user();
 
-        // Check if user has access to this application
+        
         if (($user->isCreator() || $user->isStudent()) && $application->creator_id !== $user->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -146,48 +140,12 @@ class CampaignApplicationController extends Controller
         ]);
     }
 
-    /**
-     * Approve an application (Brand only)
-     * 
-     * This method checks if the brand has funds in the platform before approving:
-     * 
-     * 1. Stripe Account Check:
-     *    - Verifies brand has a Stripe Connect account (stripe_account_id)
-     *    - Retrieves account from Stripe API to verify it exists and is active
-     *    - Checks if account has charges_enabled and payouts_enabled
-     *    - If no Stripe account, redirects to payment methods page for Stripe Connect setup
-     * 
-     * 2. Payment Method Check:
-     *    - Verifies brand has a Stripe payment method configured
-     *    - Checks for stripe_customer_id + stripe_payment_method_id OR BrandPaymentMethod records
-     *    - If no payment method, redirects to Stripe checkout to set one up
-     * 
-     * 3. Contract Funding Check:
-     *    - If payment method exists, checks for contracts related to this application
-     *    - Contracts are created when offers are accepted (after proposal approval)
-     *    - If contracts exist and need funding, redirects to payment
-     *    - Uses Contract::needsFunding() to verify if brand has paid
-     * 
-     * 4. Fund Verification:
-     *    - A contract is considered "funded" if:
-     *      * It has a JobPayment with status 'completed', OR
-     *      * Contract status is 'active' or 'completed' (payment was processed), OR
-     *      * Payment status is 'completed' or 'processing'
-     *    - A contract "needs funding" if:
-     *      * Status is 'pending' with workflow_status 'payment_pending', OR
-     *      * No payment record exists, OR
-     *      * Payment status is 'pending' or 'failed'
-     * 
-     * 5. Approval Process:
-     *    - Only proceeds if Stripe account exists, payment method exists, and contracts are funded (or no contracts exist yet)
-     *    - Creates chat room automatically
-     *    - Sends notifications to creator and admin
-     */
+    
     public function approve(CampaignApplication $application): JsonResponse
     {
         $user = Auth::user();
 
-        // Only brands can approve applications for their campaigns
+        
         if (!$user->isBrand() || $application->campaign->brand_id !== $user->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -196,20 +154,20 @@ class CampaignApplicationController extends Controller
             return response()->json(['message' => 'Application cannot be approved'], 400);
         }
 
-        // Step 1: Check if brand has Stripe account configured
-        // This verifies the brand has a valid Stripe account before approving applications
+        
+        
         $hasStripeAccount = false;
         $stripeAccountStatus = null;
         
         if (!empty($user->stripe_account_id)) {
             try {
-                // Set Stripe API key
+                
                 Stripe::setApiKey(config('services.stripe.secret'));
                 
-                // Retrieve and verify Stripe account exists and is active
+                
                 $stripeAccount = Account::retrieve($user->stripe_account_id);
                 
-                // Check if account is active (charges and payouts enabled)
+                
                 $isAccountActive = $stripeAccount->charges_enabled && $stripeAccount->payouts_enabled;
                 
                 $hasStripeAccount = true;
@@ -240,11 +198,11 @@ class CampaignApplicationController extends Controller
             ]);
         }
 
-        // Step 2: Check if brand has payment methods configured
-        // This is required before approving applications to ensure payment capability
+        
+        
         $hasPaymentMethod = false;
         
-        // Check for Stripe payment method (direct Stripe integration on user model)
+        
         if ($user->stripe_customer_id && $user->stripe_payment_method_id) {
             $hasPaymentMethod = true;
             Log::info('Brand has direct Stripe payment method', [
@@ -254,7 +212,7 @@ class CampaignApplicationController extends Controller
             ]);
         }
         
-        // Check for BrandPaymentMethod records (active payment methods)
+        
         if (!$hasPaymentMethod) {
             $activePaymentMethods = \App\Models\BrandPaymentMethod::where('user_id', $user->id)
                 ->where('is_active', true)
@@ -269,7 +227,7 @@ class CampaignApplicationController extends Controller
             }
         }
 
-        // If no Stripe account exists, redirect to Stripe Connect onboarding
+        
         if (!$hasStripeAccount) {
             Log::info('Brand has no Stripe account, redirecting to Stripe Connect setup', [
                 'user_id' => $user->id,
@@ -277,7 +235,7 @@ class CampaignApplicationController extends Controller
                 'campaign_id' => $application->campaign_id,
             ]);
             
-            // Redirect to payment methods page where they can set up Stripe Connect
+            
             $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
             $redirectUrl = $frontendUrl . '/brand?component=Pagamentos&requires_stripe_account=true&application_id=' . $application->id . '&campaign_id=' . $application->campaign_id;
             
@@ -285,12 +243,12 @@ class CampaignApplicationController extends Controller
                 'success' => false,
                 'message' => 'You need to connect your Stripe account before approving proposals. Please set up your Stripe account and try again.',
                 'requires_stripe_account' => true,
-                'requires_funding' => true, // Also set this for frontend compatibility
+                'requires_funding' => true, 
                 'redirect_url' => $redirectUrl,
-            ], 402); // 402 Payment Required
+            ], 402); 
         }
 
-        // If no payment method exists, create Stripe checkout session for payment method setup
+        
         if (!$hasPaymentMethod) {
             Log::info('Brand has no payment method, creating checkout session for setup', [
                 'user_id' => $user->id,
@@ -299,10 +257,10 @@ class CampaignApplicationController extends Controller
                 'stripe_account_id' => $user->stripe_account_id,
             ]);
             try {
-                // Set Stripe API key
+                
                 Stripe::setApiKey(config('services.stripe.secret'));
 
-                // Ensure Stripe customer exists for the brand
+                
                 $customerId = $user->stripe_customer_id;
                 
                 if (!$customerId) {
@@ -328,7 +286,7 @@ class CampaignApplicationController extends Controller
                         'customer_id' => $customerId,
                     ]);
                 } else {
-                    // Verify customer exists
+                    
                     try {
                         Customer::retrieve($customerId);
                     } catch (\Exception $e) {
@@ -351,14 +309,14 @@ class CampaignApplicationController extends Controller
                     }
                 }
 
-                // Get frontend URL from config
+                
                 $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
 
-                // Create Checkout Session in setup mode for payment method configuration
-                // This allows the brand to add a payment method without making an immediate charge
+                
+                
                 $checkoutSession = Session::create([
                     'customer' => $customerId,
-                    'mode' => 'setup', // Setup mode for payment method collection only
+                    'mode' => 'setup', 
                     'payment_method_types' => ['card'],
                     'locale' => 'pt-BR',
                     'success_url' => $frontendUrl . '/brand?component=Pagamentos&success=true&session_id={CHECKOUT_SESSION_ID}&application_id=' . $application->id . '&campaign_id=' . $application->campaign_id,
@@ -386,7 +344,7 @@ class CampaignApplicationController extends Controller
                     'requires_funding' => true,
                     'redirect_url' => $checkoutSession->url,
                     'checkout_session_id' => $checkoutSession->id,
-                ], 402); // 402 Payment Required
+                ], 402); 
 
             } catch (\Exception $e) {
                 Log::error('Failed to create Stripe Checkout Session for application approval', [
@@ -396,7 +354,7 @@ class CampaignApplicationController extends Controller
                     'trace' => $e->getTraceAsString(),
                 ]);
 
-                // Fallback to frontend redirect if Stripe fails
+                
                 $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
                 $redirectUrl = $frontendUrl . '/brand?component=Pagamentos';
                 
@@ -409,33 +367,33 @@ class CampaignApplicationController extends Controller
             }
         }
 
-        // If payment method exists, check if there are contracts that need funding
-        // This verifies that the brand has funds/payment capability before approving proposals
-        // Check for contracts related to this campaign/creator that are pending payment
+        
+        
+        
         if ($hasPaymentMethod) {
-            // Find contracts related to this application that need funding
-            // Contracts are created when offers are accepted, so we check for existing contracts
+            
+            
             $contractsNeedingFunding = \App\Models\Contract::where('brand_id', $user->id)
                 ->where(function ($query) use ($application) {
-                    // Check for contracts related to this campaign via offers
+                    
                     $query->whereHas('offer', function ($q) use ($application) {
                         $q->where('campaign_id', $application->campaign_id)
                           ->where('creator_id', $application->creator_id);
                     })
-                    // Or check for contracts with this creator (might be created directly)
+                    
                     ->orWhere(function ($q) use ($application) {
                         $q->where('creator_id', $application->creator_id)
-                          ->whereNull('offer_id'); // Contracts without offers
+                          ->whereNull('offer_id'); 
                     });
                 })
                 ->get()
                 ->filter(function ($contract) {
-                    // Use the new helper method to check if contract needs funding
+                    
                     return $contract->needsFunding();
                 });
 
-            // If there are contracts needing funding, redirect brand to payment
-            // This ensures the brand has funds in the platform before approving proposals
+            
+            
             if ($contractsNeedingFunding->isNotEmpty()) {
                 $contractToFund = $contractsNeedingFunding->first();
                 
@@ -453,10 +411,10 @@ class CampaignApplicationController extends Controller
                 ]);
 
                 try {
-                    // Set Stripe API key
+                    
                     Stripe::setApiKey(config('services.stripe.secret'));
 
-                    // Ensure Stripe customer exists
+                    
                     $customerId = $user->stripe_customer_id;
                     
                     if (!$customerId) {
@@ -471,7 +429,7 @@ class CampaignApplicationController extends Controller
                         $customerId = $customer->id;
                         $user->update(['stripe_customer_id' => $customerId]);
                     } else {
-                        // Verify customer exists
+                        
                         try {
                             Customer::retrieve($customerId);
                         } catch (\Exception $e) {
@@ -488,13 +446,13 @@ class CampaignApplicationController extends Controller
                         }
                     }
 
-                    // Get frontend URL from config
+                    
                     $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
 
-                    // Create Checkout Session in payment mode for contract funding
+                    
                     $checkoutSession = Session::create([
                         'customer' => $customerId,
-                        'mode' => 'payment', // Payment mode to charge the brand
+                        'mode' => 'payment', 
                         'payment_method_types' => ['card'],
                         'locale' => 'pt-BR',
                         'line_items' => [[
@@ -504,7 +462,7 @@ class CampaignApplicationController extends Controller
                                     'name' => 'Contract Funding: ' . $contractToFund->title,
                                     'description' => 'Escrow deposit for contract #' . $contractToFund->id,
                                 ],
-                                'unit_amount' => (int) round($contractToFund->budget * 100), // Convert to cents
+                                'unit_amount' => (int) round($contractToFund->budget * 100), 
                             ],
                             'quantity' => 1,
                         ]],
@@ -535,7 +493,7 @@ class CampaignApplicationController extends Controller
                         'redirect_url' => $checkoutSession->url,
                         'checkout_session_id' => $checkoutSession->id,
                         'contract_id' => $contractToFund->id,
-                    ], 402); // 402 Payment Required
+                    ], 402); 
 
                 } catch (\Exception $e) {
                     Log::error('Failed to create contract funding checkout session during application approval', [
@@ -546,8 +504,8 @@ class CampaignApplicationController extends Controller
                         'trace' => $e->getTraceAsString(),
                     ]);
 
-                    // Continue with approval even if funding checkout creation fails
-                    // The brand can fund the contract later
+                    
+                    
                     Log::warning('Proceeding with approval despite funding checkout failure', [
                         'user_id' => $user->id,
                         'application_id' => $application->id,
@@ -558,15 +516,15 @@ class CampaignApplicationController extends Controller
 
         $application->approve($user->id);
 
-        // Automatically create chat room when proposal is approved
+        
         try {
             $chatRoom = \App\Models\ChatRoom::findOrCreateRoom(
                 $application->campaign_id,
-                $user->id, // brand_id
+                $user->id, 
                 $application->creator_id
             );
 
-            // Update application workflow status to indicate first contact has been initiated
+            
             if ($chatRoom->wasRecentlyCreated) {
                 $application->initiateFirstContact();
                 
@@ -577,7 +535,7 @@ class CampaignApplicationController extends Controller
                     'workflow_status' => $application->workflow_status,
                 ]);
                 
-                // Send initial offer automatically when chat room is created
+                
                 $chatController = new \App\Http\Controllers\ChatController();
                 $chatController->sendInitialOfferIfNeeded($chatRoom);
             }
@@ -600,10 +558,10 @@ class CampaignApplicationController extends Controller
             ]);
         }
 
-        // Notify creator about proposal approval
+        
         \App\Services\NotificationService::notifyCreatorOfProposalApproval($application);
 
-        // Notify admin of application approval
+        
         \App\Services\NotificationService::notifyAdminOfSystemActivity('application_approved', [
             'application_id' => $application->id,
             'campaign_id' => $application->campaign_id,
@@ -621,14 +579,12 @@ class CampaignApplicationController extends Controller
         ]);
     }
 
-    /**
-     * Reject an application (Brand only)
-     */
+    
     public function reject(Request $request, CampaignApplication $application): JsonResponse
     {
         $user = Auth::user();
 
-        // Only brands can reject applications for their campaigns
+        
         if (!$user->isBrand() || $application->campaign->brand_id !== $user->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -650,7 +606,7 @@ class CampaignApplicationController extends Controller
 
         $application->reject($user->id, $request->rejection_reason);
 
-        // Notify admin of application rejection
+        
         \App\Services\NotificationService::notifyAdminOfSystemActivity('application_rejected', [
             'application_id' => $application->id,
             'campaign_id' => $application->campaign_id,
@@ -669,14 +625,12 @@ class CampaignApplicationController extends Controller
         ]);
     }
 
-    /**
-     * Withdraw an application (Creator only)
-     */
+    
     public function withdraw(CampaignApplication $application): JsonResponse
     {
         $user = Auth::user();
 
-        // Only creators and students can withdraw their own applications
+        
         if ((!$user->isCreator() && !$user->isStudent()) || $application->creator_id !== $user->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -687,7 +641,7 @@ class CampaignApplicationController extends Controller
 
         $application->delete();
 
-        // Notify admin of application withdrawal
+        
         \App\Services\NotificationService::notifyAdminOfSystemActivity('application_withdrawn', [
             'application_id' => $application->id,
             'campaign_id' => $application->campaign_id,
@@ -704,14 +658,12 @@ class CampaignApplicationController extends Controller
         ]);
     }
 
-    /**
-     * Get applications for a specific campaign
-     */
+    
     public function campaignApplications(Campaign $campaign): JsonResponse
     {
         $user = Auth::user();
 
-        // Only brand owner or admin can see applications for a campaign
+        
         if ($user->isCreator()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -722,7 +674,7 @@ class CampaignApplicationController extends Controller
 
         $applications = $campaign->applications()
             ->with(['creator', 'reviewer'])
-            ->whereHas('creator') // Only include applications where creator still exists
+            ->whereHas('creator') 
             ->orderBy('created_at', 'desc')
             ->paginate(15);
 
@@ -732,9 +684,7 @@ class CampaignApplicationController extends Controller
         ]);
     }
 
-    /**
-     * Get application statistics
-     */
+    
     public function statistics(): JsonResponse
     {
         $user = Auth::user();
@@ -743,7 +693,7 @@ class CampaignApplicationController extends Controller
         if ($user->isCreator()) {
             $query->byCreator($user->id);
         } elseif ($user->isStudent()) {
-            // Students see their own application statistics
+            
             $query->byCreator($user->id);
         } elseif ($user->isBrand()) {
             $query->whereHas('campaign', function ($q) use ($user) {

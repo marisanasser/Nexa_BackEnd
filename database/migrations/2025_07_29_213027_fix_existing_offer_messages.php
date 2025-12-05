@@ -7,12 +7,10 @@ use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    
     public function up(): void
     {
-        // Fix existing offer messages by updating their offer_data
+        
         $offerMessages = DB::table('messages')
             ->where('message_type', 'offer')
             ->whereNotNull('offer_data')
@@ -22,11 +20,11 @@ return new class extends Migration
             $offerData = json_decode($message->offer_data, true);
             
             if (isset($offerData['offer_id'])) {
-                // Get the actual offer data
+                
                 $offer = DB::table('offers')->where('id', $offerData['offer_id'])->first();
                 
                 if ($offer) {
-                    // Update the offer_data with correct information
+                    
                     $updatedOfferData = [
                         'offer_id' => $offer->id,
                         'title' => $offer->title ?? 'Oferta de Projeto',
@@ -44,7 +42,7 @@ return new class extends Migration
                         ],
                     ];
 
-                    // Update the message
+                    
                     DB::table('messages')
                         ->where('id', $message->id)
                         ->update([
@@ -55,11 +53,9 @@ return new class extends Migration
         }
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
-        // This migration fixes data, so no rollback needed
+        
     }
 };

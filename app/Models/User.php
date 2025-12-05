@@ -14,11 +14,7 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
+    
     protected $fillable = [
         'name',
         'email',
@@ -72,32 +68,20 @@ class User extends Authenticatable
         'stripe_customer_id'
     ];
 
-    /**
-     * The model's default values for attributes.
-     *
-     * @var array
-     */
+    
     protected $attributes = [
         'gender' => 'other',
         'student_verified' => false,
         'has_premium' => false,
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
+    
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
+    
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
@@ -111,7 +95,7 @@ class User extends Authenticatable
         'languages' => 'array',
     ];
 
-    // Relationships
+    
 
     public function campaigns(): HasMany
     {
@@ -198,7 +182,7 @@ class User extends Authenticatable
         return $this->hasOne(Portfolio::class);
     }
 
-    // New relationships for hiring system
+    
     public function sentOffers(): HasMany
     {
         return $this->hasMany(Offer::class, 'brand_id');
@@ -229,9 +213,7 @@ class User extends Authenticatable
         return $this->hasMany(Review::class, 'reviewed_id');
     }
 
-    /**
-     * Update user's review statistics
-     */
+    
     public function updateReviewStats(): void
     {
         $reviews = $this->receivedReviews()->where('is_public', true);
@@ -247,9 +229,7 @@ class User extends Authenticatable
         $this->save();
     }
 
-    /**
-     * Get formatted average rating
-     */
+    
     public function getFormattedAverageRatingAttribute(): string
     {
         if (!$this->average_rating) {
@@ -259,9 +239,7 @@ class User extends Authenticatable
         return number_format($this->average_rating, 1);
     }
 
-    /**
-     * Get rating stars for display
-     */
+    
     public function getRatingStarsAttribute(): string
     {
         if (!$this->average_rating) {
@@ -277,9 +255,7 @@ class User extends Authenticatable
                str_repeat('☆', $emptyStars);
     }
 
-    /**
-     * Get user's age based on birth date
-     */
+    
     public function getAgeAttribute(): ?int
     {
         if (!$this->birth_date) {
@@ -319,11 +295,7 @@ class User extends Authenticatable
         return $this->hasMany(Withdrawal::class, 'creator_id');
     }
 
-    /**
-     * Get available withdrawal methods for this user
-     * Returns active withdrawal methods that the user can use
-     * Includes user's Stripe payment method if available
-     */
+    
     public function getWithdrawalMethods()
     {
         $methods = WithdrawalMethod::getActiveMethods()
@@ -341,8 +313,8 @@ class User extends Authenticatable
                 ];
             })
             ->filter(function ($method) {
-                // Filter out 'stripe_card' and 'stripe_connect' from database methods if user has a Stripe Connect account
-                // The user-specific Stripe Connect bank account will be added below with actual bank details
+                
+                
                 if (($method['id'] === 'stripe_card' || $method['id'] === 'stripe_connect') && $this->stripe_account_id) {
                     return false;
                 }
@@ -351,19 +323,19 @@ class User extends Authenticatable
             ->values()
             ->toArray();
 
-        // Add user's Stripe Connect bank account if available
+        
         if ($this->stripe_account_id) {
             try {
                 $stripeSecret = config('services.stripe.secret');
                 if ($stripeSecret) {
                     \Stripe\Stripe::setApiKey($stripeSecret);
                     
-                    // Retrieve Stripe Connect account
+                    
                     $stripeAccount = \Stripe\Account::retrieve($this->stripe_account_id);
                     
-                    // Check if payouts are enabled (means bank account is set up)
+                    
                     if ($stripeAccount->payouts_enabled) {
-                        // Retrieve external accounts (bank accounts) for the connected account
+                        
                         $externalAccounts = \Stripe\Account::allExternalAccounts(
                             $this->stripe_account_id,
                             ['object' => 'bank_account', 'limit' => 1]
@@ -372,7 +344,7 @@ class User extends Authenticatable
                         if (!empty($externalAccounts->data)) {
                             $bankAccount = $externalAccounts->data[0];
                             
-                            // Format bank account information
+                            
                             $bankName = $bankAccount->bank_name ?? 'Banco';
                             $last4 = $bankAccount->last4 ?? '****';
                             $accountHolderName = $bankAccount->account_holder_name ?? '';
@@ -382,15 +354,15 @@ class User extends Authenticatable
                                 $bankDisplayName .= ' (' . $accountHolderName . ')';
                             }
                             
-                            // Add Stripe Connect bank account as a withdrawal option
+                            
                             $methods[] = [
                                 'id' => 'stripe_connect_bank_account',
                                 'name' => $bankDisplayName,
                                 'description' => 'Conta bancária cadastrada na sua conta Stripe Connect',
-                                'min_amount' => 10.00, // Minimum withdrawal amount
-                                'max_amount' => 10000.00, // Maximum withdrawal amount
+                                'min_amount' => 10.00, 
+                                'max_amount' => 10000.00, 
                                 'processing_time' => '1-3 dias úteis',
-                                'fee' => 0.00, // No fee for Stripe Connect withdrawals
+                                'fee' => 0.00, 
                                 'required_fields' => [],
                                 'field_config' => [],
                                 'stripe_account_id' => $this->stripe_account_id,
@@ -405,7 +377,7 @@ class User extends Authenticatable
                     }
                 }
             } catch (\Exception $e) {
-                // Log error but don't fail - just skip adding Stripe bank account
+                
                 \Illuminate\Support\Facades\Log::warning('Failed to retrieve Stripe Connect bank account for withdrawal methods', [
                     'user_id' => $this->id,
                     'stripe_account_id' => $this->stripe_account_id,
@@ -417,25 +389,19 @@ class User extends Authenticatable
         return collect($methods);
     }
 
-    /**
-     * Get the user's active subscription
-     */
+    
     public function activeSubscription(): HasOne
     {
         return $this->hasOne(\App\Models\Subscription::class)->where('status', 'active');
     }
 
-    /**
-     * Get all user subscriptions
-     */
+    
     public function subscriptions(): HasMany
     {
         return $this->hasMany(\App\Models\Subscription::class);
     }
 
-    /**
-     * Helper to safely get Carbon instance from date attribute
-     */
+    
     private function getCarbonDate($date)
     {
         if (!$date) {
@@ -454,12 +420,10 @@ class User extends Authenticatable
         return null;
     }
 
-    /**
-     * Check if the user has premium status.
-     */
+    
     public function isPremium(): bool
     {
-        // Admins always have premium
+        
         if ($this->isAdmin()) {
             return true;
         }
@@ -473,12 +437,10 @@ class User extends Authenticatable
         return $premiumExpiresAt === null || $premiumExpiresAt->isFuture();
     }
 
-    /**
-     * Check if the user is in free trial.
-     */
+    
     public function isOnTrial(): bool
     {
-        // If user has premium access, they are not on trial
+        
         if ($this->isPremium()) {
             return false;
         }
@@ -492,36 +454,30 @@ class User extends Authenticatable
         return $trialExpiresAt !== null && $trialExpiresAt->isFuture();
     }
 
-    /**
-     * Check if the user has bought premium (regardless of expiration).
-     */
+    
     public function hasBoughtPremium(): bool
     {
         return $this->has_premium;
     }
 
-    /**
-     * Check if the user has premium access (either premium or trial for students only).
-     */
+    
     public function hasPremiumAccess(): bool
     {
-        // Admins always have premium access
+        
         if ($this->isAdmin()) {
             return true;
         }
         
-        // For students, prioritize premium over trial access
+        
         if ($this->isStudent()) {
             return $this->isPremium() || $this->isOnTrial();
         }
         
-        // For creators and brands, only allow premium access (no trial)
+        
         return $this->isPremium();
     }
 
-    /**
-     * Check if the user is a verified student.
-     */
+    
     public function isVerifiedStudent(): bool
     {
         if (!$this->student_verified) {
@@ -533,41 +489,31 @@ class User extends Authenticatable
         return $studentExpiresAt === null || $studentExpiresAt->isFuture();
     }
 
-    /**
-     * Check if the user is an admin.
-     */
+    
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
     }
 
-    /**
-     * Check if the user is a creator.
-     */
+    
     public function isCreator(): bool
     {
         return $this->role === 'creator';
     }
 
-    /**
-     * Check if the user is a brand.
-     */
+    
     public function isBrand(): bool
     {
         return $this->role === 'brand';
     }
 
-    /**
-     * Check if the user is a student.
-     */
+    
     public function isStudent(): bool
     {
         return $this->role === 'student';
     }
 
-    /**
-     * Get the user's display name (includes company name for brands).
-     */
+    
     public function getDisplayNameAttribute(): string
     {
         if ($this->isBrand() && $this->company_name) {
@@ -591,49 +537,37 @@ class User extends Authenticatable
         return $this->hasOne(BrandPaymentMethod::class, 'user_id')->where('is_default', true);
     }
 
-    /**
-     * Check if the brand has any active payment methods
-     */
+    
     public function hasActivePaymentMethods(): bool
     {
         return $this->brandPaymentMethods()->active()->exists();
     }
 
-    /**
-     * Check if the brand has a default payment method
-     */
+    
     public function hasDefaultPaymentMethod(): bool
     {
         return $this->defaultPaymentMethod()->exists();
     }
 
-    /**
-     * Get the brand's default payment method
-     */
+    
     public function getDefaultPaymentMethod()
     {
         return $this->defaultPaymentMethod()->first();
     }
 
-    /**
-     * Check if the brand can send offers (has payment method)
-     */
+    
     public function canSendOffers(): bool
     {
         return $this->isBrand() && $this->hasActivePaymentMethods();
     }
 
-    /**
-     * Check if user is suspended
-     */
+    
     public function isSuspended(): bool
     {
         return $this->suspended_until && $this->suspended_until->isFuture();
     }
 
-    /**
-     * Get suspension status
-     */
+    
     public function getSuspensionStatus(): array
     {
         if (!$this->suspended_until) {
@@ -655,9 +589,7 @@ class User extends Authenticatable
         ];
     }
 
-    /**
-     * Suspend user
-     */
+    
     public function suspend(int $days, string $reason = null): bool
     {
         $this->update([
@@ -668,9 +600,7 @@ class User extends Authenticatable
         return true;
     }
 
-    /**
-     * Unsuspend user
-     */
+    
     public function unsuspend(): bool
     {
         $this->update([
@@ -681,12 +611,10 @@ class User extends Authenticatable
         return true;
     }
 
-    /**
-     * Get the has_premium attribute - always true for admins
-     */
+    
     public function getHasPremiumAttribute($value)
     {
-        // Admins always have premium
+        
         if ($this->role === 'admin') {
             return true;
         }
@@ -694,12 +622,10 @@ class User extends Authenticatable
         return $value ?? false;
     }
 
-    /**
-     * Get the premium_expires_at attribute - set far future for admins
-     */
+    
     public function getPremiumExpiresAtAttribute($value)
     {
-        // Admins have premium forever (year 2099)
+        
         if ($this->role === 'admin') {
             return now()->addYears(100);
         }

@@ -32,7 +32,7 @@ class Contract extends Model
         'cancellation_reason',
         'platform_fee',
         'creator_amount',
-        'workflow_status', // New field for detailed workflow tracking
+        'workflow_status', 
         'has_brand_review',
         'has_creator_review',
         'has_both_reviews',
@@ -49,7 +49,7 @@ class Contract extends Model
         'creator_amount' => 'decimal:2',
     ];
 
-    // Relationships
+    
     public function offer(): BelongsTo
     {
         return $this->belongsTo(Offer::class);
@@ -75,7 +75,7 @@ class Contract extends Model
         return $this->hasMany(Review::class);
     }
 
-    // User-specific review relationships
+    
     public function userReview($userId): HasOne
     {
         return $this->hasOne(Review::class)->where('reviewer_id', $userId);
@@ -96,25 +96,18 @@ class Contract extends Model
         return $this->hasOne(JobPayment::class);
     }
 
-    /**
-     * Check if brand has funded contracts for a specific application
-     * 
-     * @param int $brandId The brand user ID
-     * @param int $campaignId The campaign ID
-     * @param int $creatorId The creator user ID
-     * @return array Returns array with 'has_funded' boolean and 'contracts_needing_funding' collection
-     */
+    
     public static function checkBrandFundsForApplication(int $brandId, int $campaignId, int $creatorId): array
     {
-        // Find all contracts related to this application
+        
         $contracts = self::where('brand_id', $brandId)
             ->where(function ($query) use ($campaignId, $creatorId) {
-                // Check for contracts related to this campaign via offers
+                
                 $query->whereHas('offer', function ($q) use ($campaignId, $creatorId) {
                     $q->where('campaign_id', $campaignId)
                       ->where('creator_id', $creatorId);
                 })
-                // Or check for contracts with this creator (might be created directly)
+                
                 ->orWhere(function ($q) use ($creatorId) {
                     $q->where('creator_id', $creatorId)
                       ->whereNull('offer_id');
@@ -122,7 +115,7 @@ class Contract extends Model
             })
             ->get();
 
-        // Separate contracts into funded and needing funding
+        
         $fundedContracts = $contracts->filter(function ($contract) {
             return $contract->isFunded();
         });
@@ -156,7 +149,7 @@ class Contract extends Model
         return $this->hasMany(DeliveryMaterial::class);
     }
 
-    // Scopes
+    
     public function scopeActive($query)
     {
         return $query->where('status', 'active');
@@ -183,7 +176,7 @@ class Contract extends Model
                     ->where('expected_completion_at', '<', now());
     }
 
-    // Methods
+    
     public function isActive(): bool
     {
         return $this->status === 'active';
@@ -219,17 +212,13 @@ class Contract extends Model
         return $this->isActive() && !$this->isCompleted();
     }
 
-    /**
-     * Check if contract can be terminated
-     */
+    
     public function canBeTerminated(): bool
     {
         return $this->isActive() && !$this->isCompleted();
     }
 
-    /**
-     * Terminate a contract (brand only)
-     */
+    
     public function terminate(string $reason = null): bool
     {
         if (!$this->canBeTerminated()) {
@@ -243,82 +232,64 @@ class Contract extends Model
             'cancellation_reason' => $reason ?? 'Contract terminated by brand',
         ]);
 
-        // Notify both parties about termination
+        
         NotificationService::notifyUserOfContractTerminated($this, $reason);
 
-        // Check if campaign should be marked as cancelled
+        
         $this->checkAndCancelCampaign();
 
         return true;
     }
 
-    /**
-     * Check if contract is waiting for review
-     */
+    
     public function isWaitingForReview(): bool
     {
         return $this->status === 'completed' && $this->workflow_status === 'waiting_review';
     }
 
-    /**
-     * Check if contract has been reviewed and payment is available
-     */
+    
     public function isPaymentAvailable(): bool
     {
         return $this->status === 'completed' && $this->workflow_status === 'payment_available';
     }
 
-    /**
-     * Check if contract payment has been withdrawn
-     */
+    
     public function isPaymentWithdrawn(): bool
     {
         return $this->status === 'completed' && $this->workflow_status === 'payment_withdrawn';
     }
 
-    /**
-     * Check if the brand has reviewed this contract
-     */
+    
     public function hasBrandReview(): bool
     {
         return $this->reviews()->where('reviewer_id', $this->brand_id)->exists();
     }
 
-    /**
-     * Check if the creator has reviewed this contract
-     */
+    
     public function hasCreatorReview(): bool
     {
         return $this->reviews()->where('reviewer_id', $this->creator_id)->exists();
     }
 
-    /**
-     * Check if both parties have reviewed each other
-     */
+    
     public function hasBothReviews(): bool
     {
         return $this->hasBrandReview() && $this->hasCreatorReview();
     }
 
-    /**
-     * Get the brand's review for this contract
-     */
+    
     public function getBrandReview()
     {
         return $this->reviews()->where('reviewer_id', $this->brand_id)->first();
     }
 
-    /**
-     * Get the creator's review for this contract
-     */
+    
     public function getCreatorReview()
     {
         return $this->reviews()->where('reviewer_id', $this->creator_id)->first();
     }
 
-    /**
-     * Update contract review status
-     */
+    
     public function updateReviewStatus(): void
     {
         $this->has_brand_review = $this->hasBrandReview();
@@ -327,30 +298,28 @@ class Contract extends Model
         $this->save();
     }
 
-    /**
-     * Process payment after review is submitted
-     */
+    
     public function processPaymentAfterReview(): bool
     {
-        // Only process payment for completed contracts where creator has reviewed the brand
+        
         if ($this->status !== 'completed' || $this->workflow_status !== 'waiting_review') {
             return false;
         }
 
-        // Check if creator has submitted a review
+        
         $creatorReview = $this->reviews()->where('reviewer_id', $this->creator_id)->first();
         if (!$creatorReview) {
             return false;
         }
 
-        // Update payment status to completed
+        
         if ($this->payment) {
             $this->payment->update([
                 'status' => 'completed',
             ]);
         }
 
-        // Get or create creator balance
+        
         $balance = CreatorBalance::firstOrCreate(
             ['creator_id' => $this->creator_id],
             [
@@ -361,17 +330,17 @@ class Contract extends Model
             ]
         );
 
-        // Ensure payment is in pending_balance first (in case it wasn't added during contract funding)
-        // If the amount is not in pending_balance, add it first
-        $balance->refresh(); // Get latest balance from database
+        
+        
+        $balance->refresh(); 
         
         if ($balance->pending_balance < $this->creator_amount) {
-            // Add the creator amount to pending_balance if it's not already there
+            
             $amountToAdd = $this->creator_amount - $balance->pending_balance;
             if ($amountToAdd > 0) {
                 $previousPendingBalance = $balance->pending_balance;
                 $balance->addPendingAmount($amountToAdd);
-                $balance->refresh(); // Refresh to get updated pending_balance
+                $balance->refresh(); 
                 
                 \Illuminate\Support\Facades\Log::info('Added payment to pending balance during review processing', [
                     'contract_id' => $this->id,
@@ -384,8 +353,8 @@ class Contract extends Model
             }
         }
 
-        // Move escrow from pending to available balance upon review
-        // Only proceed if the move is successful
+        
+        
         $moveSuccess = $balance->movePendingToAvailable($this->creator_amount);
         
         if (!$moveSuccess) {
@@ -397,8 +366,8 @@ class Contract extends Model
                 'available_balance' => $balance->available_balance,
             ]);
             
-            // Still try to add the amount directly to available_balance as fallback
-            // This handles the case where payment was never in pending_balance
+            
+            
             $balance->increment('available_balance', $this->creator_amount);
             $balance->refresh();
             
@@ -410,15 +379,15 @@ class Contract extends Model
             ]);
         }
         
-        // Only add to total_earned if we successfully moved or added to available_balance
+        
         $balance->addEarning($this->creator_amount);
 
-        // Update workflow status
+        
         $this->update([
             'workflow_status' => 'payment_available',
         ]);
 
-        // Notify creator that funds are available
+        
         NotificationService::notifyCreatorOfPaymentAvailable($this);
 
         \Illuminate\Support\Facades\Log::info('Payment processed after review - moved to available balance', [
@@ -432,34 +401,26 @@ class Contract extends Model
         return true;
     }
 
-    /**
-     * Check if contract payment has been processed
-     */
+    
     public function hasPaymentProcessed(): bool
     {
         return $this->payment && $this->payment->status === 'completed';
     }
 
-    /**
-     * Check if contract is funded (brand has paid for this contract)
-     * A contract is considered funded if:
-     * 1. It has a payment record with status 'completed', OR
-     * 2. It's active (meaning payment was processed and contract started), OR
-     * 3. It's completed (meaning payment was processed and work is done)
-     */
+    
     public function isFunded(): bool
     {
-        // Check if payment exists and is completed
+        
         if ($this->hasPaymentProcessed()) {
             return true;
         }
 
-        // If contract is active or completed, it means payment was processed
+        
         if ($this->isActive() || $this->isCompleted()) {
             return true;
         }
 
-        // Check if there's a completed transaction
+        
         if ($this->payment && in_array($this->payment->status, ['completed', 'processing'])) {
             return true;
         }
@@ -467,52 +428,42 @@ class Contract extends Model
         return false;
     }
 
-    /**
-     * Check if contract needs funding (brand hasn't paid yet)
-     */
+    
     public function needsFunding(): bool
     {
-        // If contract is already funded, it doesn't need funding
+        
         if ($this->isFunded()) {
             return false;
         }
 
-        // Contract needs funding if:
-        // 1. Status is pending and workflow is payment_pending, OR
-        // 2. No payment exists, OR
-        // 3. Payment status is pending or failed
+        
+        
+        
+        
         return ($this->status === 'pending' && $this->workflow_status === 'payment_pending') ||
                !$this->payment ||
                ($this->payment && in_array($this->payment->status, ['pending', 'failed']));
     }
 
-    /**
-     * Check if contract payment is pending
-     */
+    
     public function isPaymentPending(): bool
     {
         return $this->status === 'pending' && $this->workflow_status === 'payment_pending';
     }
 
-    /**
-     * Check if contract payment failed
-     */
+    
     public function isPaymentFailed(): bool
     {
         return $this->status === 'payment_failed' && $this->workflow_status === 'payment_failed';
     }
 
-    /**
-     * Check if contract can be started (payment processed)
-     */
+    
     public function canBeStarted(): bool
     {
         return $this->status === 'pending' && $this->hasPaymentProcessed();
     }
 
-    /**
-     * Retry payment for failed contracts
-     */
+    
     public function retryPayment(): bool
     {
         if (!$this->isPaymentFailed()) {
@@ -533,9 +484,7 @@ class Contract extends Model
         return false;
     }
 
-    /**
-     * Mark payment as withdrawn
-     */
+    
     public function markPaymentWithdrawn(): bool
     {
         if (!$this->isPaymentAvailable()) {
@@ -555,27 +504,27 @@ class Contract extends Model
             return false;
         }
 
-        // Only allow completion of active contracts
+        
         if ($this->status !== 'active') {
             return false;
         }
 
-        // Calculate payment amounts
+        
         $creatorAmount = $this->budget * 0.95;
         $platformFee = $this->budget * 0.05;
 
-        // Check if transaction already exists for this contract
+        
         $existingTransaction = \App\Models\Transaction::where('contract_id', $this->id)->first();
         
-        // Create transaction record if it doesn't exist (for tracking brand's payment)
+        
         if (!$existingTransaction) {
             $transaction = \App\Models\Transaction::create([
                 'user_id' => $this->brand_id,
                 'contract_id' => $this->id,
                 'stripe_payment_intent_id' => 'contract_completed_' . $this->id,
-                'status' => 'paid', // Assuming payment is already made to platform
+                'status' => 'paid', 
                 'amount' => $this->budget,
-                'payment_method' => 'platform_escrow', // Indicates payment held by platform
+                'payment_method' => 'platform_escrow', 
                 'payment_data' => [
                     'type' => 'contract_completion',
                     'contract_id' => $this->id,
@@ -587,7 +536,7 @@ class Contract extends Model
             $transaction = $existingTransaction;
         }
 
-        // Create payment record immediately when brand completes the campaign
+        
         $jobPayment = JobPayment::create([
             'contract_id' => $this->id,
             'brand_id' => $this->brand_id,
@@ -596,41 +545,39 @@ class Contract extends Model
             'platform_fee' => $platformFee,
             'creator_amount' => $creatorAmount,
             'payment_method' => 'platform_escrow',
-            'status' => 'pending', // Payment is pending until creator reviews
-            'transaction_id' => $transaction->id, // Link to the transaction
+            'status' => 'pending', 
+            'transaction_id' => $transaction->id, 
         ]);
 
         $this->update([
             'status' => 'completed',
             'completed_at' => now(),
-            'workflow_status' => 'waiting_review', // Waiting for creator to review brand
+            'workflow_status' => 'waiting_review', 
             'platform_fee' => $platformFee,
             'creator_amount' => $creatorAmount,
         ]);
 
-        // Notify brand that review is required
+        
         NotificationService::notifyBrandOfReviewRequired($this);
 
-        // Notify creator that contract is completed and waiting for review
+        
         NotificationService::notifyCreatorOfContractCompleted($this);
 
-        // Check if campaign should be marked as completed
+        
         $this->checkAndCompleteCampaign();
 
         return true;
     }
 
-    /**
-     * Check if all contracts for the campaign are completed and mark campaign as completed
-     */
+    
     private function checkAndCompleteCampaign(): void
     {
-        // Load offer relationship if not already loaded
+        
         if (!$this->relationLoaded('offer')) {
             $this->load('offer');
         }
 
-        // Get campaign through offer relationship
+        
         if (!$this->offer || !$this->offer->campaign_id) {
             return;
         }
@@ -640,31 +587,31 @@ class Contract extends Model
             return;
         }
 
-        // Only check campaigns that are approved and not already completed/cancelled
+        
         if ($campaign->status !== 'approved' || $campaign->isCompleted() || $campaign->isCancelled()) {
             return;
         }
 
-        // Get all contracts for this campaign through offers
+        
         $allContracts = self::whereHas('offer', function ($query) use ($campaign) {
             $query->where('campaign_id', $campaign->id);
         })->get();
 
-        // If no contracts exist, don't mark campaign as completed
+        
         if ($allContracts->isEmpty()) {
             return;
         }
 
-        // Check if all contracts are completed or cancelled (not pending or active)
+        
         $allCompletedOrCancelled = $allContracts->every(function ($contract) {
             return in_array($contract->status, ['completed', 'cancelled']);
         });
 
-        // If all contracts are completed or cancelled, mark campaign as completed
+        
         if ($allCompletedOrCancelled) {
             $campaign->complete();
             
-            // Process payments for all completed contracts and withdraw to creators
+            
             $this->processCampaignPayments($campaign, $allContracts);
             
             \Illuminate\Support\Facades\Log::info('Campaign marked as completed', [
@@ -677,13 +624,10 @@ class Contract extends Model
         }
     }
 
-    /**
-     * Process payments for all completed contracts and withdraw to creators
-     * Platform fee is 5%, creator gets 95%
-     */
+    
     private function processCampaignPayments(Campaign $campaign, $allContracts): void
     {
-        // Get only completed contracts (not cancelled ones)
+        
         $completedContracts = $allContracts->where('status', 'completed');
         
         if ($completedContracts->isEmpty()) {
@@ -691,7 +635,7 @@ class Contract extends Model
         }
 
         foreach ($completedContracts as $contract) {
-            // Get the payment for this contract
+            
             $payment = JobPayment::where('contract_id', $contract->id)->first();
             
             if (!$payment) {
@@ -702,10 +646,10 @@ class Contract extends Model
                 continue;
             }
 
-            // Process payment if it's still pending
+            
             if ($payment->isPending()) {
                 try {
-                    // Process the payment to move it from pending to available balance
+                    
                     $payment->process();
                     
                     \Illuminate\Support\Facades\Log::info('Payment processed for contract on campaign completion', [
@@ -725,12 +669,12 @@ class Contract extends Model
                     ]);
                 }
             } elseif ($payment->isCompleted()) {
-                // Payment already completed, ensure balance is updated
+                
                 $balance = CreatorBalance::where('creator_id', $contract->creator_id)->first();
                 if ($balance) {
-                    // Ensure the creator amount is in available balance
-                    // If it's still in pending, move it to available
-                    $balance->refresh(); // Get latest balance
+                    
+                    
+                    $balance->refresh(); 
                     $moveSuccess = $balance->movePendingToAvailable($payment->creator_amount);
                         
                     if ($moveSuccess) {
@@ -741,7 +685,7 @@ class Contract extends Model
                             'creator_amount' => $payment->creator_amount,
                         ]);
                     } else {
-                        // If move failed, add directly to available_balance as fallback
+                        
                         $balance->increment('available_balance', $payment->creator_amount);
                         $balance->refresh();
                         
@@ -758,54 +702,52 @@ class Contract extends Model
         }
     }
 
-    /**
-     * Send chat message about contract completion
-     */
-    // private function sendContractCompletionMessage(): void
-    // {
-    //     try {
-    //         // Get the chat room for this contract
-    //         $chatRoom = \App\Models\ChatRoom::whereHas('offers', function ($query) {
-    //             $query->where('id', $this->offer_id);
-    //         })->first();
+    
+    
+    
+    
+    
+    
+    
+    
 
-    //         if ($chatRoom) {
-    //             // Message for brand asking for review
-    //             $brandReviewMessage = "🎉 Campanha finalizada com sucesso!\n\n" .
-    //                 "A campanha foi finalizada e o pagamento está pronto para ser liberado. " .
-    //                 "Por favor, envie sua avaliação para completar o processo e liberar o pagamento para o criador.\n\n" .
-    //                 "Seu feedback ajuda a manter a qualidade de nossa plataforma e apoia outros usuários a tomar decisões informadas.";
+    
+    
+    
+    
+    
+    
 
-    //             // Message for creator about payment release
-    //             $creatorPaymentMessage = "🎉 Campanha finalizada com sucesso!\n\n" .
-    //                 "A marca finalizou a campanha e o pagamento está pronto para ser liberado. " .
-    //                 "Para receber seu pagamento, por favor, envie uma avaliação da marca.\n\n" .
-    //                 "Após ambas as avaliações serem enviadas, você poderá sacar seu pagamento.";
+    
+    
+    
+    
+    
 
-    //             // For system messages, use the creator's ID as sender to avoid potential foreign key issues
-    //             \App\Models\Message::create([
-    //                 'chat_room_id' => $chatRoom->id,
-    //                 'sender_id' => $this->creator_id,
-    //                 'message' => $brandReviewMessage,
-    //                 'message_type' => 'text',
-    //                 'is_system_message' => true,
-    //             ]);
+    
+    
+    
+    
+    
+    
+    
+    
 
-    //             \App\Models\Message::create([
-    //                 'chat_room_id' => $chatRoom->id,
-    //                 'sender_id' => $this->creator_id,
-    //                 'message' => $creatorPaymentMessage,
-    //                 'message_type' => 'text',
-    //                 'is_system_message' => true,
-    //             ]);
-    //         }
-    //     } catch (\Exception $e) {
-    //         \Illuminate\Support\Facades\Log::error('Failed to send contract completion message', [
-    //             'contract_id' => $this->id,
-    //             'error' => $e->getMessage()
-    //         ]);
-    //     }
-    // }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
     public function cancel(string $reason = null): bool
     {
@@ -819,26 +761,24 @@ class Contract extends Model
             'cancellation_reason' => $reason,
         ]);
 
-        // Notify both parties about cancellation
+        
         NotificationService::notifyUserOfContractCancelled($this, $reason);
 
-        // Check if campaign should be marked as cancelled
+        
         $this->checkAndCancelCampaign();
 
         return true;
     }
 
-    /**
-     * Check if all contracts for the campaign are cancelled and mark campaign as cancelled
-     */
+    
     private function checkAndCancelCampaign(): void
     {
-        // Load offer relationship if not already loaded
+        
         if (!$this->relationLoaded('offer')) {
             $this->load('offer');
         }
 
-        // Get campaign through offer relationship
+        
         if (!$this->offer || !$this->offer->campaign_id) {
             return;
         }
@@ -848,27 +788,27 @@ class Contract extends Model
             return;
         }
 
-        // Only check campaigns that are approved and not already completed/cancelled
+        
         if ($campaign->status !== 'approved' || $campaign->isCompleted() || $campaign->isCancelled()) {
             return;
         }
 
-        // Get all contracts for this campaign through offers
+        
         $allContracts = self::whereHas('offer', function ($query) use ($campaign) {
             $query->where('campaign_id', $campaign->id);
         })->get();
 
-        // If no contracts exist, don't mark campaign as cancelled
+        
         if ($allContracts->isEmpty()) {
             return;
         }
 
-        // Check if all contracts are cancelled or terminated (not pending or active)
+        
         $allCancelledOrTerminated = $allContracts->every(function ($contract) {
             return in_array($contract->status, ['cancelled', 'terminated']);
         });
 
-        // If all contracts are cancelled or terminated, mark campaign as cancelled
+        
         if ($allCancelledOrTerminated) {
             $campaign->cancel();
             
@@ -892,7 +832,7 @@ class Contract extends Model
             'status' => 'disputed',
         ]);
 
-        // Notify admin about dispute
+        
         NotificationService::notifyAdminOfContractDispute($this, $reason);
 
         return true;
@@ -912,7 +852,7 @@ class Contract extends Model
             ]
         );
 
-        // Add to available balance since payment is processed after review
+        
         $balance->increment('available_balance', $amount);
         $balance->increment('total_earned', $amount);
     }

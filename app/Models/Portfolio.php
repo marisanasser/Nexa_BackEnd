@@ -27,7 +27,7 @@ class Portfolio extends Model
         'project_links' => 'array',
     ];
 
-    // Relationships
+    
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -48,7 +48,7 @@ class Portfolio extends Model
         return $this->hasMany(PortfolioItem::class)->where('media_type', 'video')->orderBy('order');
     }
 
-    // Accessors
+    
     public function getProfilePictureUrlAttribute(): ?string
     {
         if ($this->profile_picture) {
@@ -57,7 +57,7 @@ class Portfolio extends Model
         return null;
     }
 
-    // Methods
+    
     public function getItemsCount(): int
     {
         return $this->items()->count();

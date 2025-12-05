@@ -12,9 +12,7 @@ use Illuminate\Support\Facades\Log;
 
 class StudentController extends Controller
 {
-    /**
-     * Verify student status and grant free trial
-     */
+    
     public function verifyStudent(Request $request): JsonResponse
     {
         
@@ -28,7 +26,7 @@ class StudentController extends Controller
                 ], 401);
             }
 
-            // Check if user is already verified as student
+            
             if ($user->student_verified) {
                 return response()->json([
                     'success' => false,
@@ -44,7 +42,7 @@ class StudentController extends Controller
 
             DB::beginTransaction();
             
-            // Check again inside transaction to prevent race conditions
+            
             $user->refresh();
             if ($user->student_verified) {
                 DB::rollBack();
@@ -54,7 +52,7 @@ class StudentController extends Controller
                 ], 422);
             }
 
-            // Check if there's already a pending request
+            
             $existingRequest = \App\Models\StudentVerificationRequest::where('user_id', $user->id)
                 ->where('status', 'pending')
                 ->exists();
@@ -68,7 +66,7 @@ class StudentController extends Controller
             }
 
             try {
-                // Always create a pending verification request - ALL requests require admin approval
+                
                 $svr = \App\Models\StudentVerificationRequest::create([
                     'user_id' => $user->id,
                     'purchase_email' => $request->purchase_email,
@@ -77,7 +75,7 @@ class StudentController extends Controller
                     'status' => 'pending',
                 ]);
 
-                // Notify admin of new request
+                
                 \App\Services\NotificationService::notifyAdminOfNewStudentVerification($user, [
                     'purchase_email' => $request->purchase_email,
                     'course_name' => $request->course_name ?? 'Build Creators',
@@ -119,9 +117,7 @@ class StudentController extends Controller
         }
     }
 
-    /**
-     * Get student verification status
-     */
+    
     public function getStudentStatus(): JsonResponse
     {
         try {
@@ -134,10 +130,10 @@ class StudentController extends Controller
                 ], 401);
             }
 
-            // Refresh user to ensure proper casting
+            
             $user->refresh();
 
-            // Helper function to safely format date (handles both Carbon and string)
+            
             $formatDate = function($date) {
                 if (!$date) {
                     return null;

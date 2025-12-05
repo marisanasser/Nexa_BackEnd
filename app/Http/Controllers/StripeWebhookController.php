@@ -54,7 +54,7 @@ class StripeWebhookController extends Controller
                 'livemode' => $event->livemode ?? false,
             ]);
 
-            // Idempotency: avoid reprocessing
+            
             $eventId = $event->id ?? null;
             if ($eventId && \Illuminate\Support\Facades\Cache::has('stripe_event_'.$eventId)) {
                 return response()->json(['status' => 'duplicate']);
@@ -82,15 +82,15 @@ class StripeWebhookController extends Controller
                         'mode' => $session->mode ?? 'unknown',
                     ]);
                     
-                    // Handle subscription checkout
+                    
                     if ($session->mode === 'subscription' && $session->subscription) {
                         $this->handleCheckoutSessionCompleted($session);
                     }
-                    // Handle contract funding checkout (payment mode)
+                    
                     elseif ($session->mode === 'payment') {
                         $this->handleContractFundingCheckout($session);
                     }
-                    // Handle payment method setup (setup mode)
+                    
                     elseif ($session->mode === 'setup') {
                         $this->handleSetupModeCheckout($session);
                     }
@@ -109,16 +109,16 @@ class StripeWebhookController extends Controller
                     ]);
                     
                     if ($stripeSubscriptionId) {
-                        // Check if subscription exists, if not create it (payment is now confirmed)
+                        
                         $existingSub = LocalSubscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
                         if (!$existingSub) {
-                            // Payment is confirmed but subscription doesn't exist yet - create it now
+                            
                             Log::info('Creating subscription from invoice.paid event', [
                                 'stripe_subscription_id' => $stripeSubscriptionId,
                             ]);
                             $this->createSubscriptionFromInvoice($invoice);
                         } else {
-                            // Subscription exists, just sync it
+                            
                             $this->syncSubscription($stripeSubscriptionId, $invoice->id);
                         }
                     }
@@ -168,7 +168,7 @@ class StripeWebhookController extends Controller
                         'amount' => $event->data->object->amount ?? 0,
                         'currency' => $event->data->object->currency ?? 'unknown',
                     ]);
-                    // TODO: implementar reconciliação de pagamentos/saques
+                    
                     break;
                     
                 default:
@@ -209,7 +209,7 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Retrieve subscription from Stripe to get details
+            
             \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
             $stripeSub = \Stripe\Subscription::retrieve($stripeSubscriptionId, [
                 'expand' => ['latest_invoice.payment_intent']
@@ -226,10 +226,10 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Get plan from metadata or from subscription items
+            
             $planId = null;
             
-            // Check metadata (can be array or object)
+            
             if (isset($session->metadata)) {
                 if (is_array($session->metadata) && isset($session->metadata['plan_id'])) {
                     $planId = (int) $session->metadata['plan_id'];
@@ -238,7 +238,7 @@ class StripeWebhookController extends Controller
                 }
             }
             
-            // If not found in metadata, try to get plan from subscription price
+            
             if (!$planId) {
                 $priceId = $stripeSub->items->data[0]->price->id ?? null;
                 if ($priceId) {
@@ -267,19 +267,19 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Check payment status - only create subscription if payment is successful
+            
             $paymentStatus = $stripeSub->status ?? 'incomplete';
             $invoiceStatus = null;
             $paymentIntentStatus = null;
             
-            // Check invoice status
+            
             if (isset($stripeSub->latest_invoice) && is_object($stripeSub->latest_invoice)) {
                 $invoiceStatus = $stripeSub->latest_invoice->status ?? null;
                 if (isset($stripeSub->latest_invoice->payment_intent)) {
                     if (is_object($stripeSub->latest_invoice->payment_intent)) {
                         $paymentIntentStatus = $stripeSub->latest_invoice->payment_intent->status ?? null;
                     } elseif (is_string($stripeSub->latest_invoice->payment_intent)) {
-                        // Fetch payment intent if it's just an ID
+                        
                         try {
                             $pi = \Stripe\PaymentIntent::retrieve($stripeSub->latest_invoice->payment_intent);
                             $paymentIntentStatus = $pi->status ?? null;
@@ -293,7 +293,7 @@ class StripeWebhookController extends Controller
                 }
             }
             
-            // Determine if payment was successful
+            
             $paymentSuccessful = (
                 $paymentStatus === 'active' ||
                 $invoiceStatus === 'paid' ||
@@ -307,7 +307,7 @@ class StripeWebhookController extends Controller
                 'payment_successful' => $paymentSuccessful,
             ]);
             
-            // If payment is not successful yet, wait for invoice.paid event
+            
             if (!$paymentSuccessful) {
                 Log::info('Payment not yet successful, subscription will be created when invoice.paid event is received', [
                     'subscription_id' => $stripeSubscriptionId,
@@ -316,7 +316,7 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Check if subscription already exists
+            
             $existingSub = LocalSubscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
             if ($existingSub) {
                 Log::info('Subscription already exists, syncing instead', [
@@ -327,7 +327,7 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Create local subscription record only if payment is successful
+            
             DB::beginTransaction();
 
             $currentPeriodEnd = isset($stripeSub->current_period_end) 
@@ -351,13 +351,13 @@ class StripeWebhookController extends Controller
                 $paymentIntentId = $stripeSub->latest_invoice->payment_intent->id ?? null;
             }
             
-            // Also try to get payment intent from invoice if expanded
+            
             if (!$paymentIntentId && isset($stripeSub->latest_invoice) && is_object($stripeSub->latest_invoice)) {
                 if (is_string($stripeSub->latest_invoice->payment_intent ?? null)) {
                     $paymentIntentId = $stripeSub->latest_invoice->payment_intent;
                 }
             }
-            // Use payment intent ID as transaction identifier (unique identifier for Stripe transactions)
+            
             $stripeSubId = is_object($session->subscription) ? $session->subscription->id : $session->subscription;
             $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_' . $stripeSubscriptionId;
             $durationMonths = (int)($session->metadata->duration_months ?? 1);
@@ -365,7 +365,7 @@ class StripeWebhookController extends Controller
                 StripeSubscription::update($stripeSubId, [
                 'cancel_at' => $cancelAt,
             ]);
-            // Create transaction
+            
             try {
                 $transaction = Transaction::create([
                     'user_id' => $user->id,
@@ -389,7 +389,7 @@ class StripeWebhookController extends Controller
                 throw $e;
             }
 
-            // Create subscription
+            
             try {
                 Log::info('Creating subscription record', [
                     'user_id' => $user->id,
@@ -399,7 +399,7 @@ class StripeWebhookController extends Controller
                     'stripe_status' => $stripeSub->status ?? 'incomplete',
                 ]);
                 
-                // Set cancel_at for plans with fixed duration (semestral and anual)
+                
                 if ($plan->duration_months > 1) {
                     $cancelAt = \Carbon\Carbon::now()->addMonths($plan->duration_months)->timestamp;
                     try {
@@ -418,7 +418,7 @@ class StripeWebhookController extends Controller
                             'subscription_id' => $stripeSubscriptionId,
                             'error' => $e->getMessage(),
                         ]);
-                        // Continue anyway - subscription is created
+                        
                     }
                 }
                 
@@ -452,8 +452,8 @@ class StripeWebhookController extends Controller
                 throw $e;
             }
 
-            // Update user premium flags when subscription is successfully created
-            // Set premium status based on subscription period end date
+            
+            
             try {
                 $user->update([
                     'has_premium' => true,
@@ -471,7 +471,7 @@ class StripeWebhookController extends Controller
                     'user_id' => $user->id,
                     'error' => $e->getMessage(),
                 ]);
-                // Don't throw - subscription is created, user update can be retried
+                
             }
 
             DB::commit();
@@ -519,7 +519,7 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Get plan from subscription price
+            
             $priceId = $stripeSub->items->data[0]->price->id ?? null;
             if (!$priceId) {
                 Log::error('Could not get price ID from subscription', [
@@ -537,7 +537,7 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Check if subscription already exists (race condition check)
+            
             $existingSub = LocalSubscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
             if ($existingSub) {
                 Log::info('Subscription already exists, syncing instead', [
@@ -568,7 +568,7 @@ class StripeWebhookController extends Controller
 
             $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_' . $stripeSubscriptionId;
 
-            // Create transaction
+            
             $transaction = Transaction::create([
                 'user_id' => $user->id,
                 'stripe_payment_intent_id' => $transactionId,
@@ -582,7 +582,7 @@ class StripeWebhookController extends Controller
                 'paid_at' => now(),
             ]);
 
-            // Set cancel_at for plans with fixed duration (semestral and anual)
+            
             if ($plan->duration_months > 1) {
                 $cancelAt = \Carbon\Carbon::now()->addMonths($plan->duration_months)->timestamp;
                 try {
@@ -601,11 +601,11 @@ class StripeWebhookController extends Controller
                         'subscription_id' => $stripeSubscriptionId,
                         'error' => $e->getMessage(),
                     ]);
-                    // Continue anyway - subscription is created
+                    
                 }
             }
             
-            // Create subscription with active status (payment is confirmed)
+            
             $subscription = LocalSubscription::create([
                 'user_id' => $user->id,
                 'subscription_plan_id' => $plan->id,
@@ -621,7 +621,7 @@ class StripeWebhookController extends Controller
                 'expires_at' => $currentPeriodEnd,
             ]);
 
-            // Update user premium flags (payment is confirmed)
+            
             $user->update([
                 'has_premium' => true,
                 'premium_expires_at' => $currentPeriodEnd,
@@ -654,7 +654,7 @@ class StripeWebhookController extends Controller
                 'latest_invoice_id' => $latestInvoiceId,
             ]);
             
-            // Fetch subscription from Stripe for authoritative data
+            
             \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
             
             Log::info('Retrieving subscription from Stripe API', [
@@ -671,7 +671,7 @@ class StripeWebhookController extends Controller
                 'current_period_end' => $stripeSub->current_period_end ?? null,
             ]);
 
-            // Find local subscription
+            
             $localSub = LocalSubscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
             if (!$localSub) {
                 Log::warning('Local subscription not found for Stripe ID', [
@@ -693,8 +693,8 @@ class StripeWebhookController extends Controller
             $currentPeriodEnd = isset($stripeSub->current_period_end) ? Carbon::createFromTimestamp($stripeSub->current_period_end) : null;
             $currentPeriodStart = isset($stripeSub->current_period_start) ? Carbon::createFromTimestamp($stripeSub->current_period_start) : null;
 
-            // Only activate subscription if Stripe status is 'active'
-            // Other statuses like 'incomplete', 'trialing', etc. should remain pending
+            
+            
             $shouldActivate = ($stripeSub->status === 'active');
             
             $localSub->update([
@@ -705,7 +705,7 @@ class StripeWebhookController extends Controller
                 'stripe_latest_invoice_id' => $latestInvoiceId,
             ]);
 
-            // Update user premium flags only if subscription is active
+            
             $user = User::find($localSub->user_id);
             if ($user && $shouldActivate) {
                 $user->update([
@@ -791,9 +791,7 @@ class StripeWebhookController extends Controller
         }
     }
 
-    /**
-     * Handle contract funding and offer funding checkout session completion
-     */
+    
     private function handleContractFundingCheckout($session): void
     {
         try {
@@ -805,7 +803,7 @@ class StripeWebhookController extends Controller
                 'metadata' => $session->metadata ?? null,
             ]);
 
-            // Check metadata to determine type
+            
             $metadata = $session->metadata ?? null;
             $contractId = null;
             $type = null;
@@ -824,13 +822,13 @@ class StripeWebhookController extends Controller
                 $amount = $metadata->amount ?? null;
             }
 
-            // Handle offer funding - just create transaction record
+            
             if ($type === 'offer_funding') {
                 $this->handleOfferFundingCheckout($session, $userId, $amount);
                 return;
             }
 
-            // Handle contract funding - requires contract ID
+            
             if ($type !== 'contract_funding' || !$contractId) {
                 Log::info('Checkout session is not for contract or offer funding, skipping', [
                     'session_id' => $session->id,
@@ -840,7 +838,7 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Only process if payment was successful
+            
             if ($session->payment_status !== 'paid') {
                 Log::warning('Contract funding checkout payment not paid', [
                     'session_id' => $session->id,
@@ -850,7 +848,7 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Find the contract
+            
             $contract = \App\Models\Contract::find($contractId);
             if (!$contract) {
                 Log::error('Contract not found for funding checkout', [
@@ -860,7 +858,7 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Check if payment was already processed
+            
             if ($contract->payment && $contract->payment->status === 'completed') {
                 Log::info('Contract payment already processed', [
                     'contract_id' => $contract->id,
@@ -871,7 +869,7 @@ class StripeWebhookController extends Controller
 
             \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
             
-            // Retrieve the payment intent to get charge details
+            
             $paymentIntentId = $session->payment_intent ?? null;
             if (!$paymentIntentId) {
                 Log::error('No payment intent in checkout session', [
@@ -894,7 +892,7 @@ class StripeWebhookController extends Controller
 
             DB::beginTransaction();
 
-            // Create transaction record
+            
             $transaction = \App\Models\Transaction::create([
                 'user_id' => $contract->brand_id,
                 'stripe_payment_intent_id' => $paymentIntent->id,
@@ -911,11 +909,11 @@ class StripeWebhookController extends Controller
                 'contract_id' => $contract->id,
             ]);
 
-            // Calculate payment amounts
-            $platformFee = $contract->budget * 0.05; // 5% platform fee
-            $creatorAmount = $contract->budget * 0.95; // 95% for creator
+            
+            $platformFee = $contract->budget * 0.05; 
+            $creatorAmount = $contract->budget * 0.95; 
 
-            // Create job payment record
+            
             $jobPayment = \App\Models\JobPayment::create([
                 'contract_id' => $contract->id,
                 'brand_id' => $contract->brand_id,
@@ -924,11 +922,11 @@ class StripeWebhookController extends Controller
                 'platform_fee' => $platformFee,
                 'creator_amount' => $creatorAmount,
                 'payment_method' => 'stripe_escrow',
-                'status' => 'completed', // Payment is completed via checkout
+                'status' => 'completed', 
                 'transaction_id' => $transaction->id,
             ]);
 
-            // Credit pending balance to creator escrow
+            
             $balance = \App\Models\CreatorBalance::firstOrCreate(
                 ['creator_id' => $contract->creator_id],
                 [
@@ -940,7 +938,7 @@ class StripeWebhookController extends Controller
             );
             $balance->increment('pending_balance', $jobPayment->creator_amount);
 
-            // Update contract status
+            
             $contract->update([
                 'status' => 'active',
                 'workflow_status' => 'active',
@@ -949,7 +947,7 @@ class StripeWebhookController extends Controller
 
             DB::commit();
 
-            // Notify both parties
+            
             \App\Services\NotificationService::notifyCreatorOfContractStarted($contract);
             \App\Services\NotificationService::notifyBrandOfContractStarted($contract);
 
@@ -972,10 +970,7 @@ class StripeWebhookController extends Controller
         }
     }
 
-    /**
-     * Handle offer funding checkout session completion
-     * Creates a transaction record directly in the transactions table
-     */
+    
     private function handleOfferFundingCheckout($session, $userId, $amount): void
     {
         try {
@@ -986,7 +981,7 @@ class StripeWebhookController extends Controller
                 'payment_status' => $session->payment_status ?? 'unknown',
             ]);
 
-            // Only process if payment was successful
+            
             if ($session->payment_status !== 'paid') {
                 Log::warning('Offer funding checkout payment not paid', [
                     'session_id' => $session->id,
@@ -995,7 +990,7 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Get user from customer ID if user_id not in metadata
+            
             $user = null;
             if ($userId) {
                 $user = \App\Models\User::find($userId);
@@ -1016,7 +1011,7 @@ class StripeWebhookController extends Controller
 
             \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
             
-            // Retrieve the payment intent to get charge details
+            
             $paymentIntentId = $session->payment_intent ?? null;
             if (!$paymentIntentId) {
                 Log::error('No payment intent in offer funding checkout session', [
@@ -1039,13 +1034,13 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Get amount from session or metadata (convert from cents if needed)
+            
             $transactionAmount = $amount ? (float) $amount : ($session->amount_total / 100);
 
-            // Get metadata from session
+            
             $metadata = $session->metadata ?? null;
 
-            // Get campaign_id from metadata to update campaign price
+            
             $campaignId = null;
             if (is_array($metadata)) {
                 $campaignId = $metadata['campaign_id'] ?? null;
@@ -1053,12 +1048,12 @@ class StripeWebhookController extends Controller
                 $campaignId = $metadata->campaign_id ?? null;
             }
 
-            // Update campaign final_price if campaign_id exists
+            
             if ($campaignId) {
                 try {
                     $campaign = \App\Models\Campaign::find($campaignId);
                     if ($campaign) {
-                        // Update final_price with the funding amount (in reais, not cents)
+                        
                         $campaign->update([
                             'final_price' => $transactionAmount,
                         ]);
@@ -1081,11 +1076,11 @@ class StripeWebhookController extends Controller
                         'session_id' => $session->id,
                         'error' => $e->getMessage(),
                     ]);
-                    // Don't fail the transaction if campaign update fails
+                    
                 }
             }
 
-            // Get payment method details from charge
+            
             $charge = null;
             $cardBrand = null;
             $cardLast4 = null;
@@ -1104,7 +1099,7 @@ class StripeWebhookController extends Controller
             DB::beginTransaction();
 
             try {
-                // Check if transaction already exists
+                
                 $existingTransaction = \App\Models\Transaction::where('stripe_payment_intent_id', $paymentIntentId)
                     ->where('user_id', $user->id)
                     ->first();
@@ -1120,7 +1115,7 @@ class StripeWebhookController extends Controller
                     return;
                 }
 
-                // Create transaction record
+                
                 $transaction = \App\Models\Transaction::create([
                     'user_id' => $user->id,
                     'stripe_payment_intent_id' => $paymentIntent->id,
@@ -1151,7 +1146,7 @@ class StripeWebhookController extends Controller
                     'amount' => $transactionAmount,
                 ]);
 
-                // Create notification for successful platform funding
+                
                 try {
                     $metadata = $session->metadata ?? null;
                     $fundingData = [
@@ -1176,7 +1171,7 @@ class StripeWebhookController extends Controller
                         $fundingData
                     );
                     
-                    // Send real-time notification via Socket.IO
+                    
                     \App\Services\NotificationService::sendSocketNotification($user->id, $notification);
                     
                     Log::info('Platform funding success notification created', [
@@ -1185,7 +1180,7 @@ class StripeWebhookController extends Controller
                         'amount' => $transactionAmount,
                     ]);
                 } catch (\Exception $e) {
-                    // Log error but don't fail the transaction
+                    
                     Log::error('Failed to create platform funding success notification', [
                         'user_id' => $user->id,
                         'amount' => $transactionAmount,
@@ -1209,10 +1204,7 @@ class StripeWebhookController extends Controller
         }
     }
 
-    /**
-     * Handle setup mode checkout session (payment method setup)
-     * This ensures the payment method ID is stored in the user model
-     */
+    
     private function handleSetupModeCheckout($session): void
     {
         try {
@@ -1223,7 +1215,7 @@ class StripeWebhookController extends Controller
                 'setup_intent' => $session->setup_intent ?? null,
             ]);
 
-            // Get setup intent from session
+            
             $setupIntentId = $session->setup_intent ?? null;
             if (!$setupIntentId) {
                 Log::warning('No setup intent in checkout session', [
@@ -1232,7 +1224,7 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Retrieve setup intent from Stripe
+            
             \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
             $setupIntent = \Stripe\SetupIntent::retrieve($setupIntentId, [
                 'expand' => ['payment_method']
@@ -1246,7 +1238,7 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Get payment method ID from setup intent
+            
             $paymentMethodId = null;
             if (is_object($setupIntent->payment_method)) {
                 $paymentMethodId = $setupIntent->payment_method->id ?? null;
@@ -1261,7 +1253,7 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Find user by customer ID
+            
             $customerId = $session->customer;
             if (!$customerId) {
                 Log::warning('No customer ID in checkout session', [
@@ -1279,8 +1271,8 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Check if payment method is already stored (frontend callback already handled it)
-            // Skip webhook processing if payment method already exists to avoid duplicate updates
+            
+            
             if ($user->stripe_payment_method_id === $paymentMethodId) {
                 Log::info('Payment method already stored, skipping webhook processing', [
                     'user_id' => $user->id,
@@ -1290,10 +1282,10 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            // Check if user is creator or student (only they can have withdrawal payment methods)
+            
             $isCreatorOrStudent = $user->isCreator() || $user->isStudent();
 
-            // Retrieve payment method details from Stripe to get card information
+            
             $paymentMethod = null;
             $cardBrand = null;
             $cardLast4 = null;
@@ -1318,32 +1310,32 @@ class StripeWebhookController extends Controller
             DB::beginTransaction();
             
             try {
-                // Update user's stripe_payment_method_id using direct DB update
+                
                 $updatedRows = DB::table('users')
                     ->where('id', $user->id)
                     ->update(['stripe_payment_method_id' => $paymentMethodId]);
 
-                // Verify the update
+                
                 $actualStoredId = DB::table('users')
                     ->where('id', $user->id)
                     ->value('stripe_payment_method_id');
 
                 if ($actualStoredId !== $paymentMethodId) {
-                    // Fallback to Eloquent if direct DB update failed
+                    
                     $user->refresh();
                     $user->stripe_payment_method_id = $paymentMethodId;
                     $user->save();
                     $user->refresh();
                 }
 
-                // Only update withdrawal_methods table if user is creator or student
+                
                 $stripeCardMethod = null;
                 if ($isCreatorOrStudent) {
-                    // Ensure 'stripe_card' withdrawal method exists in withdrawal_methods table
+                    
                     $stripeCardMethod = \App\Models\WithdrawalMethod::where('code', 'stripe_card')->first();
                     
                     if (!$stripeCardMethod) {
-                        // Create stripe_card withdrawal method if it doesn't exist
+                        
                         $stripeCardMethod = \App\Models\WithdrawalMethod::create([
                             'code' => 'stripe_card',
                             'name' => 'Cartão de Crédito/Débito (Stripe)',
@@ -1363,7 +1355,7 @@ class StripeWebhookController extends Controller
                             'user_id' => $user->id,
                         ]);
                     } else {
-                        // Ensure it's active
+                        
                         if (!$stripeCardMethod->is_active) {
                             $stripeCardMethod->update(['is_active' => true]);
                             Log::info('Activated stripe_card withdrawal method', [
@@ -1413,5 +1405,4 @@ class StripeWebhookController extends Controller
         }
     }
 }
-
 

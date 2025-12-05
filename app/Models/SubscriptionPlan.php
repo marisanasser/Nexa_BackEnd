@@ -30,19 +30,14 @@ class SubscriptionPlan extends Model
         'sort_order' => 'integer'
     ];
 
-    /**
-     * Get the monthly price
-     * Note: The price in the database is already the monthly price for all plans
-     */
+    
     public function getMonthlyPriceAttribute(): float
     {
-        // The price is already monthly, so return it directly
+        
         return (float) $this->price;
     }
 
-    /**
-     * Get the savings percentage compared to monthly plan
-     */
+    
     public function getSavingsPercentageAttribute(): ?float
     {
         if ($this->duration_months <= 1) {
@@ -54,31 +49,25 @@ class SubscriptionPlan extends Model
             return null;
         }
         
-        // Both prices are already monthly, so compare directly
+        
         $savings = (($monthlyPlan->price - $this->price) / $monthlyPlan->price) * 100;
         
         return round($savings, 0);
     }
 
-    /**
-     * Scope to get only active plans
-     */
+    
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
     }
 
-    /**
-     * Scope to order by sort order
-     */
+    
     public function scopeOrdered($query)
     {
         return $query->orderBy('sort_order');
     }
 
-    /**
-     * Get all active plans ordered by sort order
-     */
+    
     public static function getActivePlans()
     {
         return static::active()->ordered()->get();

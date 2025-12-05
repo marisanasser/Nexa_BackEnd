@@ -17,15 +17,13 @@ class ContractController extends Controller
 {
     use OfferChatMessageTrait;
 
-    /**
-     * Create a system message for contract-related events
-     */
+    
     private function createSystemMessage(ChatRoom $chatRoom, string $message, array $data = []): void
     {
         try {
             $messageData = [
                 'chat_room_id' => $chatRoom->id,
-                'sender_id' => null, // System message
+                'sender_id' => null, 
                 'message' => $message,
                 'message_type' => 'system',
                 'offer_data' => json_encode($data),
@@ -33,7 +31,7 @@ class ContractController extends Controller
 
             \App\Models\Message::create($messageData);
 
-            // Update chat room's last_message_at to ensure proper ordering
+            
             $chatRoom->update(['last_message_at' => now()]);
 
         } catch (\Exception $e) {
@@ -45,9 +43,7 @@ class ContractController extends Controller
         }
     }
 
-    /**
-     * Send contract completion message to chat
-     */
+    
     private function sendContractCompletionMessage(Contract $contract, User $brand): void
     {
         try {
@@ -61,10 +57,10 @@ class ContractController extends Controller
                 return;
             }
 
-            // Create the completion message with review data
+            
             $message = \App\Models\Message::create([
                 'chat_room_id' => $chatRoom->id,
-                'sender_id' => null, // System message
+                'sender_id' => null, 
                 'message' => '🎉 O contrato foi finalizado com sucesso! Para liberar o valor para saque, você precisa avaliar a marca clicando no botão abaixo.',
                 'message_type' => 'contract_completion',
                 'offer_data' => json_encode([
@@ -81,10 +77,10 @@ class ContractController extends Controller
                 'is_system_message' => true,
             ]);
 
-            // Update chat room's last_message_at timestamp
+            
             $chatRoom->update(['last_message_at' => now()]);
 
-            // Emit socket event for real-time message delivery
+            
             $this->emitSocketEvent('new_message', [
                 'roomId' => $chatRoom->room_id,
                 'messageId' => $message->id,
@@ -116,9 +112,7 @@ class ContractController extends Controller
         }
     }
 
-    /**
-     * Emit Socket.IO event for real-time updates
-     */
+    
     private function emitSocketEvent(string $event, array $data): void
     {
         try {
@@ -127,7 +121,7 @@ class ContractController extends Controller
                 $io->emit($event, $data);
                 Log::info("Socket event emitted: {$event}", $data);
                 
-                // Also emit a general contract status update event for better frontend handling
+                
                 if (in_array($event, ['contract_completed', 'contract_terminated', 'contract_activated'])) {
                     $io->emit('contract_status_update', [
                         'roomId' => $data['roomId'],
@@ -147,9 +141,7 @@ class ContractController extends Controller
         }
     }
 
-    /**
-     * Send automatic approval messages to both parties
-     */
+    
     private function sendApprovalMessages($contract): void
     {
         try {
@@ -163,7 +155,7 @@ class ContractController extends Controller
                 return;
             }
 
-            // Create system message for contract completion
+            
             $this->createSystemMessage($chatRoom, "🎉 Contrato finalizado com sucesso! O projeto foi concluído e está aguardando avaliação.", [
                 'contract_id' => $contract->id,
                 'status' => 'completed',
@@ -171,7 +163,7 @@ class ContractController extends Controller
                 'message_type' => 'contract_completed',
             ]);
 
-            // Emit Socket.IO event for real-time updates
+            
             $this->emitSocketEvent('contract_completed', [
                 'roomId' => $chatRoom->room_id,
                 'contractData' => [
@@ -199,7 +191,7 @@ class ContractController extends Controller
                     'is_near_completion' => $contract->is_near_completion,
                     'can_review' => true,
                 ],
-                'senderId' => 0, // System message
+                'senderId' => 0, 
             ]);
 
         } catch (\Exception $e) {
@@ -210,15 +202,12 @@ class ContractController extends Controller
         }
     }
 
-
-    /**
-     * Get contracts for the authenticated user
-     */
+    
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $status = $request->get('status'); // 'active', 'completed', 'cancelled', 'disputed'
-        $workflowStatus = $request->get('workflow_status'); // 'payment_pending', 'active', etc.
+        $status = $request->get('status'); 
+        $workflowStatus = $request->get('workflow_status'); 
 
         try {
             $query = $user->isBrand() 
@@ -229,7 +218,7 @@ class ContractController extends Controller
                 $query->where('status', $status);
             }
 
-            // Filter by workflow_status if provided (useful for filtering contracts needing payment)
+            
             if ($workflowStatus) {
                 $query->where('workflow_status', $workflowStatus);
             }
@@ -317,9 +306,7 @@ class ContractController extends Controller
         }
     }
 
-    /**
-     * Get a specific contract
-     */
+    
     public function show(int $id): JsonResponse
     {
         $user = Auth::user();
@@ -370,7 +357,7 @@ class ContractController extends Controller
                 'has_brand_review' => $contract->has_brand_review,
                 'has_creator_review' => $contract->has_creator_review,
                 'has_both_reviews' => $contract->has_both_reviews,
-                'can_review' => !$contract->has_creator_review, // Creator can review if they haven't reviewed yet
+                'can_review' => !$contract->has_creator_review, 
                 'creator' => [
                     'id' => $contract->creator->id,
                     'name' => $contract->creator->name,
@@ -417,14 +404,12 @@ class ContractController extends Controller
         }
     }
 
-    /**
-     * Get contracts for a specific chat room
-     */
+    
     public function getContractsForChatRoom(Request $request, string $roomId): JsonResponse
     {
         $user = Auth::user();
         
-        // Find the chat room and verify user has access
+        
         $chatRoom = \App\Models\ChatRoom::where('room_id', $roomId)
             ->where(function ($query) use ($user) {
                 $query->where('brand_id', $user->id)
@@ -440,7 +425,7 @@ class ContractController extends Controller
         }
 
         try {
-            // Get contracts for this chat room (through offers)
+            
             $contracts = Contract::whereHas('offer', function ($query) use ($chatRoom) {
                 $query->where('chat_room_id', $chatRoom->id);
             })
@@ -523,14 +508,12 @@ class ContractController extends Controller
         }
     }
 
-    /**
-     * Activate a contract (change status from pending to active)
-     */
+    
     public function activate(int $id): JsonResponse
     {
         $user = Auth::user();
 
-        // Check if user is a brand
+        
         if (!$user->isBrand()) {
             return response()->json([
                 'success' => false,
@@ -563,10 +546,10 @@ class ContractController extends Controller
                 'started_at' => now(),
             ]);
 
-            // Send automatic messages to both parties
+            
             $this->sendApprovalMessages($contract);
 
-            // Emit Socket.IO event for real-time updates
+            
             $this->emitSocketEvent('contract_activated', [
                 'roomId' => $contract->offer->chatRoom->room_id ?? null,
                 'contractData' => [
@@ -626,14 +609,12 @@ class ContractController extends Controller
         }
     }
 
-    /**
-     * Complete a contract (brand only)
-     */
+    
     public function complete(int $id): JsonResponse
     {
         $user = Auth::user();
 
-        // Check if user is a brand
+        
         if (!$user->isBrand()) {
             Log::warning('Non-brand user attempted to complete contract', [
                 'user_id' => $user->id,
@@ -669,10 +650,10 @@ class ContractController extends Controller
             }
 
             if ($contract->complete()) {
-                // Send chat message about contract completion
+                
                 $this->sendContractCompletionMessage($contract, $user);
 
-                // Emit Socket.IO event for real-time updates
+                
                 $this->emitSocketEvent('contract_completed', [
                     'roomId' => $contract->offer->chatRoom->room_id ?? null,
                     'contractData' => [
@@ -741,9 +722,7 @@ class ContractController extends Controller
         }
     }
 
-    /**
-     * Cancel a contract
-     */
+    
     public function cancel(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -818,9 +797,7 @@ class ContractController extends Controller
         }
     }
 
-    /**
-     * Terminate a contract (brand only)
-     */
+    
     public function terminate(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -837,7 +814,7 @@ class ContractController extends Controller
 
         $user = Auth::user();
 
-        // Check if user is a brand
+        
         if (!$user->isBrand()) {
             return response()->json([
                 'success' => false,
@@ -865,11 +842,11 @@ class ContractController extends Controller
             }
 
             if ($contract->terminate($request->reason)) {
-                // Get the chat room to send termination message
+                
                 $chatRoom = $contract->offer->chatRoom ?? null;
                 
                 if ($chatRoom) {
-                    // Create chat message for contract termination
+                    
                     $this->createOfferChatMessage($chatRoom, 'contract_terminated', [
                         'sender_id' => $user->id,
                         'message' => $request->reason ? 
@@ -896,7 +873,7 @@ class ContractController extends Controller
                     ]);
                 }
                 
-                // Emit Socket.IO event for real-time updates
+                
                 $this->emitSocketEvent('contract_terminated', [
                     'roomId' => $contract->offer->chatRoom->room_id ?? null,
                     'contractData' => [
@@ -950,9 +927,7 @@ class ContractController extends Controller
         }
     }
 
-    /**
-     * Dispute a contract
-     */
+    
     public function dispute(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [

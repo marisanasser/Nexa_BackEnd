@@ -22,20 +22,18 @@ class ContractPaymentController extends Controller
     {
         $this->stripeKey = config('services.stripe.secret');
         
-        // Log simulation mode status
+        
         if (PaymentSimulator::isSimulationMode()) {
             Log::info('Contract payment simulation mode is ENABLED - All contract payments will be simulated');
         }
     }
 
-    /**
-     * Process payment when contract is started
-     */
+    
     public function processContractPayment(Request $request): JsonResponse
     {
         $user = auth()->user();
 
-        // Check if user is a brand
+        
         if (!$user->isBrand()) {
             return response()->json([
                 'success' => false,
@@ -45,9 +43,9 @@ class ContractPaymentController extends Controller
 
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'contract_id' => 'required|exists:contracts,id,brand_id,' . $user->id,
-            // When using Stripe directly, expect a Stripe PaymentMethod id
+            
             'stripe_payment_method_id' => 'nullable|string',
-            // Legacy brand payment method (Pagar.me) will be ignored when Stripe is configured
+            
             'payment_method_id' => 'nullable|exists:brand_payment_methods,id,brand_id,' . $user->id,
         ]);
 
@@ -61,7 +59,7 @@ class ContractPaymentController extends Controller
 
         $contract = Contract::with(['brand', 'creator'])->find($request->contract_id);
 
-        // Check if contract can be paid
+        
         if ($contract->status !== 'active') {
             return response()->json([
                 'success' => false,
@@ -69,7 +67,7 @@ class ContractPaymentController extends Controller
             ], 400);
         }
 
-        // Check if payment was already processed
+        
         if ($contract->payment && $contract->payment->status === 'completed') {
             return response()->json([
                 'success' => false,
@@ -77,7 +75,7 @@ class ContractPaymentController extends Controller
             ], 400);
         }
 
-        // If Stripe is configured, require a Stripe payment method id from frontend
+        
         if ($this->stripeKey) {
             if (!$request->filled('stripe_payment_method_id')) {
                 return response()->json([
@@ -87,7 +85,7 @@ class ContractPaymentController extends Controller
             }
         }
 
-        // Check if simulation mode is enabled
+        
         if (PaymentSimulator::isSimulationMode()) {
             Log::info('Processing contract payment in SIMULATION mode', [
                 'contract_id' => $contract->id,
@@ -98,7 +96,7 @@ class ContractPaymentController extends Controller
             try {
                 DB::beginTransaction();
 
-                // Use PaymentSimulator to process the contract payment
+                
                 $simulationResult = PaymentSimulator::simulateContractPayment([
                     'amount' => $contract->budget,
                     'contract_id' => $contract->id,
@@ -109,7 +107,7 @@ class ContractPaymentController extends Controller
                     throw new \Exception($simulationResult['message'] ?? 'Simulation failed');
                 }
 
-                // Create transaction record
+                
                 $transaction = Transaction::create([
                     'user_id' => $user->id,
                     'stripe_payment_intent_id' => $simulationResult['transaction_id'],
@@ -128,20 +126,20 @@ class ContractPaymentController extends Controller
                     'contract_id' => $contract->id,
                 ]);
 
-                // Create job payment record
+                
                 $jobPayment = \App\Models\JobPayment::create([
                     'contract_id' => $contract->id,
                     'brand_id' => $contract->brand_id,
                     'creator_id' => $contract->creator_id,
                     'total_amount' => $contract->budget,
-                    'platform_fee' => $contract->budget * 0.05, // 5% platform fee
-                    'creator_amount' => $contract->budget * 0.95, // 95% for creator
+                    'platform_fee' => $contract->budget * 0.05, 
+                    'creator_amount' => $contract->budget * 0.95, 
                     'payment_method' => 'credit_card',
                     'status' => 'paid',
                     'transaction_id' => $transaction->id,
                 ]);
 
-                // Update contract status
+                
                 $contract->update([
                     'status' => 'active',
                     'workflow_status' => 'active',
@@ -150,7 +148,7 @@ class ContractPaymentController extends Controller
 
                 DB::commit();
 
-                // Notify both parties
+                
                 NotificationService::notifyCreatorOfContractStarted($contract);
                 NotificationService::notifyBrandOfContractStarted($contract);
 
@@ -192,7 +190,7 @@ class ContractPaymentController extends Controller
             }
         }
 
-        // Use Stripe for real processing
+        
         if (!$this->stripeKey) {
             Log::error('Stripe secret not configured for contract payment', [
                 'contract_id' => $contract->id,
@@ -216,7 +214,7 @@ class ContractPaymentController extends Controller
             DB::beginTransaction();
             \Stripe\Stripe::setApiKey($this->stripeKey);
 
-            // Ensure Stripe customer for brand
+            
             if (!$user->stripe_customer_id) {
                 Log::info('Creating Stripe customer for brand', [
                     'brand_id' => $user->id,
@@ -242,7 +240,7 @@ class ContractPaymentController extends Controller
                 $customer = \Stripe\Customer::retrieve($user->stripe_customer_id);
             }
 
-            // Attach PM if needed and set as default for invoices
+            
             $pmId = $request->string('stripe_payment_method_id')->toString();
             
             Log::info('Attaching payment method to customer', [
@@ -252,19 +250,19 @@ class ContractPaymentController extends Controller
             
             \Stripe\PaymentMethod::attach($pmId, ['customer' => $customer->id]);
 
-            // Store payment method ID in user model for quick access using direct DB update
+            
             if ($user->stripe_payment_method_id !== $pmId) {
                 $updatedRows = DB::table('users')
                     ->where('id', $user->id)
                     ->update(['stripe_payment_method_id' => $pmId]);
                 
-                // Verify the update
+                
                 $actualStoredId = DB::table('users')
                     ->where('id', $user->id)
                     ->value('stripe_payment_method_id');
                 
                 if ($actualStoredId !== $pmId) {
-                    // Fallback to Eloquent if direct DB update failed
+                    
                     $user->refresh();
                     $user->stripe_payment_method_id = $pmId;
                     $user->save();
@@ -290,7 +288,7 @@ class ContractPaymentController extends Controller
                 'currency' => 'brl',
             ]);
 
-            // Create PaymentIntent and confirm
+            
             $intent = \Stripe\PaymentIntent::create([
                 'amount' => (int) round($contract->budget * 100),
                 'currency' => 'brl',
@@ -337,7 +335,7 @@ class ContractPaymentController extends Controller
                 'status' => $intent->status,
             ]);
 
-            // Create transaction record
+            
             $transaction = Transaction::create([
                 'user_id' => $user->id,
                 'stripe_payment_intent_id' => $intent->id,
@@ -350,21 +348,21 @@ class ContractPaymentController extends Controller
                 'contract_id' => $contract->id,
             ]);
 
-            // Create job payment record
+            
             $jobPayment = \App\Models\JobPayment::create([
                 'contract_id' => $contract->id,
                 'brand_id' => $contract->brand_id,
                 'creator_id' => $contract->creator_id,
                 'total_amount' => $contract->budget,
-                'platform_fee' => $contract->budget * 0.05, // 5% platform fee
-                'creator_amount' => $contract->budget * 0.95, // 95% for creator
+                'platform_fee' => $contract->budget * 0.05, 
+                'creator_amount' => $contract->budget * 0.95, 
                 'payment_method' => 'stripe_escrow',
-                // Brand was charged, but creator's payment is pending (escrow)
+                
                 'status' => 'pending',
                 'transaction_id' => $transaction->id,
             ]);
 
-            // Credit pending balance to creator escrow
+            
             $balance = \App\Models\CreatorBalance::firstOrCreate(
                 ['creator_id' => $contract->creator_id],
                 [
@@ -376,7 +374,7 @@ class ContractPaymentController extends Controller
             );
             $balance->increment('pending_balance', $jobPayment->creator_amount);
 
-            // Update contract status
+            
             $contract->update([
                 'status' => 'active',
                 'workflow_status' => 'active',
@@ -385,7 +383,7 @@ class ContractPaymentController extends Controller
 
             DB::commit();
 
-            // Notify both parties
+            
             NotificationService::notifyCreatorOfContractStarted($contract);
             NotificationService::notifyBrandOfContractStarted($contract);
 
@@ -427,9 +425,7 @@ class ContractPaymentController extends Controller
         }
     }
 
-    /**
-     * Get contract payment status
-     */
+    
     public function getContractPaymentStatus(Request $request): JsonResponse
     {
         $user = auth()->user();
@@ -448,7 +444,7 @@ class ContractPaymentController extends Controller
 
         $contract = Contract::with(['payment', 'payment.transaction'])->find($request->contract_id);
 
-        // Check if user has access to this contract
+        
         if ($contract->brand_id !== $user->id && $contract->creator_id !== $user->id) {
             return response()->json([
                 'success' => false,
@@ -485,14 +481,12 @@ class ContractPaymentController extends Controller
         ]);
     }
 
-    /**
-     * Get available payment methods for contract
-     */
+    
     public function getAvailablePaymentMethods(Request $request): JsonResponse
     {
         $user = auth()->user();
 
-        // Check if user is a brand
+        
         if (!$user->isBrand()) {
             return response()->json([
                 'success' => false,
@@ -519,14 +513,12 @@ class ContractPaymentController extends Controller
         ]);
     }
 
-    /**
-     * Retry payment for failed contract
-     */
+    
     public function retryPayment(Request $request): JsonResponse
     {
         $user = auth()->user();
 
-        // Check if user is a brand
+        
         if (!$user->isBrand()) {
             return response()->json([
                 'success' => false,
@@ -548,7 +540,7 @@ class ContractPaymentController extends Controller
 
         $contract = Contract::with(['brand', 'creator'])->find($request->contract_id);
 
-        // Check if contract payment failed
+        
         if (!$contract->isPaymentFailed()) {
             return response()->json([
                 'success' => false,
@@ -556,7 +548,7 @@ class ContractPaymentController extends Controller
             ], 400);
         }
 
-        // Retry payment
+        
         $success = $contract->retryPayment();
 
         if ($success) {
@@ -577,9 +569,7 @@ class ContractPaymentController extends Controller
         }
     }
 
-    /**
-     * Create Stripe Checkout Session for contract funding (escrow deposit)
-     */
+    
     public function createContractCheckoutSession(Request $request): JsonResponse
     {
         try {
@@ -606,7 +596,7 @@ class ContractPaymentController extends Controller
 
             $contract = Contract::with(['brand', 'creator'])->find($request->contract_id);
 
-            // Check if contract needs payment
+            
             if ($contract->status !== 'pending' || $contract->workflow_status !== 'payment_pending') {
                 return response()->json([
                     'success' => false,
@@ -614,7 +604,7 @@ class ContractPaymentController extends Controller
                 ], 400);
             }
 
-            // Check if payment was already processed
+            
             if ($contract->payment && $contract->payment->status === 'completed') {
                 return response()->json([
                     'success' => false,
@@ -629,10 +619,10 @@ class ContractPaymentController extends Controller
                 ], 503);
             }
 
-            // Set Stripe API key
+            
             \Stripe\Stripe::setApiKey($this->stripeKey);
 
-            // Ensure Stripe customer exists for the brand
+            
             $customerId = $user->stripe_customer_id;
             
             if (!$customerId) {
@@ -658,7 +648,7 @@ class ContractPaymentController extends Controller
                     'customer_id' => $customerId,
                 ]);
             } else {
-                // Verify customer exists
+                
                 try {
                     \Stripe\Customer::retrieve($customerId);
                 } catch (\Exception $e) {
@@ -681,10 +671,10 @@ class ContractPaymentController extends Controller
                 }
             }
 
-            // Get frontend URL from config
+            
             $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
 
-            // Create Checkout Session in payment mode (not setup mode)
+            
             $checkoutSession = \Stripe\Checkout\Session::create([
                 'customer' => $customerId,
                 'mode' => 'payment',
@@ -697,7 +687,7 @@ class ContractPaymentController extends Controller
                             'name' => 'Contract Funding: ' . $contract->title,
                             'description' => 'Escrow deposit for contract #' . $contract->id,
                         ],
-                        'unit_amount' => (int) round($contract->budget * 100), // Convert to cents
+                        'unit_amount' => (int) round($contract->budget * 100), 
                     ],
                     'quantity' => 1,
                 ]],
@@ -740,9 +730,7 @@ class ContractPaymentController extends Controller
         }
     }
 
-    /**
-     * Get transaction history for the authenticated user
-     */
+    
     public function getTransactionHistory(Request $request): JsonResponse
     {
         try {
@@ -763,7 +751,7 @@ class ContractPaymentController extends Controller
                 ->paginate($perPage, ['*'], 'page', $page);
 
             $transactions->getCollection()->transform(function ($transaction) {
-                // Get pagarme_transaction_id from payment_data or use stripe_payment_intent_id as fallback
+                
                 $paymentData = $transaction->payment_data ?? [];
                 $pagarmeTransactionId = $paymentData['pagarme_transaction_id'] 
                     ?? $paymentData['transaction_id'] 
@@ -775,7 +763,7 @@ class ContractPaymentController extends Controller
                     'id' => $transaction->id,
                     'pagarme_transaction_id' => $pagarmeTransactionId ?? '',
                     'status' => $transaction->status,
-                    'amount' => (string) $transaction->amount, // Ensure it's a string
+                    'amount' => (string) $transaction->amount, 
                     'payment_method' => $transaction->payment_method ?? '',
                     'card_brand' => $transaction->card_brand ?? '',
                     'card_last4' => $transaction->card_last4 ?? '',
@@ -815,9 +803,7 @@ class ContractPaymentController extends Controller
         }
     }
 
-    /**
-     * Get brand's transaction history (transactions related to brand's contracts)
-     */
+    
     public function getBrandTransactionHistory(Request $request): JsonResponse
     {
         try {
@@ -841,13 +827,13 @@ class ContractPaymentController extends Controller
             $page = $request->get('page', 1);
 
 $contractIds = $user->brandContracts()->pluck("id");
-            // Get transaction IDs from JobPayments, filtering only numeric IDs
-            // (transaction_id can be a string like "TXN_..." or a numeric ID)
+            
+            
             $jobPaymentTransactionIds = \App\Models\JobPayment::where("brand_id", $user->id)
                 ->whereNotNull("transaction_id")
                 ->pluck("transaction_id")
                 ->filter(function ($id) {
-                    // Only include numeric transaction IDs (actual Transaction model IDs)
+                    
                     return is_numeric($id);
                 })
                 ->map(function ($id) {

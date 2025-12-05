@@ -58,7 +58,7 @@ class Campaign extends Model
 
     protected $appends = ['is_favorited'];
 
-    // Relationships
+    
     public function brand(): BelongsTo
     {
         return $this->belongsTo(User::class, 'brand_id');
@@ -89,18 +89,15 @@ class Campaign extends Model
         return $this->favorites()->where('creator_id', $creatorId)->exists();
     }
 
-    /**
-     * Get the is_favorited attribute.
-     * This will be automatically called when the model is serialized to JSON.
-     */
+    
     public function getIsFavoritedAttribute(): bool
     {
-        // If the attribute is already set (e.g., by the controller), return it
+        
         if (isset($this->attributes['is_favorited'])) {
             return (bool) $this->attributes['is_favorited'];
         }
         
-        // Otherwise, check if the current user has favorited this campaign
+        
         if (auth()->check() && auth()->user()->isCreator()) {
             return $this->isFavoritedBy(auth()->user()->id);
         }
@@ -108,7 +105,7 @@ class Campaign extends Model
         return false;
     }
 
-    // Scopes
+    
     public function scopeApproved($query)
     {
         return $query->where('status', 'approved');
@@ -158,7 +155,7 @@ class Campaign extends Model
     public function scopeForGender($query, $genders)
     {
         if (empty($genders)) {
-            return $query; // No gender preference
+            return $query; 
         }
         return $query->whereJsonOverlaps('target_genders', $genders);
     }
@@ -166,12 +163,12 @@ class Campaign extends Model
     public function scopeForCreatorType($query, $creatorTypes)
     {
         if (empty($creatorTypes)) {
-            return $query; // No creator type preference
+            return $query; 
         }
         return $query->whereJsonOverlaps('target_creator_types', $creatorTypes);
     }
 
-    // Methods
+    
     public function isPending(): bool
     {
         return $this->status === 'pending';
@@ -214,10 +211,10 @@ class Campaign extends Model
             'rejection_reason' => null
         ]);
 
-        // Notify brand about project approval
+        
         NotificationService::notifyBrandOfProjectStatus($this, 'approved');
 
-        // Notify creators about new project
+        
         NotificationService::notifyCreatorsOfNewProject($this);
 
         return true;
@@ -232,7 +229,7 @@ class Campaign extends Model
             'rejection_reason' => $reason
         ]);
 
-        // Notify brand about project rejection
+        
         NotificationService::notifyBrandOfProjectStatus($this, 'rejected', $reason);
 
         return true;
@@ -273,121 +270,90 @@ class Campaign extends Model
         return $this->bids()->where('status', 'accepted')->exists();
     }
 
-    /**
-     * Get the remunerationType attribute in camelCase for frontend compatibility
-     */
+    
     public function getRemunerationTypeAttribute()
     {
         return $this->attributes['remuneration_type'] ?? null;
     }
 
-    /**
-     * Get the requirements attribute for frontend compatibility
-     */
+    
     public function getRequirementsAttribute()
     {
         return $this->attributes['requirements'] ?? null;
     }
 
-    /**
-     * Get the campaignType attribute in camelCase for frontend compatibility
-     */
+    
     public function getCampaignTypeAttribute()
     {
         return $this->attributes['campaign_type'] ?? null;
     }
 
-    /**
-     * Get the targetStates attribute in camelCase for frontend compatibility
-     * Note: Let Laravel's casting handle the JSON conversion automatically
-     */
-    // Removed custom accessor to allow proper JSON casting
+    
+    
 
-    /**
-     * Get the targetGenders attribute in camelCase for frontend compatibility
-     * Note: Let Laravel's casting handle the JSON conversion automatically
-     */
-    // Removed custom accessor to allow proper JSON casting
+    
+    
 
-    /**
-     * Get the targetCreatorTypes attribute in camelCase for frontend compatibility
-     * Note: Let Laravel's casting handle the JSON conversion automatically
-     */
-    // Removed custom accessor to allow proper JSON casting
+    
+    
 
-    /**
-     * Get the minAge attribute in camelCase for frontend compatibility
-     */
+    
     public function getMinAgeAttribute()
     {
         return $this->attributes['min_age'] ?? null;
     }
 
-    /**
-     * Get the maxAge attribute in camelCase for frontend compatibility
-     */
+    
     public function getMaxAgeAttribute()
     {
         return $this->attributes['max_age'] ?? null;
     }
 
-    /**
-     * Get the isActive attribute in camelCase for frontend compatibility
-     */
+    
     public function getIsActiveAttribute()
     {
         return $this->attributes['is_active'] ?? null;
     }
 
-    /**
-     * Get the isFeatured attribute in camelCase for frontend compatibility
-     */
+    
     public function getIsFeaturedAttribute()
     {
         return $this->attributes['is_featured'] ?? null;
     }
 
-    /**
-     * Get the imageUrl attribute in camelCase for frontend compatibility
-     */
+    
     public function getImageUrlAttribute()
     {
         return $this->attributes['image_url'] ?? null;
     }
 
-    /**
-     * Get the logo attribute - ensures it's always included in JSON serialization
-     */
+    
     public function getLogoAttribute()
     {
         return $this->attributes['logo'] ?? null;
     }
 
-    /**
-     * Get the attachFile attribute in camelCase for frontend compatibility
-     * Note: Returns casted array value, not raw database value
-     * This accessor ensures the array cast is properly applied during serialization
-     */
+    
     public function getAttachFileAttribute()
     {
-        // Get the raw attribute value from database
+        
         $value = $this->attributes['attach_file'] ?? null;
         
         if ($value === null) {
             return null;
         }
         
-        // If it's already an array (shouldn't happen, but handle it)
+        
         if (is_array($value)) {
             return $value;
         }
         
-        // Decode JSON string to array (database stores JSON string due to array cast)
+        
         if (is_string($value)) {
             $decoded = json_decode($value, true);
-            // Handle null, array, or single value
+            
             if ($decoded === null && json_last_error() === JSON_ERROR_NONE) {
-                return null; // Valid JSON null
+                return null; 
             }
             return is_array($decoded) ? $decoded : ($decoded !== null ? [$decoded] : null);
         }
@@ -395,33 +361,25 @@ class Campaign extends Model
         return null;
     }
 
-    /**
-     * Get the rejectionReason attribute in camelCase for frontend compatibility
-     */
+    
     public function getRejectionReasonAttribute()
     {
         return $this->attributes['rejection_reason'] ?? null;
     }
 
-    /**
-     * Get the maxBids attribute in camelCase for frontend compatibility
-     */
+    
     public function getMaxBidsAttribute()
     {
         return $this->attributes['max_bids'] ?? null;
     }
 
-    /**
-     * Get the approvedAt a
-     */
+    
     public function getApprovedAtAttribute()
     {
         return $this->attributes['approved_at'] ?? null;
     }
 
-    /**
-     * Get the approvedBy attribute in camelCase for frontend compatibility
-     */
+    
     public function getApprovedByAttribute()
     {
         return $this->attributes['approved_by'] ?? null;

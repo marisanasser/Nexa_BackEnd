@@ -15,9 +15,7 @@ use Carbon\Carbon;
 
 class AdminController extends Controller
 {
-    /**
-     * Get dashboard metrics
-     */
+    
     public function getDashboardMetrics(): JsonResponse
     {
         try {
@@ -25,7 +23,7 @@ class AdminController extends Controller
                 'pendingCampaignsCount' => Campaign::where('status', 'pending')->count(),
                 'allActiveCampaignCount' => Campaign::where('is_active', true)->count(),
                 'allRejectCampaignCount' => Campaign::where('status', 'rejected')->count(),
-                'allUserCount' => User::whereNotIn('role', ['admin'])->count(), // Exclude admin users
+                'allUserCount' => User::whereNotIn('role', ['admin'])->count(), 
             ];
 
             return response()->json([
@@ -40,9 +38,7 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Get pending campaigns for dashboard
-     */
+    
     public function getPendingCampaigns(): JsonResponse
     {
         try {
@@ -73,34 +69,32 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Get recent users for dashboard
-     */
+    
     public function getRecentUsers(): JsonResponse
     {
         try {
-            $users = User::whereNotIn('role', ['admin']) // Exclude admin users
+            $users = User::whereNotIn('role', ['admin']) 
                 ->orderBy('created_at', 'desc')
                 ->limit(10)
                 ->get()
                 ->map(function ($user) {
                     $daysAgo = $user->created_at->diffInDays(now());
                     
-                    // Map role to display name
+                    
                     $roleDisplay = match($user->role) {
                         'brand' => 'Marca',
                         'creator' => 'Criador',
                         default => 'Usuário'
                     };
                     
-                    // Determine tag based on user role and premium status
+                    
                     $tag = match($user->role) {
                         'brand' => 'Marca',
                         'creator' => 'Criador',
                         default => 'Usuário'
                     };
                     
-                    // If user has premium, show as "Pagante" (Paying)
+                    
                     if ($user->has_premium) {
                         $tag = 'Pagante';
                     }
@@ -126,9 +120,7 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Get users by role with pagination and filtering
-     */
+    
     public function getUsers(Request $request): JsonResponse
     {
         $request->validate([
@@ -147,12 +139,12 @@ class AdminController extends Controller
 
         $query = User::query();
 
-        // Filter by role
+        
         if ($role) {
             $query->where('role', $role);
         }
 
-        // Filter by status (account status)
+        
         if ($status) {
             switch ($status) {
                 case 'active':
@@ -170,7 +162,7 @@ class AdminController extends Controller
             }
         }
 
-        // Search functionality
+        
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
@@ -179,7 +171,7 @@ class AdminController extends Controller
             });
         }
 
-        // Get users with related data
+        
         $users = $query->withCount([
             'campaignApplications as applied_campaigns',
             'campaignApplications as approved_campaigns' => function ($q) {
@@ -190,7 +182,7 @@ class AdminController extends Controller
         ->orderBy('created_at', 'desc')
         ->paginate($perPage, ['*'], 'page', $page);
 
-        // Transform the data to match frontend expectations
+        
         $transformedUsers = $users->getCollection()->map(function ($user) {
             return $this->transformUserData($user);
         });
@@ -209,27 +201,21 @@ class AdminController extends Controller
         ]);
     }
 
-    /**
-     * Get creators with enhanced data
-     */
+    
     public function getCreators(Request $request): JsonResponse
     {
         $request->merge(['role' => 'creator']);
         return $this->getUsers($request);
     }
 
-    /**
-     * Get brands with enhanced data
-     */
+    
     public function getBrands(Request $request): JsonResponse
     {
         $request->merge(['role' => 'brand']);
         return $this->getUsers($request);
     }
 
-    /**
-     * Get all campaigns with filtering and pagination
-     */
+    
     public function getCampaigns(Request $request): JsonResponse
     {
         $request->validate([
@@ -246,12 +232,12 @@ class AdminController extends Controller
 
         $query = Campaign::with(['brand', 'applications']);
 
-        // Filter by status
+        
         if ($status) {
             $query->where('status', $status);
         }
 
-        // Search functionality
+        
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
@@ -293,9 +279,7 @@ class AdminController extends Controller
         ]);
     }
 
-    /**
-     * Get specific campaign details
-     */
+    
     public function getCampaign(int $id): JsonResponse
     {
         try {
@@ -343,9 +327,7 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Update a campaign (Admin can update any campaign)
-     */
+    
     public function updateCampaign(Request $request, int $id): JsonResponse
 {
     \Log::info('Update campaign request:', [
@@ -357,8 +339,8 @@ class AdminController extends Controller
             'campaign' => $campaign,
         ]);
 
-        // Handle multipart form data parsing issue
-        // Laravel sometimes doesn't parse multipart/form-data correctly for PATCH requests
+        
+        
         $contentType = $request->header('Content-Type');
         $isMultipart = strpos($contentType, 'multipart/form-data') !== false;
         
@@ -370,18 +352,18 @@ class AdminController extends Controller
                 'fields' => array_keys($parsedData),
             ]);
             
-            // Merge manually parsed data with request (except files which are handled separately)
+            
             foreach ($parsedData as $key => $value) {
-                // Skip file fields - they need special handling
+                
                 if (!($value instanceof \Illuminate\Http\UploadedFile) && !is_array($value)) {
                     $request->merge([$key => $value]);
                 } elseif (is_array($value) && !empty($value) && !($value[0] instanceof \Illuminate\Http\UploadedFile)) {
-                    // Handle array fields that aren't files
+                    
                     $request->merge([$key => $value]);
                 }
             }
             
-            // Handle files separately
+            
             foreach ($parsedData as $key => $value) {
                 if ($value instanceof \Illuminate\Http\UploadedFile) {
                     $request->files->set($key, $value);
@@ -418,9 +400,9 @@ class AdminController extends Controller
             'status' => 'sometimes|in:pending,approved,rejected,archived',
         ]);
 
-        // Handle both FormData and JSON requests
-        // For FormData, Laravel sometimes doesn't populate $request->all() correctly
-        // So we'll manually check each field using input() method
+        
+        
+        
         $fields = ['title', 'description', 'budget', 'requirements', 'remuneration_type',
                   'target_states', 'target_genders', 'target_creator_types',
                   'min_age', 'max_age', 'category', 'campaign_type', 'deadline', 'status'];
@@ -429,7 +411,7 @@ class AdminController extends Controller
         ]);
         $data = [];
         foreach ($fields as $field) {
-            // Use input() which works for both FormData and JSON
+            
             $value = $request->input($field);
             if ($value !== null) {
                 $data[$field] = $value;
@@ -438,7 +420,7 @@ class AdminController extends Controller
         
         $allRequestData = $request->all();
         if (empty($data) && !empty($allRequestData)) {
-            // Fallback to only() if all() has data but input() didn't
+            
             $data = $request->only($fields);
         }
         
@@ -452,18 +434,18 @@ class AdminController extends Controller
             'has_files' => $request->hasFile('logo') || $request->hasFile('image') || $request->hasFile('attach_file')
         ]);
         
-        // Remove nulls to avoid overwriting existing data, but keep empty strings and 0 values
+        
         $data = array_filter($data, fn($v) => !is_null($v));
 
-        // Note: target_states, target_genders, and target_creator_types are cast as 'array' 
-        // in the Campaign model, so Laravel will automatically handle JSON encoding/decoding
-        // We just need to ensure they are arrays if present
         
-        // Handle deadline format - ensure it's a proper date format
-        // Use createFromFormat to avoid timezone issues (parse can interpret timezone and cause 1-day difference)
+        
+        
+        
+        
+        
         if (isset($data['deadline']) && is_string($data['deadline'])) {
             try {
-                // Parse as local date (Y-m-d format) to avoid timezone conversion issues
+                
                 $deadline = \Carbon\Carbon::createFromFormat('Y-m-d', $data['deadline'])->startOfDay();
                 $data['deadline'] = $deadline->format('Y-m-d');
             } catch (\Exception $e) {
@@ -472,26 +454,26 @@ class AdminController extends Controller
             }
         }
 
-        // Track uploaded files for rollback in case of transaction failure
+        
         $uploadedFiles = [
             'image' => null,
             'logo' => null,
             'attachments' => [],
         ];
 
-        // Store old file URLs before deletion (for cleanup outside transaction)
+        
         $oldFilesToDelete = [
             'image' => null,
             'logo' => null,
             'attachments' => [],
         ];
 
-        // Use transaction to ensure atomicity of database and file operations
+        
         DB::beginTransaction();
         try {
-            // Handle file uploads safely - upload first, then delete old files to prevent data loss
+            
             if ($request->hasFile('image')) {
-                // Upload new image first
+                
                 $newImageUrl = $this->uploadFile($request->file('image'), 'campaigns/images');
                 if ($newImageUrl) {
                     $uploadedFiles['image'] = $newImageUrl;
@@ -503,7 +485,7 @@ class AdminController extends Controller
             }
 
             if ($request->hasFile('logo')) {
-                // Upload new logo first
+                
                 $newLogo = $this->uploadFile($request->file('logo'), 'campaigns/logos');
                 if ($newLogo) {
                     $uploadedFiles['logo'] = $newLogo;
@@ -514,15 +496,15 @@ class AdminController extends Controller
                 }
             }
 
-            // Handle multiple attachments
+            
             if ($request->hasFile('attach_file')) {
                 $attachmentFiles = $request->file('attach_file');
-                // If single file, convert to array
+                
                 if (!is_array($attachmentFiles)) {
                     $attachmentFiles = [$attachmentFiles];
                 }
                 
-                // Upload all new attachments first
+                
                 $attachmentUrls = [];
                 foreach ($attachmentFiles as $file) {
                     $uploadedUrl = $this->uploadFile($file, 'campaigns/attachments');
@@ -530,7 +512,7 @@ class AdminController extends Controller
                         $attachmentUrls[] = $uploadedUrl;
                         $uploadedFiles['attachments'][] = $uploadedUrl;
                     } else {
-                        // If any upload fails, rollback transaction and clean up uploaded files
+                        
                         DB::rollBack();
                         foreach ($attachmentUrls as $uploadedUrl) {
                             $this->deleteFile($uploadedUrl);
@@ -539,7 +521,7 @@ class AdminController extends Controller
                     }
                 }
                 
-                // Store old attachments for deletion after successful transaction
+                
                 if ($campaign->attach_file && !empty($attachmentUrls)) {
                     $oldAttachments = is_array($campaign->attach_file) 
                         ? $campaign->attach_file 
@@ -547,20 +529,20 @@ class AdminController extends Controller
                     $oldFilesToDelete['attachments'] = $oldAttachments;
                 }
                 
-                // Store as array - Laravel will auto-encode to JSON due to cast
+                
                 $data['attach_file'] = $attachmentUrls;
             }
 
-            // Update campaign within transaction
+            
             $campaign->update($data);
 
-            // Commit transaction - all operations succeeded
+            
             DB::commit();
 
             \Log::info('Campaign database update committed', ['id' => $campaign->id]);
 
         } catch (\Exception $e) {
-            // Rollback transaction on any error
+            
             DB::rollBack();
             
             \Log::error('Campaign update transaction rolled back', [
@@ -568,7 +550,7 @@ class AdminController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            // Clean up uploaded files that were created before the rollback
+            
             if ($uploadedFiles['image']) {
                 $this->deleteFile($uploadedFiles['image']);
                 \Log::info('Rolled back: deleted uploaded image', [
@@ -590,12 +572,12 @@ class AdminController extends Controller
                 ]);
             }
 
-            // Re-throw the exception to be caught by outer catch block
+            
             throw $e;
         }
 
-        // Delete old files only after successful transaction commit
-        // This happens outside the transaction since file operations aren't transactional
+        
+        
         if ($oldFilesToDelete['image']) {
             $this->deleteFile($oldFilesToDelete['image']);
             \Log::info('Deleted old campaign image after successful update', [
@@ -641,10 +623,7 @@ class AdminController extends Controller
     }
 }
 
-
-    /**
-     * Approve a campaign
-     */
+    
     public function approveCampaign(int $id): JsonResponse
     {
         try {
@@ -658,10 +637,10 @@ class AdminController extends Controller
                 ], 422);
             }
 
-            // Use the model's approve method to ensure proper workflow
+            
             $campaign->approve($user->id);
 
-            // Notify admin of campaign approval
+            
             \App\Services\NotificationService::notifyAdminOfSystemActivity('campaign_approved', [
                 'campaign_id' => $campaign->id,
                 'campaign_title' => $campaign->title,
@@ -683,9 +662,7 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Reject a campaign
-     */
+    
     public function rejectCampaign(int $id): JsonResponse
     {
         try {
@@ -699,7 +676,7 @@ class AdminController extends Controller
                 ], 422);
             }
 
-            // Use the model's reject method to ensure proper workflow
+            
             $campaign->reject($user->id, 'Rejected by admin');
 
             return response()->json([
@@ -716,22 +693,20 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Delete a campaign
-     */
+    
     public function deleteCampaign(int $id): JsonResponse
     {
         try {
             $campaign = Campaign::findOrFail($id);
             
-            // Delete associated files
+            
             if ($campaign->image_url) {
                 $this->deleteFile($campaign->image_url);
             }
             if ($campaign->logo) {
                 $this->deleteFile($campaign->logo);
             }
-            // Delete all attachments if they exist
+            
             if ($campaign->attach_file) {
                 $attachments = is_array($campaign->attach_file) 
                     ? $campaign->attach_file 
@@ -777,16 +752,13 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Parse multipart form data manually
-     * Workaround for Laravel's issue with parsing multipart/form-data for PATCH requests
-     */
+    
     private function parseMultipartData(Request $request): array
     {
         $rawContent = $request->getContent();
         $contentType = $request->header('Content-Type');
         
-        // Extract boundary
+        
         if (!preg_match('/boundary=(.+)$/', $contentType, $matches)) {
             return [];
         }
@@ -800,10 +772,10 @@ class AdminController extends Controller
                 continue;
             }
             
-            // Parse headers
+            
             $headerEnd = strpos($part, "\r\n\r\n");
             if ($headerEnd === false) {
-                // Try with just \n\n as fallback
+                
                 $headerEnd = strpos($part, "\n\n");
                 if ($headerEnd === false) {
                     continue;
@@ -816,25 +788,25 @@ class AdminController extends Controller
             $headers = substr($part, 0, $headerEnd);
             $content = rtrim($content, "\r\n-");
             
-            // Extract field name
+            
             if (preg_match('/name="([^"]+)"/', $headers, $matches)) {
                 $originalFieldName = $matches[1];
                 
-                // Check if it's a file
+                
                 if (preg_match('/filename="([^"]+)"/', $headers, $fileMatches)) {
                     $filename = $fileMatches[1];
                     
-                    // Extract base field name (remove array notation for files)
+                    
                     $fieldName = preg_replace('/\[\d*\]$/', '', $originalFieldName);
                     $fieldName = str_replace('[]', '', $fieldName);
                     
                     if (!empty($content)) {
-                        // Create temporary file
+                        
                         $tempPath = tempnam(sys_get_temp_dir(), 'upload_');
                         file_put_contents($tempPath, $content);
                         
-                        // Create UploadedFile object
-                        // Handle array file fields
+                        
+                        
                         if (strpos($originalFieldName, '[]') !== false || preg_match('/\[\d+\]$/', $originalFieldName)) {
                             if (!isset($parsedData[$fieldName])) {
                                 $parsedData[$fieldName] = [];
@@ -857,16 +829,16 @@ class AdminController extends Controller
                         }
                     }
                 } else {
-                    // Regular field - handle array notation (e.g., target_states[], target_genders[])
+                    
                     if (strpos($originalFieldName, '[]') !== false) {
-                        // Array field like target_states[]
+                        
                         $baseFieldName = str_replace('[]', '', $originalFieldName);
                         if (!isset($parsedData[$baseFieldName])) {
                             $parsedData[$baseFieldName] = [];
                         }
                         $parsedData[$baseFieldName][] = $content;
                     } elseif (preg_match('/\[(\d+)\]$/', $originalFieldName, $arrayMatches)) {
-                        // Indexed array field like target_states[0]
+                        
                         $baseFieldName = preg_replace('/\[\d+\]$/', '', $originalFieldName);
                         if (!isset($parsedData[$baseFieldName])) {
                             $parsedData[$baseFieldName] = [];
@@ -874,7 +846,7 @@ class AdminController extends Controller
                         $index = (int)$arrayMatches[1];
                         $parsedData[$baseFieldName][$index] = $content;
                     } else {
-                        // Regular single field
+                        
                         $parsedData[$originalFieldName] = $content;
                     }
                 }
@@ -884,9 +856,7 @@ class AdminController extends Controller
         return $parsedData;
     }
 
-    /**
-     * Get user statistics
-     */
+    
     public function getUserStatistics(): JsonResponse
     {
         $stats = [
@@ -905,9 +875,7 @@ class AdminController extends Controller
         ]);
     }
 
-    /**
-     * Update user status (activate, block, remove)
-     */
+    
     public function updateUserStatus(Request $request, User $user): JsonResponse
     {
         $request->validate([
@@ -958,19 +926,17 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Transform user data for admin interface
-     */
+    
     private function transformUserData(User $user): array
     {
         $isCreator = $user->role === 'creator';
         
         if ($isCreator) {
-            // For creators, show their actual role from database
-            $status = 'Criador'; // Default for creator role
+            
+            $status = 'Criador'; 
             $statusColor = 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200';
             
-            // If they have premium, show as "Pagante" (Paying)
+            
             if ($user->has_premium) {
                 $status = 'Pagante';
                 $statusColor = 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-200';
@@ -993,11 +959,11 @@ class AdminController extends Controller
                 'free_trial_expires_at' => $user->free_trial_expires_at,
             ];
         } else {
-            // For brands, show their actual role from database
-            $status = 'Marca'; // Default for brand role
+            
+            $status = 'Marca'; 
             $statusColor = 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-200';
             
-            // If they have premium, show as "Pagante" (Paying)
+            
             if ($user->has_premium) {
                 $status = 'Pagante';
                 $statusColor = 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-200';
@@ -1021,9 +987,7 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Get user time status
-     */
+    
     private function getUserTimeStatus(User $user): string
     {
         if ($user->has_premium && $user->premium_expires_at === null) {
@@ -1031,7 +995,7 @@ class AdminController extends Controller
         }
 
         if ($user->has_premium && $user->premium_expires_at) {
-            // Ensure we have a Carbon instance
+            
             $premiumExpiresAt = $user->premium_expires_at instanceof Carbon 
                 ? $user->premium_expires_at 
                 : Carbon::parse($user->premium_expires_at);
@@ -1040,7 +1004,7 @@ class AdminController extends Controller
         }
 
         if ($user->free_trial_expires_at) {
-            // Ensure we have a Carbon instance
+            
             $trialExpiresAt = $user->free_trial_expires_at instanceof Carbon 
                 ? $user->free_trial_expires_at 
                 : Carbon::parse($user->free_trial_expires_at);
@@ -1052,9 +1016,7 @@ class AdminController extends Controller
         return $months . ' meses';
     }
 
-    /**
-     * Get account status
-     */
+    
     private function getAccountStatus(User $user): string
     {
         if ($user->deleted_at) {
@@ -1065,7 +1027,7 @@ class AdminController extends Controller
             return 'Ativo';
         }
 
-        // Check if user has been inactive for too long
+        
         if ($user->created_at->diffInDays(now()) > 30) {
             return 'Bloqueado';
         }
@@ -1073,9 +1035,7 @@ class AdminController extends Controller
         return 'Pendente';
     }
 
-    /**
-     * Get all students with trial information
-     */
+    
     public function getStudents(Request $request): JsonResponse
     {
         $request->validate([
@@ -1092,7 +1052,7 @@ class AdminController extends Controller
 
         $query = User::where('student_verified', true);
 
-        // Filter by status
+        
         if ($status) {
             switch ($status) {
                 case 'active':
@@ -1109,7 +1069,7 @@ class AdminController extends Controller
             }
         }
 
-        // Search functionality
+        
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
@@ -1138,9 +1098,7 @@ class AdminController extends Controller
         ]);
     }
 
-    /**
-     * List student verification requests
-     */
+    
     public function getStudentVerificationRequests(Request $request): JsonResponse
     {
         $request->validate([
@@ -1150,10 +1108,10 @@ class AdminController extends Controller
 
         $query = \App\Models\StudentVerificationRequest::query()
             ->with(['user' => function ($query) {
-                // Only load users that are not soft-deleted
+                
                 $query->withTrashed();
             }])
-            ->whereHas('user'); // Filter out requests for deleted users
+            ->whereHas('user'); 
         
         if ($request->status) {
             $query->where('status', $request->status);
@@ -1166,9 +1124,7 @@ class AdminController extends Controller
         ]);
     }
 
-    /**
-     * Approve a student verification request
-     */
+    
     public function approveStudentVerification(int $id, Request $request): JsonResponse
     {
         $request->validate([
@@ -1185,7 +1141,7 @@ class AdminController extends Controller
         $duration = $request->input('duration_months', 12);
         $user = $svr->user;
 
-        // Check if user exists (not soft-deleted)
+        
         if (!$user) {
             return response()->json([
                 'success' => false,
@@ -1193,7 +1149,7 @@ class AdminController extends Controller
             ], 404);
         }
 
-        // Check if user is already verified to prevent duplicate approvals
+        
         if ($user->student_verified) {
             $svr->update([
                 'status' => 'approved',
@@ -1223,8 +1179,8 @@ class AdminController extends Controller
                 'free_trial_expires_at' => $expiresAt,
             ];
 
-            // Only change role to 'student' if user doesn't have premium subscription
-            // This preserves premium users who want student verification
+            
+            
             if (!$user->has_premium) {
                 $updateData['role'] = 'student';
             }
@@ -1233,7 +1189,7 @@ class AdminController extends Controller
 
             DB::commit();
             
-            // Notify user of approval
+            
             \App\Services\NotificationService::notifyUserOfStudentVerificationApproval($user, [
                 'duration_months' => $duration,
                 'expires_at' => $expiresAt,
@@ -1258,9 +1214,7 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Reject a student verification request
-     */
+    
     public function rejectStudentVerification(int $id, Request $request): JsonResponse
     {
         $request->validate([
@@ -1281,7 +1235,7 @@ class AdminController extends Controller
             'review_notes' => $request->review_notes,
         ]);
 
-        // Notify user of rejection if user exists
+        
         if ($user) {
             try {
                 \App\Services\NotificationService::notifyUserOfStudentVerificationRejection($user, [
@@ -1302,16 +1256,14 @@ class AdminController extends Controller
         ]);
     }
 
-    /**
-     * Update student trial period
-     */
+    
     public function updateStudentTrial(Request $request, User $student): JsonResponse
     {
         $request->validate([
             'period' => 'required|in:1month,6months,1year',
         ]);
 
-        // Check if user is a verified student
+        
         if (!$student->student_verified) {
             return response()->json([
                 'success' => false,
@@ -1319,7 +1271,7 @@ class AdminController extends Controller
             ], 422);
         }
 
-        // Verify user role is student (unless they have premium, then allow)
+        
         if (!$student->isStudent() && !$student->has_premium) {
             return response()->json([
                 'success' => false,
@@ -1336,13 +1288,13 @@ class AdminController extends Controller
                 default => now()->addMonth(),
             };
 
-            // Sync both student_expires_at and free_trial_expires_at
+            
             $student->update([
                 'free_trial_expires_at' => $expiresAt,
-                'student_expires_at' => $expiresAt, // Sync both dates
+                'student_expires_at' => $expiresAt, 
             ]);
 
-            // Log the trial update
+            
             \Illuminate\Support\Facades\Log::info('Student trial period updated', [
                 'student_id' => $student->id,
                 'student_email' => $student->email,
@@ -1371,9 +1323,7 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Update student status (activate, block, remove)
-     */
+    
     public function updateStudentStatus(Request $request, User $student): JsonResponse
     {
         $request->validate([
@@ -1417,7 +1367,7 @@ class AdminController extends Controller
                     ], 400);
             }
 
-            // Log the action
+            
             \Illuminate\Support\Facades\Log::info('Student status updated', [
                 'student_id' => $student->id,
                 'student_email' => $student->email,
@@ -1446,15 +1396,13 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Transform student data for admin interface
-     */
+    
     private function transformStudentData(User $student): array
     {
         $now = now();
         $trialExpiresAt = $student->free_trial_expires_at;
         
-        // Determine status
+        
         $status = 'active';
         if ($student->has_premium) {
             $status = 'premium';
@@ -1462,7 +1410,7 @@ class AdminController extends Controller
             $status = 'expired';
         }
 
-        // Determine trial status
+        
         $trialStatus = 'active';
         if ($student->has_premium) {
             $trialStatus = 'premium';
@@ -1470,7 +1418,7 @@ class AdminController extends Controller
             $trialStatus = 'expired';
         }
 
-        // Calculate days remaining
+        
         $daysRemaining = 0;
         if ($trialExpiresAt && $trialExpiresAt->isFuture()) {
             $daysRemaining = $now->diffInDays($trialExpiresAt, false);
@@ -1495,9 +1443,7 @@ class AdminController extends Controller
         ];
     }
 
-    /**
-     * Get all guides for admin management
-     */
+    
     public function getGuides(): JsonResponse
     {
         try {
@@ -1515,9 +1461,7 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Get a specific guide for admin management
-     */
+    
     public function getGuide($id): JsonResponse
     {
         try {
@@ -1535,13 +1479,11 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Update a guide for admin management
-     */
+    
     public function updateGuide($id, Request $request): JsonResponse
     {
         try {
-            // Validate request manually
+            
             $validated = $request->validate([
                 'title' => 'required|string|min:2|max:255',
                 'audience' => 'required|string|in:Brand,Creator',
@@ -1562,12 +1504,12 @@ class AdminController extends Controller
 
             $guide->update($data);
 
-            // Handle steps update if provided
+            
             if ($request->has('steps') && is_array($request->steps)) {
-                // Delete existing steps
+                
                 $guide->steps()->delete();
 
-                // Create new steps
+                
                 foreach ($request->steps as $index => $stepData) {
                     $stepFields = [
                         'guide_id' => $guide->id,
@@ -1576,7 +1518,7 @@ class AdminController extends Controller
                         'order' => $index,
                     ];
 
-                    // Handle step video if provided
+                    
                     if (isset($stepData['videoFile']) && $stepData['videoFile'] instanceof \Illuminate\Http\UploadedFile) {
                         $file = $stepData['videoFile'];
                         $filename = Str::uuid()->toString() . '.' . $file->getClientOriginalExtension();
@@ -1586,7 +1528,7 @@ class AdminController extends Controller
                         $stepFields['video_mime'] = $file->getMimeType();
                     }
 
-                    // Handle step screenshots if provided
+                    
                     if (isset($stepData['screenshots']) && is_array($stepData['screenshots'])) {
                         $screenshotPaths = [];
                         foreach ($stepData['screenshots'] as $screenshot) {
@@ -1605,7 +1547,7 @@ class AdminController extends Controller
 
             \DB::commit();
 
-            // Reload guide with steps
+            
             $guide->load('steps');
 
             return response()->json([

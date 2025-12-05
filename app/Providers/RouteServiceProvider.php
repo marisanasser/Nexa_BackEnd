@@ -10,24 +10,16 @@ use Illuminate\Support\Facades\Route;
 
 class RouteServiceProvider extends ServiceProvider
 {
-    /**
-     * The path to your application's "home" route.
-     *
-     * Typically, users are redirected here after authentication.
-     *
-     * @var string
-     */
+    
     public const HOME = '/dashboard';
 
-    /**
-     * Define your route model bindings, pattern filters, and other route configuration.
-     */
+    
     public function boot(): void
     {
-        // Rate limiting for new user flow (registration + immediate login)
+        
         RateLimiter::for('new-user-flow', function (Request $request) {
             return Limit::perMinute(25)->by($request->ip())->response(function () use ($request) {
-                // Log rate limiting for debugging
+                
                 \Log::info('New user flow rate limited', [
                     'ip' => $request->ip(),
                     'user_agent' => $request->userAgent(),
@@ -37,19 +29,19 @@ class RouteServiceProvider extends ServiceProvider
                 
                 return response()->json([
                     'message' => 'Muitas tentativas de criação de conta. Tente novamente em alguns instantes.',
-                    'retry_after' => 300, // 5 minutes
+                    'retry_after' => 300, 
                     'error_type' => 'new_user_flow_rate_limited'
                 ], 429);
             });
         });
 
-        // Rate limiting for authentication endpoints (more lenient for new users)
+        
         RateLimiter::for('auth', function (Request $request) {
             $config = config('rate_limiting.auth.login');
             return Limit::perMinute($config['attempts'])
                 ->by($request->ip())
                 ->response(function () use ($config, $request) {
-                    // Log rate limiting for debugging
+                    
                     \Log::info('Route-level auth rate limited', [
                         'ip' => $request->ip(),
                         'user_agent' => $request->userAgent(),
@@ -65,13 +57,13 @@ class RouteServiceProvider extends ServiceProvider
                 });
         });
 
-        // Rate limiting for registration (prevent spam but allow legitimate users)
+        
         RateLimiter::for('registration', function (Request $request) {
             $config = config('rate_limiting.auth.registration');
             return Limit::perMinute($config['attempts'])
                 ->by($request->ip())
                 ->response(function () use ($config, $request) {
-                    // Log rate limiting for debugging
+                    
                     \Log::info('Route-level registration rate limited', [
                         'ip' => $request->ip(),
                         'user_agent' => $request->userAgent(),
@@ -87,7 +79,7 @@ class RouteServiceProvider extends ServiceProvider
                 });
         });
 
-        // Rate limiting for password reset
+        
         RateLimiter::for('password-reset', function (Request $request) {
             $config = config('rate_limiting.auth.password_reset');
             return Limit::perMinute($config['attempts'])
@@ -101,54 +93,54 @@ class RouteServiceProvider extends ServiceProvider
                 });
         });
 
-        // General API rate limiting
+        
         RateLimiter::for('api', function (Request $request) {
             $config = config('rate_limiting.api.general');
             return Limit::perMinute($config['attempts'])
                 ->by($request->user()?->id ?: $request->ip());
         });
 
-        // Separate rate limiting for dashboard endpoints to prevent conflicts
+        
         RateLimiter::for('dashboard', function (Request $request) {
-            return Limit::perMinute(200) // More lenient for dashboard data
+            return Limit::perMinute(200) 
                 ->by($request->user()?->id ?: $request->ip())
                 ->response(function () use ($request) {
                     return response()->json([
                         'message' => 'Dashboard rate limit exceeded. Please wait a moment.',
-                        'retry_after' => 60, // 1 minute
+                        'retry_after' => 60, 
                         'error_type' => 'dashboard_rate_limited'
                     ], 429);
                 });
         });
 
-        // Separate rate limiting for chat endpoints
+        
         RateLimiter::for('chat', function (Request $request) {
-            return Limit::perMinute(300) // More lenient for chat
+            return Limit::perMinute(300) 
                 ->by($request->user()?->id ?: $request->ip())
                 ->response(function () use ($request) {
                     return response()->json([
                         'message' => 'Chat rate limit exceeded. Please wait a moment.',
-                        'retry_after' => 60, // 1 minute
+                        'retry_after' => 60, 
                         'error_type' => 'chat_rate_limited'
                     ], 429);
                 });
         });
 
-        // Add specific rate limiting for notification endpoints
+        
         RateLimiter::for('notifications', function (Request $request) {
             $config = config('rate_limiting.api.notifications');
             return Limit::perMinute($config['attempts'])
                 ->by($request->user()?->id ?: $request->ip());
         });
 
-        // Add specific rate limiting for user status checks
+        
         RateLimiter::for('user-status', function (Request $request) {
             $config = config('rate_limiting.api.user_status');
             return Limit::perMinute($config['attempts'])
                 ->by($request->user()?->id ?: $request->ip());
         });
 
-        // Add specific rate limiting for payment endpoints
+        
         RateLimiter::for('payment', function (Request $request) {
             $config = config('rate_limiting.api.payment');
             return Limit::perMinute($config['attempts'])

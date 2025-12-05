@@ -7,16 +7,14 @@ use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    
     public function up(): void
     {
         Schema::table('transactions', function (Blueprint $table) {
             if (!Schema::hasColumn('transactions', 'contract_id')) {
                 $table->unsignedBigInteger('contract_id')->nullable()->after('user_id');
                 
-                // Only add foreign key if not using SQLite
+                
                 if (DB::getDriverName() !== 'sqlite') {
                     $table->foreign('contract_id')->references('id')->on('contracts')->onDelete('set null');
                 }
@@ -24,9 +22,7 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
         Schema::table('transactions', function (Blueprint $table) {

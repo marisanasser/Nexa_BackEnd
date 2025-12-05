@@ -10,9 +10,7 @@ use Illuminate\Support\Facades\Auth;
 
 class NotificationController extends Controller
 {
-    /**
-     * Get user's notifications
-     */
+    
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
@@ -22,12 +20,12 @@ class NotificationController extends Controller
 
         $query = Notification::where('user_id', $user->id);
 
-        // Filter by type
+        
         if ($type) {
             $query->where('type', $type);
         }
 
-        // Filter by read status
+        
         if ($isRead !== null) {
             $query->where('is_read', $isRead);
         }
@@ -47,9 +45,7 @@ class NotificationController extends Controller
         ]);
     }
 
-    /**
-     * Get unread notification count
-     */
+    
     public function unreadCount(): JsonResponse
     {
         $user = Auth::user();
@@ -61,9 +57,7 @@ class NotificationController extends Controller
         ]);
     }
 
-    /**
-     * Mark notification as read
-     */
+    
     public function markAsRead(int $id): JsonResponse
     {
         $user = Auth::user();
@@ -82,9 +76,7 @@ class NotificationController extends Controller
         ], 404);
     }
 
-    /**
-     * Mark all notifications as read
-     */
+    
     public function markAllAsRead(): JsonResponse
     {
         $user = Auth::user();
@@ -97,9 +89,7 @@ class NotificationController extends Controller
         ]);
     }
 
-    /**
-     * Delete notification
-     */
+    
     public function destroy(int $id): JsonResponse
     {
         $user = Auth::user();
@@ -122,9 +112,7 @@ class NotificationController extends Controller
         ]);
     }
 
-    /**
-     * Get notification statistics
-     */
+    
     public function statistics(): JsonResponse
     {
         $user = Auth::user();
@@ -149,6 +137,5 @@ class NotificationController extends Controller
             ],
         ]);
     }
-
 
 } 

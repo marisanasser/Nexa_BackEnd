@@ -22,9 +22,7 @@ class WithdrawalController extends Controller
         Stripe::setApiKey(config('services.stripe.secret'));
     }
 
-    /**
-     * Check if user's Stripe account has payouts enabled
-     */
+    
     private function checkStripePayoutsEnabled(User $user): array
     {
         try {
@@ -97,9 +95,7 @@ class WithdrawalController extends Controller
         }
     }
 
-    /**
-     * Create a withdrawal request
-     */
+    
     public function store(Request $request): JsonResponse
     {
         $user = Auth::user();
@@ -110,7 +106,7 @@ class WithdrawalController extends Controller
             'requested_amount' => $request->amount ?? 'not_provided',
             'withdrawal_method' => $request->withdrawal_method ?? 'not_provided',
         ]);
-        // Check if user is a creator or student
+        
         if (!$user->isCreator() && !$user->isStudent()) {
             Log::warning('Withdrawal request denied: User is not creator or student', [
                 'user_id' => $user->id,
@@ -126,7 +122,7 @@ class WithdrawalController extends Controller
             'user_id' => $user->id,
         ]);
         
-        // Check Stripe payouts status before allowing withdrawal
+        
         $payoutsStatus = $this->checkStripePayoutsEnabled($user);
         if (!$payoutsStatus['enabled']) {
             Log::warning('Withdrawal request blocked: Stripe payouts not enabled', [
@@ -145,16 +141,16 @@ class WithdrawalController extends Controller
             'user_id' => $user->id,
         ]);
         
-        // Get the withdrawal method from database or check if it's a dynamic method
+        
         $withdrawalMethod = \App\Models\WithdrawalMethod::findByCode($request->withdrawal_method);
         $dynamicMethod = null;
         
-        // If not found in database, check if it's a valid dynamic method (e.g., stripe_connect_bank_account)
+        
         if (!$withdrawalMethod) {
-            // Get user's available withdrawal methods (includes dynamic methods)
+            
             $availableMethods = $user->getWithdrawalMethods();
             
-            // For Stripe methods, ensure stripe_account_id matches
+            
             if (strpos($request->withdrawal_method, 'stripe') !== false) {
                 $dynamicMethod = $availableMethods->first(function ($method) use ($request, $user) {
                     return $method['id'] === $request->withdrawal_method &&
@@ -196,7 +192,7 @@ class WithdrawalController extends Controller
             ]);
         }
         
-        // Validate Stripe account requirement for Stripe methods
+        
         if (($request->withdrawal_method === 'stripe_connect_bank_account' || 
              $request->withdrawal_method === 'stripe_connect' ||
              $request->withdrawal_method === 'stripe_card') && 
@@ -208,7 +204,7 @@ class WithdrawalController extends Controller
             ], 400);
         }
         
-        // Also validate that dynamic method has stripe_account_id if it's a Stripe method
+        
         if ($dynamicMethod && 
             (strpos($request->withdrawal_method, 'stripe') !== false) &&
             empty($dynamicMethod['stripe_account_id']) &&
@@ -220,7 +216,7 @@ class WithdrawalController extends Controller
             ], 400);
         }
         
-        // Build dynamic validation rules
+        
         $validationRules = [
             'amount' => 'required|numeric|min:0.01',
             'withdrawal_method' => 'required|string',
@@ -241,19 +237,19 @@ class WithdrawalController extends Controller
             ], 422);
         }
 
-        // Validate withdrawal details using the method's validation
-        // Temporarily comment out to debug
-        // $detailErrors = $withdrawalMethod->validateWithdrawalDetails($request->withdrawal_details);
-        // if (!empty($detailErrors)) {
-        //     return response()->json([
-        //         'success' => false,
-        //         'message' => 'Invalid withdrawal details',
-        //         'errors' => $detailErrors,
-        //     ], 422);
-        // }
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
 
         try {
-            // Use database transaction to ensure data integrity
+            
             return DB::transaction(function () use ($user, $request, $withdrawalMethod, $dynamicMethod) {
                 $balance = CreatorBalance::where('creator_id', $user->id)->first();
 
@@ -271,7 +267,7 @@ class WithdrawalController extends Controller
                     ]);
                 }
 
-                // Check if user has sufficient balance
+                
                 if (!$balance->canWithdraw($request->amount)) {
                     return response()->json([
                         'success' => false,
@@ -279,9 +275,9 @@ class WithdrawalController extends Controller
                     ], 400);
                 }
 
-                // Check if amount is within method limits
+                
                 if ($withdrawalMethod) {
-                    // Database method
+                    
                     if (!$withdrawalMethod->isAmountValid($request->amount)) {
                         return response()->json([
                             'success' => false,
@@ -289,7 +285,7 @@ class WithdrawalController extends Controller
                         ], 400);
                     }
                 } elseif ($dynamicMethod) {
-                    // Dynamic method (e.g., stripe_connect_bank_account)mkmlmlk
+                    
                     $minAmount = $dynamicMethod['min_amount'] ?? 0;
                     $maxAmount = $dynamicMethod['max_amount'] ?? 1000000;
                     if ($request->amount < $minAmount || $request->amount > $maxAmount) {
@@ -303,7 +299,7 @@ class WithdrawalController extends Controller
                     }
                 }
 
-                // Check if user has pending withdrawals
+                
                 $pendingWithdrawals = $user->withdrawals()
                     ->whereIn('status', ['pending', 'processing'])
                     ->count();
@@ -315,10 +311,10 @@ class WithdrawalController extends Controller
                     ], 400);
                 }
 
-                // Prepare withdrawal details with method-specific information
+                
                 $withdrawalDetails = $request->withdrawal_details ?? [];
                 
-                // Add method fee percentage to withdrawal details for reference
+                
                 if ($withdrawalMethod) {
                     $withdrawalDetails['method_fee_percentage'] = $withdrawalMethod->fee;
                     $withdrawalDetails['method_name'] = $withdrawalMethod->name;
@@ -329,9 +325,9 @@ class WithdrawalController extends Controller
                     $withdrawalDetails['method_code'] = $request->withdrawal_method;
                 }
                 
-                // Always include stripe_account_id for Stripe methods if available
+                
                 if (strpos($request->withdrawal_method, 'stripe') !== false && $user->stripe_account_id) {
-                    // If dynamic method has stripe_account_id, use it (it should match user's)
+                    
                     if ($dynamicMethod && isset($dynamicMethod['stripe_account_id'])) {
                         $withdrawalDetails['stripe_account_id'] = $dynamicMethod['stripe_account_id'];
                     } else {
@@ -339,19 +335,19 @@ class WithdrawalController extends Controller
                     }
                 }
                 
-                // If it's a Stripe Connect bank account withdrawal, store bank account info
+                
                 if (($request->withdrawal_method === 'stripe_connect_bank_account' || 
                      ($withdrawalMethod && $withdrawalMethod->code === 'stripe_connect_bank_account')) 
                     && $user->stripe_account_id) {
                     $withdrawalDetails['stripe_account_id'] = $user->stripe_account_id;
                     
-                    // Try to get bank account details from Stripe Connect
+                    
                     try {
                         $stripeSecret = config('services.stripe.secret');
                         if ($stripeSecret) {
                             \Stripe\Stripe::setApiKey($stripeSecret);
                             
-                            // Retrieve external accounts (bank accounts) for the connected account
+                            
                             $externalAccounts = \Stripe\Account::allExternalAccounts(
                                 $user->stripe_account_id,
                                 ['object' => 'bank_account', 'limit' => 1]
@@ -378,7 +374,7 @@ class WithdrawalController extends Controller
                     }
                 }
                 
-                // If it's a Pagar.me withdrawal, store bank account info
+                
                 if (($withdrawalMethod && $withdrawalMethod->code === 'pagarme_bank_transfer') || 
                     $request->withdrawal_method === 'pagarme_bank_transfer') {
                     $bankAccount = \App\Models\BankAccount::where('user_id', $user->id)->first();
@@ -395,30 +391,30 @@ class WithdrawalController extends Controller
                     }
                 }
 
-                // Create withdrawal record in database
+                
                 $withdrawal = Withdrawal::create([
                     'creator_id' => $user->id,
                     'amount' => $request->amount,
-                    'platform_fee' => 5.00, // 5% platform fee
-                    'fixed_fee' => 5.00, // R$5 fixed platform fee
+                    'platform_fee' => 5.00, 
+                    'fixed_fee' => 5.00, 
                     'withdrawal_method' => $request->withdrawal_method,
                     'withdrawal_details' => $withdrawalDetails,
                     'status' => 'pending',
                 ]);
 
-                // Verify withdrawal was created successfully
+                
                 if (!$withdrawal || !$withdrawal->id) {
                     throw new \Exception('Failed to create withdrawal record in database');
                 }
 
-                // Deduct from available balance
+                
                 $withdrawResult = $balance->withdraw($request->amount);
                 
                 if (!$withdrawResult) {
                     throw new \Exception('Failed to deduct amount from available balance');
                 }
                 
-                // Refresh balance to get updated values
+                
                 $balance->refresh();
 
                 $methodName = $withdrawalMethod ? $withdrawalMethod->name : ($dynamicMethod['name'] ?? $request->withdrawal_method);
@@ -470,14 +466,12 @@ class WithdrawalController extends Controller
         }
     }
 
-    /**
-     * Get withdrawal history for the authenticated creator
-     */
+    
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
 
-        // Check if user is a creator or student
+        
         if (!$user->isCreator() && !$user->isStudent()) {
             return response()->json([
                 'success' => false,
@@ -538,14 +532,12 @@ class WithdrawalController extends Controller
         }
     }
 
-    /**
-     * Get a specific withdrawal
-     */
+    
     public function show(int $id): JsonResponse
     {
         $user = Auth::user();
 
-        // Check if user is a creator or student
+        
         if (!$user->isCreator() && !$user->isStudent()) {
             return response()->json([
                 'success' => false,
@@ -605,14 +597,12 @@ class WithdrawalController extends Controller
         }
     }
 
-    /**
-     * Cancel a withdrawal request
-     */
+    
     public function cancel(int $id): JsonResponse
     {
         $user = Auth::user();
 
-        // Check if user is a creator or student
+        
         if (!$user->isCreator() && !$user->isStudent()) {
             return response()->json([
                 'success' => false,
@@ -674,14 +664,12 @@ class WithdrawalController extends Controller
         }
     }
 
-    /**
-     * Get withdrawal statistics for the creator
-     */
+    
     public function statistics(): JsonResponse
     {
         $user = Auth::user();
 
-        // Check if user is a creator or student
+        
         if (!$user->isCreator() && !$user->isStudent()) {
             return response()->json([
                 'success' => false,
@@ -710,7 +698,7 @@ class WithdrawalController extends Controller
                     ->sum('amount'),
             ];
 
-            // Format amounts
+            
             $stats['formatted_total_amount_withdrawn'] = 'R$ ' . number_format($stats['total_amount_withdrawn'], 2, ',', '.');
             $stats['formatted_pending_amount'] = 'R$ ' . number_format($stats['pending_amount'], 2, ',', '.');
             $stats['formatted_processing_amount'] = 'R$ ' . number_format($stats['processing_amount'], 2, ',', '.');

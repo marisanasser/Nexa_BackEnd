@@ -8,23 +8,13 @@ use Illuminate\Support\Facades\Log;
 
 class ProcessWithdrawals extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
+    
     protected $signature = 'withdrawals:process';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    
     protected $description = 'Process pending withdrawal requests';
 
-    /**
-     * Execute the console command.
-     */
+    
     public function handle()
     {
         $this->info('Starting withdrawal processing...');

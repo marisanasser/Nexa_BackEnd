@@ -23,7 +23,7 @@ class ProcessSubscription extends Command
         Stripe::setApiKey(config('services.stripe.secret'));
         
         try {
-            // Retrieve subscription from Stripe
+            
             $stripeSub = StripeSubscription::retrieve($stripeSubscriptionId, [
                 'expand' => ['latest_invoice.payment_intent']
             ]);
@@ -32,7 +32,7 @@ class ProcessSubscription extends Command
             $this->info("  Status: {$stripeSub->status}");
             $this->info("  Customer: {$stripeSub->customer}");
             
-            // Find user by customer ID
+            
             $user = User::where('stripe_customer_id', $stripeSub->customer)->first();
             
             if (!$user) {
@@ -42,13 +42,13 @@ class ProcessSubscription extends Command
             
             $this->info("User found: {$user->email} (ID: {$user->id})");
             
-            // Check if subscription already exists
+            
             $existingSub = Subscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
             if ($existingSub) {
                 $this->warn("Subscription already exists in database (ID: {$existingSub->id})");
                 $this->info("Updating user premium status...");
                 
-                // Update user premium status
+                
                 $currentPeriodEnd = isset($stripeSub->current_period_end) 
                     ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_end) 
                     : null;
@@ -69,7 +69,7 @@ class ProcessSubscription extends Command
                 return 0;
             }
             
-            // Get plan from subscription price
+            
             $priceId = $stripeSub->items->data[0]->price->id ?? null;
             if (!$priceId) {
                 $this->error("Could not get price ID from subscription");
@@ -84,7 +84,7 @@ class ProcessSubscription extends Command
             
             $this->info("Plan found: {$plan->name} (ID: {$plan->id})");
             
-            // Check payment status
+            
             $invoiceStatus = null;
             $paymentIntentStatus = null;
             
@@ -132,7 +132,7 @@ class ProcessSubscription extends Command
                 
                 $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_' . $stripeSubscriptionId;
                 
-                // Create transaction
+                
                 $transaction = Transaction::create([
                     'user_id' => $user->id,
                     'stripe_payment_intent_id' => $transactionId,
@@ -146,7 +146,7 @@ class ProcessSubscription extends Command
                     'paid_at' => now(),
                 ]);
                 
-                // Set cancel_at for plans with fixed duration
+                
                 if ($plan->duration_months > 1) {
                     $cancelAt = \Carbon\Carbon::now()->addMonths($plan->duration_months)->timestamp;
                     try {
@@ -159,7 +159,7 @@ class ProcessSubscription extends Command
                     }
                 }
                 
-                // Create subscription
+                
                 $subscription = Subscription::create([
                     'user_id' => $user->id,
                     'subscription_plan_id' => $plan->id,
@@ -175,13 +175,13 @@ class ProcessSubscription extends Command
                     'expires_at' => $currentPeriodEnd,
                 ]);
                 
-                // Calculate expiration date
+                
                 $premiumExpiresAt = $currentPeriodEnd;
                 if (!$premiumExpiresAt) {
                     $premiumExpiresAt = \Carbon\Carbon::now()->addMonths($plan->duration_months);
                 }
                 
-                // Update user premium flags
+                
                 $user->update([
                     'has_premium' => true,
                     'premium_expires_at' => $premiumExpiresAt->format('Y-m-d H:i:s'),
@@ -209,6 +209,4 @@ class ProcessSubscription extends Command
         }
     }
 }
-
-
 
