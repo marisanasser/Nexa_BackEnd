@@ -278,9 +278,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Payment transaction history (requires authentication)
     Route::get('/payment/transactions', [ContractPaymentController::class, 'getTransactionHistory'])->middleware(['throttle:dashboard']);
     
-    // Brand transaction history (transactions related to brand's contracts)
-    Route::get('/brand/transactions', [ContractPaymentController::class, 'getBrandTransactionHistory'])->middleware(['throttle:dashboard']);
-    
     // Freelancer payment routes
     Route::prefix('freelancer')->group(function () {
         // Bank account management
