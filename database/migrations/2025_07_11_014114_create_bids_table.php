@@ -6,9 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    
     public function up(): void
     {
         Schema::create('bids', function (Blueprint $table) {
@@ -24,14 +22,12 @@ return new class extends Migration
             $table->text('rejection_reason')->nullable();
             $table->timestamps();
             
-            // Ensure one bid per user per campaign
+            
             $table->unique(['campaign_id', 'user_id']);
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
         Schema::dropIfExists('bids');

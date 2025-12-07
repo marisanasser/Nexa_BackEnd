@@ -16,18 +16,14 @@ class PasswordReset extends Mailable
     public $token;
     public $email;
 
-    /**
-     * Create a new message instance.
-     */
+    
     public function __construct($token, $email)
     {
         $this->token = $token;
         $this->email = $email;
     }
 
-    /**
-     * Get the message envelope.
-     */
+    
     public function envelope(): Envelope
     {
         return new Envelope(
@@ -35,13 +31,11 @@ class PasswordReset extends Mailable
         );
     }
 
-    /**
-     * Get the message content definition.
-     */
+    
     public function content(): Content
     {
-        // Construct the reset password URL with token and email query parameters
-        // The frontend ResetPassword.tsx expects these parameters
+        
+        
         $resetUrl = config('app.frontend_url') . '/reset-password?token=' . urlencode($this->token) . '&email=' . urlencode($this->email);
         
         return new Content(
@@ -53,11 +47,7 @@ class PasswordReset extends Mailable
         );
     }
 
-    /**
-     * Get the attachments for the message.
-     *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
-     */
+    
     public function attachments(): array
     {
         return [];

@@ -22,7 +22,7 @@ class DeliveryMaterial extends Model
         'media_type',
         'title',
         'description',
-        'status', // pending, approved, rejected
+        'status', 
         'submitted_at',
         'reviewed_at',
         'reviewed_by',
@@ -36,7 +36,7 @@ class DeliveryMaterial extends Model
         'file_size' => 'integer',
     ];
 
-    // Relationships
+    
     public function contract(): BelongsTo
     {
         return $this->belongsTo(Contract::class);
@@ -62,7 +62,7 @@ class DeliveryMaterial extends Model
         return $this->belongsTo(CampaignTimeline::class, 'milestone_id');
     }
 
-    // Accessors
+    
     public function getFileUrlAttribute(): string
     {
         return asset('storage/' . $this->file_path);
@@ -82,12 +82,12 @@ class DeliveryMaterial extends Model
 
     public function getThumbnailUrlAttribute(): string
     {
-        // For now, return the same URL as the file
-        // In the future, you could generate thumbnails for videos
+        
+        
         return $this->file_url;
     }
 
-    // Methods
+    
     public function isPending(): bool
     {
         return $this->status === 'pending';

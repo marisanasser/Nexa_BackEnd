@@ -25,7 +25,7 @@ class DirectChatRoom extends Model
         'last_message_at' => 'datetime',
     ];
 
-    // Relationships
+    
     public function brand(): BelongsTo
     {
         return $this->belongsTo(User::class, 'brand_id');
@@ -51,7 +51,7 @@ class DirectChatRoom extends Model
         return $this->hasMany(DirectMessage::class)->latest();
     }
 
-    // Static methods
+    
     public static function generateRoomId(int $brandId, int $creatorId): string
     {
         return "direct_room_{$brandId}_{$creatorId}";
@@ -70,12 +70,12 @@ class DirectChatRoom extends Model
                 'room_id' => $roomId,
                 'is_active' => true,
                 'connection_request_id' => $connectionRequestId,
-                'last_message_at' => now(), // Set to current time for new rooms
+                'last_message_at' => now(), 
             ]
         );
     }
 
-    // Methods
+    
     public function getOtherUser($currentUserId)
     {
         if ($currentUserId == $this->brand_id) {

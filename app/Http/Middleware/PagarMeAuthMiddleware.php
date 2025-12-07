@@ -11,11 +11,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class PagarMeAuthMiddleware
 {
-    /**
-     * Handle an incoming request.
-     *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
-     */
+    
     public function handle(Request $request, Closure $next): Response
     {
         $accountId = $request->header('X-PagarMe-Account-ID');
@@ -28,7 +24,7 @@ class PagarMeAuthMiddleware
         }
 
         try {
-            // Find user by account_id or email
+            
             $user = User::where('account_id', $accountId)
                        ->orWhere('email', $email)
                        ->first();
@@ -39,14 +35,14 @@ class PagarMeAuthMiddleware
                 ], 401);
             }
 
-            // Verify that the account_id matches if user has one
+            
             if ($user->account_id && $user->account_id !== $accountId) {
                 return response()->json([
                     'message' => 'Account ID mismatch.',
                 ], 401);
             }
 
-            // Log the authentication attempt
+            
             Log::info('Pagar.me middleware authentication', [
                 'user_id' => $user->id,
                 'account_id' => $accountId,
@@ -55,10 +51,10 @@ class PagarMeAuthMiddleware
                 'user_agent' => $request->userAgent(),
             ]);
 
-            // Set the authenticated user
+            
             auth()->login($user);
 
-            // Add user info to request for easy access
+            
             $request->merge(['pagarme_user' => $user]);
 
             return $next($request);

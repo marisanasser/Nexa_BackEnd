@@ -7,23 +7,13 @@ use Illuminate\Support\Facades\File;
 
 class SetupStorageDirectories extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
+    
     protected $signature = 'storage:setup-directories';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    
     protected $description = 'Create all necessary storage directories if they do not exist';
 
-    /**
-     * Execute the console command.
-     */
+    
     public function handle()
     {
         $this->info('Setting up storage directories...');

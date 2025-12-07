@@ -15,9 +15,7 @@ use Illuminate\Support\Facades\Log;
 
 class DeliveryMaterialController extends Controller
 {
-    /**
-     * Get delivery materials for a contract (Brand only)
-     */
+    
     public function index(Request $request): JsonResponse
     {
         $request->validate([
@@ -26,7 +24,7 @@ class DeliveryMaterialController extends Controller
 
         $contract = Contract::findOrFail($request->contract_id);
         
-        // Only brand can view delivery materials for their contracts
+        
         if (Auth::user()->role !== 'brand' || $contract->brand_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -42,14 +40,12 @@ class DeliveryMaterialController extends Controller
         ]);
     }
 
-    /**
-     * Submit delivery material (Creator only)
-     */
+    
     public function store(Request $request): JsonResponse
     {
         $user = Auth::user();
 
-        // Only creators can submit delivery materials
+        
         if (!$user->isCreator()) {
             return response()->json(['message' => 'Only creators can submit delivery materials'], 403);
         }
@@ -57,7 +53,7 @@ class DeliveryMaterialController extends Controller
         $validator = Validator::make($request->all(), [
             'contract_id' => 'required|exists:contracts,id',
             'milestone_id' => 'nullable|exists:campaign_timelines,id',
-            'file' => 'required|file|max:102400', // 100MB max
+            'file' => 'required|file|max:102400', 
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:1000',
         ]);
@@ -71,12 +67,12 @@ class DeliveryMaterialController extends Controller
 
         $contract = Contract::findOrFail($request->contract_id);
         
-        // Check if creator is part of this contract
+        
         if ($contract->creator_id !== $user->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        // Check if contract is active
+        
         if ($contract->status !== 'active') {
             return response()->json(['message' => 'Contract is not active'], 400);
         }
@@ -105,7 +101,7 @@ class DeliveryMaterialController extends Controller
                 'submitted_at' => now(),
             ]);
 
-            // Notify brand about new delivery material
+            
             NotificationService::notifyBrandOfNewDeliveryMaterial($material);
 
             return response()->json([
@@ -128,14 +124,12 @@ class DeliveryMaterialController extends Controller
         }
     }
 
-    /**
-     * Approve delivery material (Brand only)
-     */
+    
     public function approve(Request $request, DeliveryMaterial $material): JsonResponse
     {
         $user = Auth::user();
 
-        // Only brands can approve delivery materials for their contracts
+        
         if (!$user->isBrand() || $material->brand_id !== $user->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -158,10 +152,10 @@ class DeliveryMaterialController extends Controller
         try {
             $material->approve($user->id, $request->comment);
 
-            // Notify creator about approval
+            
             NotificationService::notifyCreatorOfDeliveryMaterialApproval($material);
             
-            // Notify brand about the action taken
+            
             NotificationService::notifyBrandOfDeliveryMaterialAction($material, 'approved');
 
             return response()->json([
@@ -184,14 +178,12 @@ class DeliveryMaterialController extends Controller
         }
     }
 
-    /**
-     * Reject delivery material (Brand only)
-     */
+    
     public function reject(Request $request, DeliveryMaterial $material): JsonResponse
     {
         $user = Auth::user();
 
-        // Only brands can reject delivery materials for their contracts
+        
         if (!$user->isBrand() || $material->brand_id !== $user->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -215,10 +207,10 @@ class DeliveryMaterialController extends Controller
         try {
             $material->reject($user->id, $request->rejection_reason, $request->comment);
 
-            // Notify creator about rejection
+            
             NotificationService::notifyCreatorOfDeliveryMaterialRejection($material);
             
-            // Notify brand about the action taken
+            
             NotificationService::notifyBrandOfDeliveryMaterialAction($material, 'rejected');
 
             return response()->json([
@@ -241,14 +233,12 @@ class DeliveryMaterialController extends Controller
         }
     }
 
-    /**
-     * Download delivery material file
-     */
+    
     public function download(DeliveryMaterial $material): JsonResponse
     {
         $user = Auth::user();
 
-        // Check if user has access to this material
+        
         if ($material->contract->brand_id !== $user->id && $material->contract->creator_id !== $user->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -263,9 +253,7 @@ class DeliveryMaterialController extends Controller
         return response()->download($filePath, $fileName);
     }
 
-    /**
-     * Get delivery material statistics for a contract
-     */
+    
     public function getStatistics(Request $request): JsonResponse
     {
         $request->validate([
@@ -274,7 +262,7 @@ class DeliveryMaterialController extends Controller
 
         $contract = Contract::findOrFail($request->contract_id);
         
-        // Only brand can view statistics for their contracts
+        
         if (Auth::user()->role !== 'brand' || $contract->brand_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -298,9 +286,7 @@ class DeliveryMaterialController extends Controller
         ]);
     }
 
-    /**
-     * Determine media type from MIME type
-     */
+    
     private function getMediaType(string $mimeType): string
     {
         if (str_starts_with($mimeType, 'image/')) {

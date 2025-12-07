@@ -30,7 +30,7 @@ class GoogleOAuthTest extends TestCase
 
     public function test_google_callback_creates_new_user(): void
     {
-        // Mock the Socialite user
+        
         $socialiteUser = new SocialiteUser();
         $socialiteUser->id = '123456789';
         $socialiteUser->name = 'John Doe';
@@ -77,13 +77,13 @@ class GoogleOAuthTest extends TestCase
 
     public function test_google_callback_logs_in_existing_user(): void
     {
-        // Create existing user
+        
         $user = User::factory()->create([
             'email' => 'john@example.com',
             'google_id' => '123456789'
         ]);
 
-        // Mock the Socialite user
+        
         $socialiteUser = new SocialiteUser();
         $socialiteUser->id = '123456789';
         $socialiteUser->name = 'John Doe';
@@ -123,7 +123,7 @@ class GoogleOAuthTest extends TestCase
 
     public function test_google_auth_with_role_creates_user_with_specified_role(): void
     {
-        // Mock the Socialite user
+        
         $socialiteUser = new SocialiteUser();
         $socialiteUser->id = '123456789';
         $socialiteUser->name = 'Jane Doe';
@@ -181,7 +181,7 @@ class GoogleOAuthTest extends TestCase
 
     public function test_google_callback_with_role_creates_user_with_specified_role(): void
     {
-        // Mock the Socialite user
+        
         $socialiteUser = new SocialiteUser();
         $socialiteUser->id = '123456789';
         $socialiteUser->name = 'Brand User';
@@ -228,7 +228,7 @@ class GoogleOAuthTest extends TestCase
 
     public function test_google_callback_with_invalid_role_defaults_to_creator(): void
     {
-        // Mock the Socialite user
+        
         $socialiteUser = new SocialiteUser();
         $socialiteUser->id = '123456789';
         $socialiteUser->name = 'Test User';
@@ -269,7 +269,7 @@ class GoogleOAuthTest extends TestCase
             'name' => 'Test User',
             'email' => 'test@example.com',
             'google_id' => '123456789',
-            'role' => 'creator' // Should default to creator for invalid role
+            'role' => 'creator' 
         ]);
     }
 } 

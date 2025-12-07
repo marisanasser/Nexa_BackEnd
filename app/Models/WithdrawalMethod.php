@@ -33,9 +33,7 @@ class WithdrawalMethod extends Model
         'sort_order' => 'integer',
     ];
 
-    /**
-     * Get active withdrawal methods ordered by sort order
-     */
+    
     public static function getActiveMethods()
     {
         return static::where('is_active', true)
@@ -43,9 +41,7 @@ class WithdrawalMethod extends Model
             ->get();
     }
 
-    /**
-     * Get method by code
-     */
+    
     public static function findByCode(string $code)
     {
         return static::where('code', $code)
@@ -53,57 +49,43 @@ class WithdrawalMethod extends Model
             ->first();
     }
 
-    /**
-     * Get formatted fee
-     */
+    
     public function getFormattedFeeAttribute(): string
     {
         return 'R$ ' . number_format($this->fee, 2, ',', '.');
     }
 
-    /**
-     * Get formatted min amount
-     */
+    
     public function getFormattedMinAmountAttribute(): string
     {
         return 'R$ ' . number_format($this->min_amount, 2, ',', '.');
     }
 
-    /**
-     * Get formatted max amount
-     */
+    
     public function getFormattedMaxAmountAttribute(): string
     {
         return 'R$ ' . number_format($this->max_amount, 2, ',', '.');
     }
 
-    /**
-     * Check if amount is within limits
-     */
+    
     public function isAmountValid(float $amount): bool
     {
         return $amount >= $this->min_amount && $amount <= $this->max_amount;
     }
 
-    /**
-     * Get required fields for this method
-     */
+    
     public function getRequiredFields(): array
     {
         return $this->required_fields ?? [];
     }
 
-    /**
-     * Get field configuration for this method
-     */
+    
     public function getFieldConfig(): array
     {
         return $this->field_config ?? [];
     }
 
-    /**
-     * Validate withdrawal details for this method
-     */
+    
     public function validateWithdrawalDetails(array $details): array
     {
         $errors = [];

@@ -6,9 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    
     public function up(): void
     {
         Schema::table('campaigns', function (Blueprint $table) {
@@ -19,17 +17,15 @@ return new class extends Migration
                 $table->integer('max_age')->nullable()->after('min_age');
             }
             if (!Schema::hasColumn('campaigns', 'target_genders')) {
-                $table->json('target_genders')->nullable()->after('max_age'); // Array of genders or empty for no preference
+                $table->json('target_genders')->nullable()->after('max_age'); 
             }
             if (!Schema::hasColumn('campaigns', 'target_creator_types')) {
-                $table->json('target_creator_types')->nullable()->after('target_genders'); // Array of creator types, require at least one
+                $table->json('target_creator_types')->nullable()->after('target_genders'); 
             }
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
         Schema::table('campaigns', function (Blueprint $table) {

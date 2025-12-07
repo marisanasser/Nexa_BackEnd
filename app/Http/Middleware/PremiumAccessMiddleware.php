@@ -9,22 +9,18 @@ use Illuminate\Support\Facades\Log;
 
 class PremiumAccessMiddleware
 {
-    /**
-     * Handle an incoming request.
-     *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
-     */
+    
     public function handle(Request $request, Closure $next): Response
     {
         $user = auth()->user();
         
-        // If not authenticated, let the auth middleware handle it
+        
         if (!$user) {
             Log::warning('PremiumAccessMiddleware: No authenticated user found');
             return $next($request);
         }
 
-        // Debug logging
+        
         Log::info('PremiumAccessMiddleware Debug', [
             'path' => $request->path(),
             'method' => $request->method(),
@@ -37,7 +33,7 @@ class PremiumAccessMiddleware
             'authorizationHeader' => $request->header('Authorization') ? 'present' : 'missing'
         ]);
 
-        // Admins bypass all premium checks - CRITICAL: Must be first check
+        
         if (($user->role === 'admin') || $user->isAdmin()) {
             Log::info('PremiumAccessMiddleware: Admin user bypassing all premium checks', [
                 'userId' => $user->id,
@@ -50,7 +46,7 @@ class PremiumAccessMiddleware
             return $next($request);
         }
 
-        // Only apply to creators and students
+        
         if (!$user->isCreator() && !$user->isStudent()) {
             Log::info('PremiumAccessMiddleware: User is not a creator or student, allowing access', [
                 'role' => $user->role,
@@ -59,23 +55,23 @@ class PremiumAccessMiddleware
             return $next($request);
         }
 
-        // For creators and students, check if they have premium access for restricted features
-        // Get the current path
+        
+        
         $currentPath = $request->path();
         $method = $request->method();
         
-        // Define paths that require premium for creators (only for POST/PATCH operations)
+        
         $premiumRequiredPaths = [
-            'api/connections', // Connection requests (POST/PATCH require premium)
-            'api/direct-chat', // Direct messaging (POST require premium)
-            // Note: Portfolio management is now allowed for all creators
+            'api/connections', 
+            'api/direct-chat', 
+            
         ];
         
-        // Check if current path requires premium
+        
         $requiresPremium = false;
         foreach ($premiumRequiredPaths as $premiumPath) {
             if (str_starts_with($currentPath, $premiumPath)) {
-                // For connections and direct-chat, only POST/PATCH require premium
+                
                 if ($method === 'GET') {
                     Log::info('PremiumAccessMiddleware: Allowing GET request without premium', [
                         'path' => $currentPath,
@@ -89,9 +85,9 @@ class PremiumAccessMiddleware
             }
         }
         
-        // For campaigns, only require premium for premium actions (not viewing)
+        
         if (str_starts_with($currentPath, 'api/campaigns')) {
-            // Allow GET requests (viewing campaigns) for all users
+            
             if ($method === 'GET') {
                 Log::info('PremiumAccessMiddleware: Allowing campaign viewing without premium', [
                     'path' => $currentPath,
@@ -101,15 +97,15 @@ class PremiumAccessMiddleware
                 return $next($request);
             }
             
-            // Check if this is a premium-required campaign action
+            
             $premiumCampaignPaths = [
-                'api/campaigns/{campaign}/applications', // Apply to campaign
-                'api/campaigns/{campaign}/bids',        // Create bid
+                'api/campaigns/{campaign}/applications', 
+                'api/campaigns/{campaign}/bids',        
             ];
             
             $isPremiumAction = false;
             foreach ($premiumCampaignPaths as $premiumPath) {
-                // Remove {campaign} pattern for matching
+                
                 $pattern = str_replace('{campaign}', '[^/]+', $premiumPath);
                 if (preg_match('#' . $pattern . '#', $currentPath)) {
                     $isPremiumAction = true;
@@ -117,13 +113,13 @@ class PremiumAccessMiddleware
                 }
             }
             
-            // If it's a premium action, check premium access
+            
             if ($isPremiumAction) {
                 $requiresPremium = true;
             }
         }
         
-        // Allow GET requests for applications (viewing) without premium
+        
         if (str_starts_with($currentPath, 'api/applications')) {
             if ($method === 'GET') {
                 Log::info('PremiumAccessMiddleware: Allowing application viewing without premium', [
@@ -133,11 +129,11 @@ class PremiumAccessMiddleware
                 ]);
                 return $next($request);
             }
-            // POST/PATCH/DELETE require premium
+            
             $requiresPremium = true;
         }
         
-        // Allow GET requests for bids (viewing) without premium
+        
         if (str_starts_with($currentPath, 'api/bids')) {
             if ($method === 'GET') {
                 Log::info('PremiumAccessMiddleware: Allowing bid viewing without premium', [
@@ -147,11 +143,11 @@ class PremiumAccessMiddleware
                 ]);
                 return $next($request);
             }
-            // POST/PATCH/DELETE require premium
+            
             $requiresPremium = true;
         }
         
-        // If path doesn't require premium, allow access
+        
         if (!$requiresPremium) {
             Log::info('PremiumAccessMiddleware: Path does not require premium, allowing access', [
                 'path' => $currentPath,
@@ -160,7 +156,7 @@ class PremiumAccessMiddleware
             return $next($request);
         }
         
-        // Check if user has premium access for premium-required features
+        
         if (!$user->hasPremiumAccess()) {
             Log::warning('PremiumAccessMiddleware: Creator without premium access blocked from premium feature', [
                 'userId' => $user->id,

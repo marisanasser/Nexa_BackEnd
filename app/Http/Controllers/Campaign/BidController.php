@@ -11,31 +11,29 @@ use Illuminate\Http\JsonResponse;
 
 class BidController extends Controller
 {
-    /**
-     * Display a listing of bids.
-     */
+    
     public function index(Request $request): JsonResponse
     {
         $user = auth()->user();
         $query = Bid::with(['campaign', 'user']);
 
-        // Apply filters based on user role
+        
         if ($user->isCreator()) {
-            // Creators see only their own bids
+            
             $query->where('user_id', $user->id);
         } elseif ($user->isBrand()) {
-            // Brands see only bids on their campaigns
+            
             $query->whereHas('campaign', function($q) use ($user) {
                 $q->where('brand_id', $user->id);
             });
         } elseif ($user->isAdmin()) {
-            // Admin sees all bids
-            // No additional filters needed
+            
+            
         } else {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        // Apply additional filters
+        
         if ($request->has('status')) {
             $query->where('status', $request->status);
         }
@@ -52,7 +50,7 @@ class BidController extends Controller
             $query->where('bid_amount', '<=', $request->bid_amount_max);
         }
 
-        // Sorting
+        
         $sortBy = $request->get('sort_by', 'created_at');
         $sortOrder = $request->get('sort_order', 'desc');
         $query->orderBy($sortBy, $sortOrder);
@@ -66,17 +64,13 @@ class BidController extends Controller
         ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
+    
     public function create()
     {
-        //
+        
     }
 
-    /**
-     * Store a new bid on a campaign.
-     */
+    
     public function store(StoreBidRequest $request, Campaign $campaign): JsonResponse
     {
         $validated = $request->validated();
@@ -85,7 +79,7 @@ class BidController extends Controller
 
         $bid = Bid::create($validated);
 
-        // Notify admin of new bid
+        
         \App\Services\NotificationService::notifyAdminOfNewBid($bid);
 
         return response()->json([
@@ -95,14 +89,12 @@ class BidController extends Controller
         ], 201);
     }
 
-    /**
-     * Display the specified bid.
-     */
+    
     public function show(Bid $bid): JsonResponse
     {
         $user = auth()->user();
 
-        // Check authorization
+        
         if ($user->isCreator() && $bid->user_id !== $user->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
@@ -120,32 +112,28 @@ class BidController extends Controller
         ]);
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
+    
     public function edit(string $id)
     {
-        //
+        
     }
 
-    /**
-     * Update the specified bid.
-     */
+    
     public function update(Request $request, Bid $bid): JsonResponse
     {
         $user = auth()->user();
 
-        // Only bid owner can update their bids
+        
         if (!$user->isCreator() || $bid->user_id !== $user->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        // Can't update non-pending bids
+        
         if (!$bid->isPending()) {
             return response()->json(['error' => 'Only pending bids can be updated'], 400);
         }
 
-        // Check if campaign still accepts bids
+        
         if (!$bid->campaign->canReceiveBids()) {
             return response()->json(['error' => 'Campaign no longer accepts bids'], 400);
         }
@@ -166,19 +154,17 @@ class BidController extends Controller
         ]);
     }
 
-    /**
-     * Remove the specified bid.
-     */
+    
     public function destroy(Bid $bid): JsonResponse
     {
         $user = auth()->user();
 
-        // Only bid owner can delete their bids
+        
         if (!$user->isCreator() || $bid->user_id !== $user->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        // Can't delete non-pending bids
+        
         if (!$bid->isPending()) {
             return response()->json(['error' => 'Only pending bids can be deleted'], 400);
         }
@@ -191,9 +177,7 @@ class BidController extends Controller
         ]);
     }
 
-    /**
-     * Accept a bid (Brand only).
-     */
+    
     public function accept(Bid $bid): JsonResponse
     {
         $user = auth()->user();
@@ -212,7 +196,7 @@ class BidController extends Controller
 
         $bid->accept();
 
-        // Notify admin of bid acceptance
+        
         \App\Services\NotificationService::notifyAdminOfSystemActivity('bid_accepted', [
             'bid_id' => $bid->id,
             'campaign_id' => $bid->campaign_id,
@@ -230,9 +214,7 @@ class BidController extends Controller
         ]);
     }
 
-    /**
-     * Reject a bid (Brand only).
-     */
+    
     public function reject(Request $request, Bid $bid): JsonResponse
     {
         $user = auth()->user();
@@ -251,7 +233,7 @@ class BidController extends Controller
 
         $bid->reject($validated['reason'] ?? null);
 
-        // Notify admin of bid rejection
+        
         \App\Services\NotificationService::notifyAdminOfSystemActivity('bid_rejected', [
             'bid_id' => $bid->id,
             'campaign_id' => $bid->campaign_id,
@@ -270,9 +252,7 @@ class BidController extends Controller
         ]);
     }
 
-    /**
-     * Withdraw a bid (Creator only).
-     */
+    
     public function withdraw(Bid $bid): JsonResponse
     {
         $user = auth()->user();
@@ -287,7 +267,7 @@ class BidController extends Controller
 
         $bid->withdraw();
 
-        // Notify admin of bid withdrawal
+        
         \App\Services\NotificationService::notifyAdminOfSystemActivity('bid_withdrawn', [
             'bid_id' => $bid->id,
             'campaign_id' => $bid->campaign_id,
@@ -305,14 +285,12 @@ class BidController extends Controller
         ]);
     }
 
-    /**
-     * Get bids for a specific campaign.
-     */
+    
     public function campaignBids(Request $request, Campaign $campaign): JsonResponse
     {
         $user = auth()->user();
 
-        // Check authorization
+        
         if ($user->isBrand() && $campaign->brand_id !== $user->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
@@ -323,7 +301,7 @@ class BidController extends Controller
 
         $query = $campaign->bids()->with(['user']);
 
-        // Apply filters
+        
         if ($request->has('status')) {
             $query->where('status', $request->status);
         }
@@ -336,7 +314,7 @@ class BidController extends Controller
             $query->where('bid_amount', '<=', $request->bid_amount_max);
         }
 
-        // Sorting
+        
         $sortBy = $request->get('sort_by', 'bid_amount');
         $sortOrder = $request->get('sort_order', 'asc');
         $query->orderBy($sortBy, $sortOrder);

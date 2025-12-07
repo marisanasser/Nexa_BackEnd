@@ -1,69 +1,414 @@
-# nexa-backend
-Nexa Backend (php + laravel)
+# Nexa Backend
 
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+Laravel 10 REST API backend for the Nexa platform, providing authentication, campaign management, real-time chat, payment processing, and administrative features.
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## 📋 Table of Contents
 
-## About Laravel
+- [Overview](#overview)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Database Setup](#database-setup)
+- [Socket.IO Server](#socketio-server)
+- [API Documentation](#api-documentation)
+- [Development](#development)
+- [Testing](#testing)
+- [Deployment](#deployment)
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 🎯 Overview
 
--   [Simple, fast routing engine](https://laravel.com/docs/routing).
--   [Powerful dependency injection container](https://laravel.com/docs/container).
--   Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
--   Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
--   Database agnostic [schema migrations](https://laravel.com/docs/migrations).
--   [Robust background job processing](https://laravel.com/docs/queues).
--   [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+The Nexa Backend is built with Laravel 10 and provides a comprehensive REST API for:
+- User authentication and authorization (Laravel Sanctum)
+- Campaign creation and management
+- Real-time chat functionality (Socket.IO)
+- Payment processing (Stripe integration)
+- Admin dashboard and user management
+- Portfolio management for creators
+- Contract and offer management
+- Student verification system
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## ✨ Features
 
-## Learning Laravel
+### Core Features
+- **Authentication & Authorization**
+  - Email/password authentication
+  - Google OAuth integration
+  - Role-based access control (Admin, Creator, Brand, Student)
+  - Account status management (Active, Blocked, Removed)
+  - Password reset functionality
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- **Campaign Management**
+  - Campaign creation and editing
+  - Campaign approval workflow
+  - Bid management
+  - Campaign applications
+  - Campaign timeline tracking
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+- **Real-time Chat**
+  - Socket.IO integration
+  - Message history
+  - Typing indicators
+  - Read receipts
+  - File attachments
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- **Payment Processing**
+  - Stripe payment integration
+  - Subscription management
+  - Withdrawal processing
+  - Payment method management
+  - Automatic payment processing
 
-## Laravel Sponsors
+- **Admin Features**
+  - Dashboard with metrics
+  - User management (Creators, Brands, Students)
+  - Campaign approval/rejection
+  - Guide management
+  - Brand rankings
+  - Withdrawal verification
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+- **Additional Features**
+  - Portfolio management
+  - Contract management
+  - Offer system
+  - Review system
+  - Notification system
+  - Student verification
+  - Guide system
 
-### Premium Partners
+## 📦 Requirements
 
--   **[Vehikl](https://vehikl.com/)**
--   **[Tighten Co.](https://tighten.co)**
--   **[WebReinvent](https://webreinvent.com/)**
--   **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
--   **[64 Robots](https://64robots.com)**
--   **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
--   **[Cyber-Duck](https://cyber-duck.co.uk)**
--   **[DevSquad](https://devsquad.com/hire-laravel-developers)**
--   **[Jump24](https://jump24.co.uk)**
--   **[Redberry](https://redberry.international/laravel/)**
--   **[Active Logic](https://activelogic.com)**
--   **[byte5](https://byte5.de)**
--   **[OP.GG](https://op.gg)**
+- **PHP** >= 8.1 with extensions:
+  - BCMath, Ctype, Fileinfo, JSON, Mbstring, OpenSSL, PDO, Tokenizer, XML
+- **Composer** >= 2.0
+- **Node.js** >= 18.x (for Socket.IO server)
+- **MySQL** >= 8.0 or **PostgreSQL** >= 13
+- **Redis** (for caching and queues)
 
-## Contributing
+## 🚀 Installation
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+1. **Install PHP dependencies:**
+   ```bash
+   composer install
+   ```
 
-## Code of Conduct
+2. **Copy environment file:**
+   ```bash
+   cp .env.example .env
+   ```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+3. **Generate application key:**
+   ```bash
+   php artisan key:generate
+   ```
 
-## Security Vulnerabilities
+4. **Create storage link:**
+   ```bash
+   php artisan storage:link
+   ```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+5. **Set up storage directories:**
+   ```bash
+   php artisan storage:setup-directories
+   ```
 
-## License
+6. **Install Node.js dependencies (for Socket.IO):**
+   ```bash
+   npm install
+   ```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## ⚙️ Configuration
+
+### Environment Variables
+
+Edit `.env` file with your configuration:
+
+```env
+# Application
+APP_NAME="Nexa Platform"
+APP_ENV=local
+APP_KEY=base64:... # Generated by php artisan key:generate
+APP_DEBUG=true
+APP_URL=http://localhost:8000
+APP_TIMEZONE=UTC
+
+# Database
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=nexa_db
+DB_USERNAME=root
+DB_PASSWORD=
+
+# Redis
+REDIS_HOST=127.0.0.1
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+
+# Mail (AWS SES)
+MAIL_MAILER=ses
+MAIL_FROM_ADDRESS=noreply@nexacreators.com.br
+MAIL_FROM_NAME="${APP_NAME}"
+
+# AWS Configuration
+AWS_ACCESS_KEY_ID=your_aws_access_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+AWS_DEFAULT_REGION=us-east-1
+AWS_SES_REGION=us-east-1
+
+# Stripe
+STRIPE_SECRET=sk_test_your_stripe_secret_key
+STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+
+# Pusher (optional, for broadcasting)
+PUSHER_APP_ID=
+PUSHER_APP_KEY=
+PUSHER_APP_SECRET=
+PUSHER_APP_CLUSTER=mt1
+
+# Session & Cache
+SESSION_DRIVER=redis
+CACHE_DRIVER=redis
+QUEUE_CONNECTION=redis
+
+# Sanctum
+SANCTUM_STATEFUL_DOMAINS=localhost:5173,localhost:3000
+SESSION_DOMAIN=localhost
+```
+
+## 🗄️ Database Setup
+
+1. **Create the database:**
+   ```sql
+   CREATE DATABASE nexa_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+   ```
+
+2. **Run migrations:**
+   ```bash
+   php artisan migrate
+   ```
+
+3. **Seed the database (optional):**
+   ```bash
+   php artisan db:seed
+   ```
+
+## 🔌 Socket.IO Server
+
+The backend includes a Socket.IO server for real-time chat functionality.
+
+### Running the Socket Server
+
+**Development:**
+```bash
+npm run dev
+```
+
+**Production:**
+```bash
+npm run start
+```
+
+**With PM2:**
+```bash
+pm2 start socket-server.js --name nexa-socket
+pm2 save
+pm2 startup
+```
+
+The Socket.IO server runs on port `3001` by default. Configure CORS in `socket-server.js` to match your frontend URL.
+
+## 📚 API Documentation
+
+### Base URL
+```
+http://localhost:8000/api
+```
+
+### Authentication
+All protected routes require a Bearer token in the Authorization header:
+```
+Authorization: Bearer {token}
+```
+
+### Main API Endpoints
+
+#### Authentication
+- `POST /api/login` - User login
+- `POST /api/register` - User registration
+- `POST /api/logout` - User logout
+- `POST /api/forgot-password` - Request password reset
+- `POST /api/reset-password` - Reset password
+- `GET /api/auth/google` - Google OAuth redirect
+- `GET /api/auth/google/callback` - Google OAuth callback
+
+#### Campaigns
+- `GET /api/campaigns` - List campaigns
+- `POST /api/campaigns` - Create campaign
+- `GET /api/campaigns/{id}` - Get campaign details
+- `PUT /api/campaigns/{id}` - Update campaign
+- `DELETE /api/campaigns/{id}` - Delete campaign
+- `POST /api/campaigns/{id}/apply` - Apply to campaign
+- `GET /api/campaigns/{id}/bids` - Get campaign bids
+
+#### Chat
+- `GET /api/chat/rooms` - Get user's chat rooms
+- `GET /api/chat/rooms/{roomId}/messages` - Get messages
+- `POST /api/chat/rooms` - Create chat room
+- `POST /api/chat/messages` - Send message
+- `POST /api/chat/mark-read` - Mark messages as read
+
+#### Payments
+- `POST /api/payment/process` - Process payment
+- `POST /api/stripe/create-payment-intent` - Create Stripe payment intent
+- `POST /api/stripe/webhook` - Stripe webhook handler
+- `GET /api/subscription/plans` - Get subscription plans
+
+## 💻 Development
+
+### Common Commands
+
+```bash
+# Run migrations
+php artisan migrate
+
+# Rollback last migration
+php artisan migrate:rollback
+
+# Create new migration
+php artisan make:migration create_table_name
+
+# Run seeders
+php artisan db:seed
+
+# Clear cache
+php artisan cache:clear
+php artisan config:clear
+php artisan route:clear
+php artisan view:clear
+
+# Optimize for production
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+# Generate IDE helper
+php artisan ide-helper:generate
+php artisan ide-helper:models
+php artisan ide-helper:meta
+```
+
+### Code Structure
+
+```
+app/
+├── Http/
+│   ├── Controllers/       # API controllers
+│   ├── Middleware/        # Custom middleware
+│   ├── Requests/          # Form request validation
+│   └── Resources/         # API resources
+├── Models/                # Eloquent models
+├── Services/              # Business logic services
+└── Traits/                # Reusable traits
+
+database/
+├── migrations/            # Database migrations
+├── seeders/               # Database seeders
+└── factories/             # Model factories
+
+routes/
+├── api.php                # API routes
+└── auth.php               # Authentication routes
+
+config/                    # Configuration files
+storage/                   # File storage
+public/                    # Public assets
+```
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+php artisan test
+
+# Run specific test file
+php artisan test tests/Feature/AdminControllerTest.php
+
+# Run with coverage
+php artisan test --coverage
+```
+
+## 🚢 Deployment
+
+### Production Checklist
+
+1. **Environment Configuration:**
+   ```bash
+   APP_ENV=production
+   APP_DEBUG=false
+   ```
+
+2. **Optimize Application:**
+   ```bash
+   php artisan config:cache
+   php artisan route:cache
+   php artisan view:cache
+   php artisan optimize
+   ```
+
+3. **Set Permissions:**
+   ```bash
+   chmod -R 775 storage bootstrap/cache
+   chown -R www-data:www-data storage bootstrap/cache
+   ```
+
+4. **Run Migrations:**
+   ```bash
+   php artisan migrate --force
+   ```
+
+5. **Start Socket.IO Server:**
+   ```bash
+   pm2 start socket-server.js --name nexa-socket
+   ```
+
+### Server Requirements
+
+- PHP 8.1+ with required extensions
+- Composer
+- Node.js 18+ (for Socket.IO)
+- MySQL 8.0+ or PostgreSQL 13+
+- Redis
+- Web server (Nginx/Apache)
+- SSL certificate (for HTTPS)
+
+## 🔒 Security
+
+- All API routes are protected with Laravel Sanctum
+- Admin routes require admin role middleware
+- Rate limiting on authentication routes
+- CSRF protection for web routes
+- Input validation on all requests
+- SQL injection protection via Eloquent ORM
+- XSS protection via Blade templating
+
+## 📝 License
+
+This project is licensed under the MIT License.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Write tests
+5. Submit a pull request
+
+## 📞 Support
+
+For issues and questions, please open an issue on the repository.
+
+---
+
+**Note:** Make sure to configure all environment variables before running the application. The Socket.IO server must be running for real-time chat functionality to work.

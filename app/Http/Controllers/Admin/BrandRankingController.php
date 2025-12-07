@@ -13,9 +13,7 @@ use Carbon\Carbon;
 
 class BrandRankingController extends Controller
 {
-    /**
-     * Get brand rankings based on different metrics
-     */
+   
     public function getBrandRankings(): JsonResponse
     {
         try {
@@ -52,9 +50,6 @@ class BrandRankingController extends Controller
         }
     }
 
-    /**
-     * Get brands ranked by most campaigns posted
-     */
     private function getMostPostedBrands(): array
     {
         try {
@@ -89,9 +84,7 @@ class BrandRankingController extends Controller
         }
     }
 
-    /**
-     * Get brands ranked by most creators hired (completed contracts)
-     */
+ 
     private function getMostHiredBrands(): array
     {
         try {
@@ -130,9 +123,7 @@ class BrandRankingController extends Controller
         }
     }
 
-    /**
-     * Get brands ranked by highest total payments
-     */
+    
     private function getMostPaidBrands(): array
     {
         try {
@@ -170,9 +161,7 @@ class BrandRankingController extends Controller
         }
     }
 
-    /**
-     * Get comprehensive brand ranking with all metrics
-     */
+    
     public function getComprehensiveRankings(): JsonResponse
     {
         try {
@@ -190,7 +179,7 @@ class BrandRankingController extends Controller
                 }], 'total_amount')
                 ->get()
                 ->filter(function ($brand) {
-                    // Only include brands with some activity
+                    
                     return $brand->total_campaigns > 0 || $brand->total_contracts > 0 || ($brand->total_paid ?? 0) > 0;
                 })
                 ->map(function ($brand, $index) {
@@ -242,15 +231,13 @@ class BrandRankingController extends Controller
         }
     }
 
-    /**
-     * Calculate a composite ranking score
-     */
+    
     private function calculateRankingScore(int $campaigns, int $contracts, float $payments): float
     {
-        // Normalize values and create a weighted score
-        $campaignScore = min($campaigns / 10, 1) * 30; // Max 30 points
-        $contractScore = min($contracts / 20, 1) * 30; // Max 30 points
-        $paymentScore = min($payments / 10000, 1) * 40; // Max 40 points (R$ 10k = 100%)
+        
+        $campaignScore = min($campaigns / 10, 1) * 30; 
+        $contractScore = min($contracts / 20, 1) * 30; 
+        $paymentScore = min($payments / 10000, 1) * 40; 
 
         return $campaignScore + $contractScore + $paymentScore;
     }

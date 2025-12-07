@@ -19,9 +19,7 @@ class MilestoneDelayWarning extends Mailable
     public $creator;
     public $brand;
 
-    /**
-     * Create a new message instance.
-     */
+    
     public function __construct(CampaignTimeline $milestone)
     {
         $this->milestone = $milestone;
@@ -30,9 +28,7 @@ class MilestoneDelayWarning extends Mailable
         $this->brand = $milestone->contract->brand;
     }
 
-    /**
-     * Get the message envelope.
-     */
+    
     public function envelope(): Envelope
     {
         return new Envelope(
@@ -40,9 +36,7 @@ class MilestoneDelayWarning extends Mailable
         );
     }
 
-    /**
-     * Get the message content definition.
-     */
+    
     public function content(): Content
     {
         return new Content(
@@ -56,11 +50,7 @@ class MilestoneDelayWarning extends Mailable
         );
     }
 
-    /**
-     * Get the attachments for the message.
-     *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
-     */
+    
     public function attachments(): array
     {
         return [];

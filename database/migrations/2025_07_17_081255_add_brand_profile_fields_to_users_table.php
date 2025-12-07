@@ -6,13 +6,11 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            // Only add fields that don't already exist
+            
             if (!Schema::hasColumn('users', 'whatsapp_number')) {
                 $table->string('whatsapp_number')->nullable()->after('whatsapp');
             }
@@ -22,9 +20,7 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {

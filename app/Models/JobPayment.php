@@ -35,7 +35,7 @@ class JobPayment extends Model
         'payment_data' => 'array',
     ];
 
-    // Relationships
+    
     public function contract(): BelongsTo
     {
         return $this->belongsTo(Contract::class);
@@ -51,7 +51,7 @@ class JobPayment extends Model
         return $this->belongsTo(User::class, 'creator_id');
     }
 
-    // Scopes
+    
     public function scopePending($query)
     {
         return $query->where('status', 'pending');
@@ -77,7 +77,7 @@ class JobPayment extends Model
         return $query->where('status', 'refunded');
     }
 
-    // Methods
+    
     public function isPending(): bool
     {
         return $this->status === 'pending';
@@ -118,9 +118,9 @@ class JobPayment extends Model
             'status' => 'processing',
         ]);
 
-        // Simulate payment processing (in real implementation, this would integrate with payment gateway)
+        
         try {
-            // Process payment through payment gateway
+            
             $this->processPayment();
             
             $this->update([
@@ -128,10 +128,10 @@ class JobPayment extends Model
                 'processed_at' => now(),
             ]);
 
-            // Update creator balance
+            
             $this->updateCreatorBalance();
 
-            // Notify creator about payment
+            
             NotificationService::notifyUserOfPaymentCompleted($this);
 
             return true;
@@ -140,7 +140,7 @@ class JobPayment extends Model
                 'status' => 'failed',
             ]);
 
-            // Notify about payment failure
+            
             NotificationService::notifyUserOfPaymentFailed($this, $e->getMessage());
 
             return false;
@@ -149,13 +149,13 @@ class JobPayment extends Model
 
     private function processPayment(): void
     {
-        // In a real implementation, this would integrate with Pagar.me or another payment gateway
-        // For now, we'll simulate the payment processing
         
-        // Simulate processing delay
+        
+        
+        
         sleep(1);
         
-        // Generate transaction ID
+        
         $this->update([
             'transaction_id' => 'TXN_' . time() . '_' . $this->id,
         ]);
@@ -173,7 +173,7 @@ class JobPayment extends Model
             ]
         );
 
-        // Move from pending to available balance
+        
         $balance->decrement('pending_balance', $this->creator_amount);
         $balance->increment('available_balance', $this->creator_amount);
     }
@@ -188,14 +188,14 @@ class JobPayment extends Model
             'status' => 'refunded',
         ]);
 
-        // Update creator balance (remove from available balance)
+        
         $balance = CreatorBalance::where('creator_id', $this->creator_id)->first();
         if ($balance) {
             $balance->decrement('available_balance', $this->creator_amount);
             $balance->decrement('total_earned', $this->creator_amount);
         }
 
-        // Notify about refund
+        
         NotificationService::notifyUserOfPaymentRefunded($this, $reason);
 
         return true;

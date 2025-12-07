@@ -8,7 +8,7 @@ class StoreGuideRequest extends FormRequest
 {
     public function authorize()
     {
-        // adjust authorization when you add auth / admin guards
+        
         return true;
     }
 

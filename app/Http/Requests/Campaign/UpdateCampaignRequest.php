@@ -7,34 +7,27 @@ use App\Models\Campaign;
 
 class UpdateCampaignRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     * Allow admin or brand owner of the campaign.
-     */
+    
     public function authorize(): bool
     {
         $user = auth()->user();
         $campaign = $this->route('campaign');
         
-        // Allow admin or brand owner
+        
         if (!$user || !$campaign) {
             return false;
         }
         
-        // Admins can update any campaign
+        
         if ($user->isAdmin()) {
             return true;
         }
         
-        // Brands can only update their own campaigns
+        
         return $user->isBrand() && $campaign->brand_id === $user->id;
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
+    
     public function rules(): array
     {
         return [
@@ -48,19 +41,15 @@ class UpdateCampaignRequest extends FormRequest
             'category' => ['sometimes', 'nullable', 'string', 'max:255'],
             'campaign_type' => ['sometimes', 'nullable', 'string', 'max:255'],
             'image_url' => ['sometimes', 'nullable', 'url', 'max:2048'],
-            'image' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'], // 5MB max
-            'logo' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'], // 5MB max
-            'attach_file' => ['sometimes', 'nullable', 'file', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar', 'max:10240'], // 10MB max
+            'image' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'], 
+            'logo' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'], 
+            'attach_file' => ['sometimes', 'nullable', 'file', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar', 'max:10240'], 
             'deadline' => ['sometimes', 'date', 'after:today'],
             'max_bids' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100'],
         ];
     }
 
-    /**
-     * Get custom messages for validator errors.
-     *
-     * @return array
-     */
+    
     public function messages(): array
     {
         return [
@@ -88,11 +77,7 @@ class UpdateCampaignRequest extends FormRequest
         ];
     }
 
-    /**
-     * Get custom attributes for validator errors.
-     *
-     * @return array
-     */
+    
     public function attributes(): array
     {
         return [
@@ -100,16 +85,11 @@ class UpdateCampaignRequest extends FormRequest
         ];
     }
 
-    /**
-     * Configure the validator instance.
-     *
-     * @param  \Illuminate\Validation\Validator  $validator
-     * @return void
-     */
+    
     public function withValidator($validator)
     {
         $validator->after(function ($validator) {
-            // Ensure only one of image_url or image is provided
+            
             if ($this->filled('image_url') && $this->hasFile('image')) {
                 $validator->errors()->add('image', 'Please provide either an image URL or upload an image file, not both.');
             }

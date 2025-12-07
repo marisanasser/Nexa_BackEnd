@@ -118,7 +118,7 @@ class AuthenticationTest extends TestCase
                     'message' => 'Logged out successfully'
                 ]);
 
-        // Try to access protected route with the same token (should fail)
+        
         $response = $this->withHeaders([
             'Authorization' => 'Bearer ' . $token,
         ])->getJson('/api/user');
@@ -188,7 +188,7 @@ class AuthenticationTest extends TestCase
             'password' => bcrypt('Password123!'),
         ]);
 
-        // Test creator login
+        
         $response = $this->postJson('/api/login', [
             'email' => 'creator@example.com',
             'password' => 'Password123!',
@@ -196,7 +196,7 @@ class AuthenticationTest extends TestCase
         $response->assertStatus(200);
         $this->assertEquals('creator', $response->json('user.role'));
 
-        // Test brand login
+        
         $response = $this->postJson('/api/login', [
             'email' => 'brand@example.com',
             'password' => 'Password123!',
@@ -204,7 +204,7 @@ class AuthenticationTest extends TestCase
         $response->assertStatus(200);
         $this->assertEquals('brand', $response->json('user.role'));
 
-        // Test admin login
+        
         $response = $this->postJson('/api/login', [
             'email' => 'admin@example.com',
             'password' => 'Password123!',

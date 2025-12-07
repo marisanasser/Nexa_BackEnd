@@ -28,7 +28,7 @@ class Bid extends Model
         'accepted_at' => 'datetime',
     ];
 
-    // Relationships
+    
     public function campaign(): BelongsTo
     {
         return $this->belongsTo(Campaign::class);
@@ -39,7 +39,7 @@ class Bid extends Model
         return $this->belongsTo(User::class);
     }
 
-    // Scopes
+    
     public function scopePending($query)
     {
         return $query->where('status', 'pending');
@@ -55,7 +55,7 @@ class Bid extends Model
         return $query->where('status', 'rejected');
     }
 
-    // Methods
+    
     public function isPending(): bool
     {
         return $this->status === 'pending';
@@ -78,7 +78,7 @@ class Bid extends Model
 
     public function accept(): bool
     {
-        // Only one bid can be accepted per campaign
+        
         $this->campaign->bids()->where('id', '!=', $this->id)->update(['status' => 'rejected']);
         
         $this->update([
@@ -86,12 +86,12 @@ class Bid extends Model
             'accepted_at' => now()
         ]);
 
-        // Update campaign with final price
+        
         $this->campaign->update([
             'final_price' => $this->bid_amount
         ]);
 
-        // Notify creator about proposal acceptance
+        
         NotificationService::notifyCreatorOfProposalStatus($this, 'accepted');
 
         return true;
@@ -104,7 +104,7 @@ class Bid extends Model
             'rejection_reason' => $reason
         ]);
 
-        // Notify creator about proposal rejection
+        
         NotificationService::notifyCreatorOfProposalStatus($this, 'rejected', $reason);
 
         return true;

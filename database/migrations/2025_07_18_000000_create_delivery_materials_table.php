@@ -6,9 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    
     public function up(): void
     {
         Schema::create('delivery_materials', function (Blueprint $table) {
@@ -32,7 +30,7 @@ return new class extends Migration
             $table->text('comment')->nullable();
             $table->timestamps();
             
-            // Indexes for better performance
+            
             $table->index(['contract_id', 'status']);
             $table->index(['creator_id', 'status']);
             $table->index(['brand_id', 'status']);
@@ -42,9 +40,7 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
         Schema::dropIfExists('delivery_materials');

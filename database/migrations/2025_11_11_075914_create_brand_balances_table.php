@@ -6,17 +6,15 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    
     public function up(): void
     {
         Schema::create('brand_balances', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('brand_id');
-            $table->decimal('available_balance', 10, 2)->default(0); // Available for making offers/contracts
-            $table->decimal('total_funded', 10, 2)->default(0); // Total amount funded to platform
-            $table->decimal('total_spent', 10, 2)->default(0); // Total amount spent on offers/contracts
+            $table->decimal('available_balance', 10, 2)->default(0); 
+            $table->decimal('total_funded', 10, 2)->default(0); 
+            $table->decimal('total_spent', 10, 2)->default(0); 
             $table->timestamps();
 
             $table->foreign('brand_id')->references('id')->on('users')->onDelete('cascade');
@@ -24,9 +22,7 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
         Schema::dropIfExists('brand_balances');

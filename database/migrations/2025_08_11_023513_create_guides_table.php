@@ -13,9 +13,9 @@ return new class extends Migration
             $table->string('title');
             $table->string('audience')->nullable();
             $table->text('description')->nullable();
-            $table->string('video_path')->nullable(); // stored path in storage disk
+            $table->string('video_path')->nullable(); 
             $table->string('video_mime')->nullable();
-            $table->unsignedBigInteger('created_by')->nullable(); // optional
+            $table->unsignedBigInteger('created_by')->nullable(); 
             $table->timestamps();
         });
     }

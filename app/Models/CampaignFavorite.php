@@ -15,7 +15,7 @@ class CampaignFavorite extends Model
         'campaign_id',
     ];
 
-    // Relationships
+    
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'creator_id');

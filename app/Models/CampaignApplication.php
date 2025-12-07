@@ -37,7 +37,7 @@ class CampaignApplication extends Model
         'agreement_finalized_at' => 'datetime',
     ];
 
-    // Relationships
+    
     public function campaign(): BelongsTo
     {
         return $this->belongsTo(Campaign::class);
@@ -59,7 +59,7 @@ class CampaignApplication extends Model
             ->where('creator_id', $this->creator_id);
     }
 
-    // Scopes
+    
     public function scopePending($query)
     {
         return $query->where('status', 'pending');
@@ -100,7 +100,7 @@ class CampaignApplication extends Model
         return $query->where('workflow_status', 'agreement_finalized');
     }
 
-    // Methods
+    
     public function isPending(): bool
     {
         return $this->status === 'pending';
@@ -149,7 +149,7 @@ class CampaignApplication extends Model
     {
         $this->update([
             'status' => 'rejected',
-            'workflow_status' => 'first_contact_pending', // Reset workflow status
+            'workflow_status' => 'first_contact_pending', 
             'reviewed_by' => $brandId,
             'reviewed_at' => now(),
             'rejection_reason' => $reason
@@ -206,7 +206,7 @@ class CampaignApplication extends Model
         return $this->isApproved() && $this->isAgreementInProgress();
     }
 
-    // Get workflow status label for display
+    
     public function getWorkflowStatusLabelAttribute(): string
     {
         return match($this->workflow_status) {
@@ -217,7 +217,7 @@ class CampaignApplication extends Model
         };
     }
 
-    // Get workflow status color for UI
+    
     public function getWorkflowStatusColorAttribute(): string
     {
         return match($this->workflow_status) {

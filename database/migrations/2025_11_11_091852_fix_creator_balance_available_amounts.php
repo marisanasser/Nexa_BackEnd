@@ -8,18 +8,14 @@ use Illuminate\Support\Facades\Log;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     * Fixes creator balances where total_earned exists but available_balance is 0
-     * This happens when the payment was processed but not moved to available_balance
-     */
+    
     public function up(): void
     {
-        // Find all creator balances where:
-        // - total_earned > 0
-        // - available_balance = 0
-        // - pending_balance = 0
-        // - total_withdrawn < total_earned (meaning there's money that should be available)
+        
+        
+        
+        
+        
         $balances = DB::table('creator_balances')
             ->where('total_earned', '>', 0)
             ->where('available_balance', '=', 0)
@@ -32,12 +28,12 @@ return new class extends Migration
         ]);
 
         foreach ($balances as $balance) {
-            // Calculate the amount that should be in available_balance
-            // This is the total_earned minus what has already been withdrawn
+            
+            
             $amountToAdd = $balance->total_earned - $balance->total_withdrawn;
             
             if ($amountToAdd > 0) {
-                // Add the missing amount to available_balance
+                
                 DB::table('creator_balances')
                     ->where('id', $balance->id)
                     ->update([
@@ -60,13 +56,10 @@ return new class extends Migration
         ]);
     }
 
-    /**
-     * Reverse the migrations.
-     * Note: This is a data fix migration, so we can't safely reverse it
-     */
+    
     public function down(): void
     {
-        // This migration is not reversible as we're fixing data inconsistencies
-        // If needed, you would need to manually adjust the balances
+        
+        
     }
 };

@@ -11,19 +11,13 @@ use Illuminate\Validation\ValidationException;
 
 class LoginRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
+    
     public function authorize(): bool
     {
         return true;
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\Rule|array|string>
-     */
+    
     public function rules(): array
     {
         return [
@@ -32,16 +26,12 @@ class LoginRequest extends FormRequest
         ];
     }
 
-    /**
-     * Attempt to authenticate the request's credentials.
-     *
-     * @throws \Illuminate\Validation\ValidationException
-     */
+    
     public function authenticate(): void
     {
         $this->ensureIsNotRateLimited();
 
-        // Check if user exists first (including soft deleted users)
+        
         $user = \App\Models\User::withTrashed()->where('email', $this->input('email'))->first();
         
         if (!$user) {
@@ -51,11 +41,11 @@ class LoginRequest extends FormRequest
             ]);
         }
 
-        // Check if user is soft deleted (removed)
+        
         if ($user->trashed()) {
             RateLimiter::hit($this->throttleKey());
             
-            // Check if account can be restored (within 30 days)
+            
             $daysSinceDeletion = now()->diffInDays($user->deleted_at);
             if ($daysSinceDeletion <= 30) {
                 throw ValidationException::withMessages([
@@ -70,7 +60,7 @@ class LoginRequest extends FormRequest
             }
         }
 
-        // Check if user is blocked (not email verified)
+        
         if (!$user->email_verified_at) {
             RateLimiter::hit($this->throttleKey());
             throw ValidationException::withMessages([
@@ -78,7 +68,7 @@ class LoginRequest extends FormRequest
             ]);
         }
 
-        // User exists and is active, now check password
+        
         if (!Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
             throw ValidationException::withMessages([
@@ -86,19 +76,14 @@ class LoginRequest extends FormRequest
             ]);
         }
 
-        // Clear rate limiting on successful authentication
+        
         RateLimiter::clear($this->throttleKey());
     }
 
-    /**
-     * Ensure the login request is not rate limited.
-     * This is now more lenient since we have route-level rate limiting.
-     *
-     * @throws \Illuminate\Validation\ValidationException
-     */
+    
     public function ensureIsNotRateLimited(): void
     {
-        // More lenient rate limiting for login attempts (10 attempts per 5 minutes)
+        
         if (! RateLimiter::tooManyAttempts($this->throttleKey(), 10)) {
             return;
         }
@@ -107,7 +92,7 @@ class LoginRequest extends FormRequest
 
         $seconds = RateLimiter::availableIn($this->throttleKey());
 
-        // Log rate limiting for debugging
+        
         \Log::info('Login rate limited', [
             'email' => $this->input('email'),
             'ip' => $this->ip(),
@@ -123,9 +108,7 @@ class LoginRequest extends FormRequest
         ]);
     }
 
-    /**
-     * Get the rate limiting throttle key for the request.
-     */
+    
     public function throttleKey(): string
     {
         return Str::transliterate(Str::lower($this->input('email')).'|'.$this->ip());

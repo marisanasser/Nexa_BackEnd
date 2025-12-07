@@ -6,23 +6,19 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    
     public function up(): void
     {
         Schema::table('guides', function (Blueprint $table) {
-            $table->json('screenshots')->nullable()->after('video_mime'); // Array of screenshot paths
+            $table->json('screenshots')->nullable()->after('video_mime'); 
         });
 
         Schema::table('steps', function (Blueprint $table) {
-            $table->json('screenshots')->nullable()->after('video_mime'); // Array of screenshot paths
+            $table->json('screenshots')->nullable()->after('video_mime'); 
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
         Schema::table('guides', function (Blueprint $table) {

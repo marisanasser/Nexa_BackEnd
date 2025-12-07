@@ -33,13 +33,13 @@ class PortfolioItem extends Model
         'order' => 'integer',
     ];
 
-    // Relationships
+    
     public function portfolio(): BelongsTo
     {
         return $this->belongsTo(Portfolio::class);
     }
 
-    // Accessors
+    
     public function getFileUrlAttribute(): string
     {
         return asset('storage/' . $this->file_path);
@@ -59,12 +59,12 @@ class PortfolioItem extends Model
 
     public function getThumbnailUrlAttribute(): string
     {
-        // For now, return the same URL as the file
-        // In the future, you could generate thumbnails for videos
+        
+        
         return $this->file_url;
     }
 
-    // Methods
+    
     public function isImage(): bool
     {
         return $this->media_type === 'image';

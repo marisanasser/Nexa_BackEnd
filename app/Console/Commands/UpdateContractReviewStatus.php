@@ -7,23 +7,13 @@ use Illuminate\Console\Command;
 
 class UpdateContractReviewStatus extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
+    
     protected $signature = 'contracts:update-review-status';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    
     protected $description = 'Update review status for all existing contracts';
 
-    /**
-     * Execute the console command.
-     */
+    
     public function handle()
     {
         $this->info('Updating contract review status...');

@@ -8,23 +8,13 @@ use Exception;
 
 class VerifySESEmail extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
+    
     protected $signature = 'ses:verify {email} {--sender}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    
     protected $description = 'Verify an email address in AWS SES';
 
-    /**
-     * Execute the console command.
-     */
+    
     public function handle()
     {
         $email = $this->argument('email');
@@ -50,7 +40,7 @@ class VerifySESEmail extends Command
                 ],
             ]);
 
-            // Check current verification status
+            
             $status = $this->getEmailVerificationStatus($ses, $email);
             $this->info("Current verification status: {$status}");
 
@@ -64,7 +54,7 @@ class VerifySESEmail extends Command
                 return 0;
             }
 
-            // Send verification email
+            
             $this->info('Sending verification email...');
             $ses->verifyEmailIdentity(['EmailAddress' => $email]);
             
@@ -92,9 +82,7 @@ class VerifySESEmail extends Command
         return 0;
     }
 
-    /**
-     * Check if AWS SES is properly configured
-     */
+    
     private function isSESConfigured(): bool
     {
         return !empty(env('AWS_ACCESS_KEY_ID')) && 
@@ -102,9 +90,7 @@ class VerifySESEmail extends Command
                !empty(env('AWS_DEFAULT_REGION'));
     }
 
-    /**
-     * Get email verification status from SES
-     */
+    
     private function getEmailVerificationStatus(SesClient $ses, string $email): string
     {
         try {

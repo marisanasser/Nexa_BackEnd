@@ -9,21 +9,15 @@ use Illuminate\Support\Facades\Auth;
 
 class CheckUserStatus
 {
-    /**
-     * Handle an incoming request.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Closure(\Illuminate\Http\Request): (\Illuminate\Http\Response|\Illuminate\Http\JsonResponse)  $next
-     * @return \Illuminate\Http\Response|\Illuminate\Http\JsonResponse
-     */
+    
     public function handle(Request $request, Closure $next)
     {
         $user = Auth::user();
 
         if ($user) {
-            // Check if user is soft deleted (removed)
+            
             if ($user->trashed()) {
-                // Revoke all tokens for the user
+                
                 $user->tokens()->delete();
                 
                 return response()->json([
@@ -32,9 +26,9 @@ class CheckUserStatus
                 ], 403);
             }
 
-            // Check if user is blocked (not email verified)
+            
             if (!$user->email_verified_at) {
-                // Revoke all tokens for the user
+                
                 $user->tokens()->delete();
                 
                 return response()->json([

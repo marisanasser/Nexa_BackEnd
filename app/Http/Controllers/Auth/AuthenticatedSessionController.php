@@ -12,20 +12,17 @@ use Illuminate\Support\Facades\Auth;
 
 class AuthenticatedSessionController extends Controller
 {
-    /**
-     * Handle an incoming authentication request.
-     */
+    
     public function store(LoginRequest $request)
     {
         $request->authenticate();
 
         $user = Auth::user();
 
-
-        // Create a Sanctum token for the user
+        
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        // Notify admin of new login (only for non-admin users)
+        
         if (!$user->isAdmin()) {
             NotificationService::notifyAdminOfNewLogin($user, [
                 'ip_address' => $request->ip(),
@@ -49,17 +46,15 @@ class AuthenticatedSessionController extends Controller
         ], 200);
     }
 
-    /**
-     * Destroy an authenticated session.
-     */
+    
     public function destroy(Request $request): JsonResponse
     {
-        // For token-based authentication, revoke the current access token
+        
         if ($request->user() && $request->user()->currentAccessToken()) {
             $request->user()->currentAccessToken()->delete();
         }
 
-        // Only handle session-based logout if session is available (for web authentication)
+        
         if ($request->hasSession()) {
             Auth::guard('web')->logout();
             $request->session()->invalidate();

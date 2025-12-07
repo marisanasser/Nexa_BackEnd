@@ -17,18 +17,14 @@ class CampaignApproved extends Mailable
     public $campaign;
     public $brand;
 
-    /**
-     * Create a new message instance.
-     */
+    
     public function __construct(Campaign $campaign)
     {
         $this->campaign = $campaign;
         $this->brand = $campaign->brand;
     }
 
-    /**
-     * Get the message envelope.
-     */
+    
     public function envelope(): Envelope
     {
         return new Envelope(
@@ -36,9 +32,7 @@ class CampaignApproved extends Mailable
         );
     }
 
-    /**
-     * Get the message content definition.
-     */
+    
     public function content(): Content
     {
         return new Content(
@@ -50,11 +44,7 @@ class CampaignApproved extends Mailable
         );
     }
 
-    /**
-     * Get the attachments for the message.
-     *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
-     */
+    
     public function attachments(): array
     {
         return [];

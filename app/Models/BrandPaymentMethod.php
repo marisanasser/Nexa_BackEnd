@@ -30,47 +30,37 @@ class BrandPaymentMethod extends Model
         'is_active' => 'boolean',
     ];
 
-    /**
-     * Get the user that owns this payment method
-     */
+    
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
     }
 
-    /**
-     * Scope to get only active payment methods
-     */
+    
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
     }
 
-    /**
-     * Scope to get default payment method
-     */
+    
     public function scopeDefault($query)
     {
         return $query->where('is_default', true);
     }
 
-    /**
-     * Set this payment method as default and unset others
-     */
+    
     public function setAsDefault(): void
     {
-        // Unset other default payment methods for this user
+        
         static::where('user_id', $this->user_id)
             ->where('id', '!=', $this->id)
             ->update(['is_default' => false]);
 
-        // Set this one as default
+        
         $this->update(['is_default' => true]);
     }
 
-    /**
-     * Get masked card number for display
-     */
+    
     public function getMaskedCardNumberAttribute(): string
     {
         if ($this->card_last4) {
@@ -79,9 +69,7 @@ class BrandPaymentMethod extends Model
         return '**** **** **** ****';
     }
 
-    /**
-     * Get formatted card info for display
-     */
+    
     public function getFormattedCardInfoAttribute(): string
     {
         $brand = $this->card_brand ? ucfirst($this->card_brand) : 'Card';

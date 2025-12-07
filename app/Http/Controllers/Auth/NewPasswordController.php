@@ -15,11 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 class NewPasswordController extends Controller
 {
-    /**
-     * Handle an incoming new password request.
-     *
-     * @throws \Illuminate\Validation\ValidationException
-     */
+    
     public function store(Request $request): JsonResponse
     {
         $request->validate([
@@ -28,9 +24,9 @@ class NewPasswordController extends Controller
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
-        // Here we will attempt to reset the user's password. If it is successful we
-        // will update the password on an actual user model and persist it to the
-        // database. Otherwise we will parse the error and return the response.
+        
+        
+        
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
             function ($user) use ($request) {
@@ -52,11 +48,7 @@ class NewPasswordController extends Controller
         return response()->json(['status' => __($status)]);
     }
 
-    /**
-     * Handle password update for a specific user.
-     *
-     * @throws \Illuminate\Validation\ValidationException
-     */
+    
     public function update(Request $request): JsonResponse
     {
         $request->validate([
@@ -67,22 +59,22 @@ class NewPasswordController extends Controller
                 'min:8',
                 'different:current_password',
                 function ($attribute, $value, $fail) {
-                    // Check for at least 1 number
+                    
                     if (preg_match_all('/[0-9]/', $value) < 1) {
                         $fail('The password must contain at least 1 number.');
                     }
                     
-                    // Check for at least 1 uppercase letter
+                    
                     if (preg_match_all('/[A-Z]/', $value) < 1) {
                         $fail('The password must contain at least 1 uppercase letter.');
                     }
                     
-                    // Check for at least 1 special character
+                    
                     if (preg_match_all('/[^a-zA-Z0-9]/', $value) < 1) {
                         $fail('The password must contain at least 1 special character.');
                     }
                     
-                    // Check for at least 1 lowercase letter
+                    
                     if (preg_match_all('/[a-z]/', $value) < 1) {
                         $fail('The password must contain at least 1 lowercase letter.');
                     }
@@ -93,7 +85,7 @@ class NewPasswordController extends Controller
         try {
             $user = User::findOrFail($request->user_id);
             
-            // Verify current password
+            
             if (!Hash::check($request->current_password, $user->password)) {
                 return response()->json([
                     'success' => false,

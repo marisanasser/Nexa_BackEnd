@@ -12,9 +12,7 @@ use Illuminate\Validation\Rule;
 
 class AccountController extends Controller
 {
-    /**
-     * Remove user account (soft delete)
-     */
+    
     public function removeAccount(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -32,7 +30,7 @@ class AccountController extends Controller
 
         $user = Auth::user();
         
-        // Verify password before account removal
+        
         if (!Hash::check($request->password, $user->password)) {
             return response()->json([
                 'success' => false,
@@ -41,7 +39,7 @@ class AccountController extends Controller
         }
 
         try {
-            // Log the account removal
+            
             \Log::info('User account removal initiated', [
                 'user_id' => $user->id,
                 'email' => $user->email,
@@ -50,10 +48,10 @@ class AccountController extends Controller
                 'user_agent' => $request->userAgent(),
             ]);
 
-            // Soft delete the user account
+            
             $user->delete();
 
-            // Revoke all tokens for this user
+            
             $user->tokens()->delete();
 
             return response()->json([
@@ -74,9 +72,7 @@ class AccountController extends Controller
         }
     }
 
-    /**
-     * Restore user account
-     */
+    
     public function restoreAccount(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -93,7 +89,7 @@ class AccountController extends Controller
         }
 
         try {
-            // Find the soft deleted user
+            
             $user = User::withTrashed()
                 ->where('email', $request->email)
                 ->whereNotNull('deleted_at')
@@ -106,7 +102,7 @@ class AccountController extends Controller
                 ], 404);
             }
 
-            // Verify password
+            
             if (!Hash::check($request->password, $user->password)) {
                 return response()->json([
                     'success' => false,
@@ -114,7 +110,7 @@ class AccountController extends Controller
                 ], 401);
             }
 
-            // Check if account can be restored (within 30 days)
+            
             $daysSinceDeletion = now()->diffInDays($user->deleted_at);
             if ($daysSinceDeletion > 30) {
                 return response()->json([
@@ -123,10 +119,10 @@ class AccountController extends Controller
                 ], 403);
             }
 
-            // Restore the user account
+            
             $user->restore();
 
-            // Log the account restoration
+            
             \Log::info('User account restored', [
                 'user_id' => $user->id,
                 'email' => $user->email,
@@ -135,7 +131,7 @@ class AccountController extends Controller
                 'user_agent' => $request->userAgent(),
             ]);
 
-            // Create a new token for the restored user
+            
             $token = $user->createToken('auth_token')->plainTextToken;
 
             return response()->json([
@@ -167,9 +163,7 @@ class AccountController extends Controller
         }
     }
 
-    /**
-     * Check if email exists in removed accounts
-     */
+    
     public function checkRemovedAccount(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -185,7 +179,7 @@ class AccountController extends Controller
         }
 
         try {
-            // Check if email exists in removed accounts
+            
             $removedUser = User::withTrashed()
                 ->where('email', $request->email)
                 ->whereNotNull('deleted_at')
@@ -198,7 +192,7 @@ class AccountController extends Controller
                 ], 404);
             }
 
-            // Check if account can be restored
+            
             $daysSinceDeletion = now()->diffInDays($removedUser->deleted_at);
             $canRestore = $daysSinceDeletion <= 30;
 
@@ -221,9 +215,7 @@ class AccountController extends Controller
             ], 500);
         }
     }
-    /**
-     * Check if email exists in removed accounts
-     */
+    
 
     public function checkAccount(Request $request): JsonResponse
     {

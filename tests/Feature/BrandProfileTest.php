@@ -17,7 +17,7 @@ class BrandProfileTest extends TestCase
     {
         parent::setUp();
         
-        // Create a test user
+        
         $this->user = User::factory()->create([
             'role' => 'brand',
             'name' => 'Test Brand',
@@ -25,7 +25,7 @@ class BrandProfileTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function it_can_fetch_brand_profile()
     {
         $response = $this->actingAs($this->user)
@@ -50,7 +50,7 @@ class BrandProfileTest extends TestCase
             ]);
     }
 
-    /** @test */
+    
     public function it_can_update_brand_profile()
     {
         $updateData = [
@@ -71,7 +71,7 @@ class BrandProfileTest extends TestCase
                 'message' => 'Profile updated successfully'
             ]);
 
-        // Verify the data was updated in the database
+        
         $this->user->refresh();
         $this->assertEquals('Updated Brand Name', $this->user->name);
         $this->assertEquals('updated@test.com', $this->user->email);
@@ -81,11 +81,11 @@ class BrandProfileTest extends TestCase
         $this->assertEquals('California', $this->user->state);
     }
 
-    /** @test */
+    
     public function it_can_change_password()
     {
         $passwordData = [
-            'old_password' => 'password', // Default password from factory
+            'old_password' => 'password', 
             'new_password' => 'newpassword123',
             'new_password_confirmation' => 'newpassword123',
         ];
@@ -100,7 +100,7 @@ class BrandProfileTest extends TestCase
             ]);
     }
 
-    /** @test */
+    
     public function it_validates_required_fields_on_update()
     {
         $response = $this->actingAs($this->user)
@@ -113,7 +113,7 @@ class BrandProfileTest extends TestCase
             ->assertJsonValidationErrors(['email', 'gender']);
     }
 
-    /** @test */
+    
     public function it_validates_password_change()
     {
         $response = $this->actingAs($this->user)
@@ -130,10 +130,10 @@ class BrandProfileTest extends TestCase
             ]);
     }
 
-    /** @test */
+    
     public function it_can_upload_avatar()
     {
-        // Create a simple base64 encoded image
+        
         $imageData = base64_encode(file_get_contents(__DIR__ . '/../../public/placeholder.svg'));
         $base64Image = 'data:image/svg+xml;base64,' . $imageData;
 
@@ -142,7 +142,7 @@ class BrandProfileTest extends TestCase
                 'avatar' => $base64Image
             ]);
 
-        // Debug: Print response content if it fails
+        
         if ($response->status() !== 200) {
             dump($response->content());
         }
@@ -161,13 +161,13 @@ class BrandProfileTest extends TestCase
                 ]
             ]);
 
-        // Verify the avatar was saved in the database
+        
         $this->user->refresh();
         $this->assertNotNull($this->user->avatar_url);
         $this->assertStringContainsString('/storage/avatars/', $this->user->avatar_url);
     }
 
-    /** @test */
+    
     public function it_validates_avatar_format()
     {
         $response = $this->actingAs($this->user)
@@ -182,10 +182,10 @@ class BrandProfileTest extends TestCase
             ]);
     }
 
-    /** @test */
+    
     public function it_can_delete_avatar()
     {
-        // First upload an avatar
+        
         $imageData = base64_encode(file_get_contents(__DIR__ . '/../../public/placeholder.svg'));
         $base64Image = 'data:image/svg+xml;base64,' . $imageData;
 
@@ -194,7 +194,7 @@ class BrandProfileTest extends TestCase
                 'avatar' => $base64Image
             ]);
 
-        // Now delete the avatar
+        
         $response = $this->actingAs($this->user)
             ->deleteJson('/api/brand-profile/avatar');
 
@@ -204,12 +204,12 @@ class BrandProfileTest extends TestCase
                 'message' => 'Avatar deleted successfully'
             ]);
 
-        // Verify the avatar was removed from the database
+        
         $this->user->refresh();
         $this->assertNull($this->user->avatar_url);
     }
 
-    /** @test */
+    
     public function it_can_update_profile_with_avatar()
     {
         $imageData = base64_encode(file_get_contents(__DIR__ . '/../../public/placeholder.svg'));
@@ -230,7 +230,7 @@ class BrandProfileTest extends TestCase
                 'message' => 'Profile updated successfully'
             ]);
 
-        // Verify both profile data and avatar were updated
+        
         $this->user->refresh();
         $this->assertEquals('Updated Brand Name', $this->user->name);
         $this->assertEquals('Test Company', $this->user->company_name);

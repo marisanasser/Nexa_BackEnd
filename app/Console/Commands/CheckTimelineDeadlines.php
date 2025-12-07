@@ -11,28 +11,18 @@ use Carbon\Carbon;
 
 class CheckTimelineDeadlines extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
+    
     protected $signature = 'timeline:check-deadlines';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    
     protected $description = 'Check for overdue timeline milestones and apply penalties';
 
-    /**
-     * Execute the console command.
-     */
+    
     public function handle()
     {
         $this->info('Checking timeline deadlines...');
 
-        // Get all overdue milestones that haven't been notified yet
+        
         $overdueMilestones = CampaignTimeline::where('deadline', '<', now())
             ->where('status', '!=', 'completed')
             ->whereNull('delay_notified_at')
@@ -45,28 +35,26 @@ class CheckTimelineDeadlines extends Command
             $this->processOverdueMilestone($milestone);
         }
 
-        // Check for creators with multiple overdue milestones (7-day suspension)
+        
         $this->checkForSuspensions();
 
         $this->info('Timeline deadline check completed!');
     }
 
-    /**
-     * Process an overdue milestone
-     */
+    
     private function processOverdueMilestone(CampaignTimeline $milestone)
     {
         $contract = $milestone->contract;
         $creator = $contract->creator;
         $brand = $contract->brand;
 
-        // Mark milestone as delayed
+        
         $milestone->markAsDelayed();
 
-        // Send notifications
+        
         $this->sendOverdueNotifications($milestone, $contract, $creator, $brand);
 
-        // Check if this is the creator's second overdue milestone
+        
         $overdueCount = CampaignTimeline::whereHas('contract', function ($query) use ($creator) {
             $query->where('creator_id', $creator->id);
         })
@@ -81,19 +69,17 @@ class CheckTimelineDeadlines extends Command
         $this->info("Processed overdue milestone {$milestone->id} for creator {$creator->name}");
     }
 
-    /**
-     * Send overdue notifications
-     */
+    
     private function sendOverdueNotifications($milestone, $contract, $creator, $brand)
     {
-        // Notify creator
+        
         $creatorMessage = "⚠️ Milestone '{$milestone->title}' está atrasado. 
         Prazo: " . $milestone->deadline->format('d/m/Y H:i') . "
         Contrato: {$contract->title}
         
         Se você não justificar o atraso, poderá receber uma penalidade de 7 dias sem novos convites.";
 
-        // Create notification for creator
+        
         \App\Models\Notification::create([
             'user_id' => $creator->id,
             'title' => 'Milestone Atrasado',
@@ -106,7 +92,7 @@ class CheckTimelineDeadlines extends Command
             ],
         ]);
 
-        // Notify brand
+        
         $brandMessage = "⚠️ Milestone '{$milestone->title}' está atrasado.
         Criador: {$creator->name}
         Prazo: " . $milestone->deadline->format('d/m/Y H:i') . "
@@ -114,7 +100,7 @@ class CheckTimelineDeadlines extends Command
         
         Você pode justificar o atraso para evitar penalidades ao criador.";
 
-        // Create notification for brand
+        
         \App\Models\Notification::create([
             'user_id' => $brand->id,
             'title' => 'Milestone Atrasado',
@@ -127,23 +113,21 @@ class CheckTimelineDeadlines extends Command
             ],
         ]);
 
-        // Send chat messages
+        
         $this->sendChatMessages($milestone, $contract, $creator, $brand);
     }
 
-    /**
-     * Send chat messages about overdue milestone
-     */
+    
     private function sendChatMessages($milestone, $contract, $creator, $brand)
     {
         try {
-            // Get the chat room for this contract
+            
             $chatRoom = \App\Models\ChatRoom::whereHas('offers', function ($query) use ($contract) {
                 $query->where('id', $contract->offer_id);
             })->first();
 
             if ($chatRoom) {
-                // Send system message about overdue milestone
+                
                 \App\Models\Message::create([
                     'chat_room_id' => $chatRoom->id,
                     'sender_id' => $brand->id,
@@ -161,17 +145,15 @@ class CheckTimelineDeadlines extends Command
         }
     }
 
-    /**
-     * Apply suspension to creator
-     */
+    
     private function applySuspension(User $creator)
     {
-        // Check if creator is already suspended
+        
         if ($creator->suspended_until && $creator->suspended_until->isFuture()) {
             return;
         }
 
-        // Apply 7-day suspension
+        
         $suspensionEnd = now()->addDays(7);
         
         $creator->update([
@@ -179,7 +161,7 @@ class CheckTimelineDeadlines extends Command
             'suspension_reason' => 'Multiple overdue timeline milestones',
         ]);
 
-        // Send suspension notification
+        
         \App\Models\Notification::create([
             'user_id' => $creator->id,
             'title' => 'Conta Suspensa',
@@ -195,12 +177,10 @@ class CheckTimelineDeadlines extends Command
         $this->warn("Applied 7-day suspension to creator {$creator->name}");
     }
 
-    /**
-     * Check for creators with multiple overdue milestones
-     */
+    
     private function checkForSuspensions()
     {
-        // Get creators with 2 or more overdue milestones
+        
         $creatorsWithOverdue = \DB::table('campaign_timelines')
             ->join('contracts', 'campaign_timelines.contract_id', '=', 'contracts.id')
             ->join('users', 'contracts.creator_id', '=', 'users.id')

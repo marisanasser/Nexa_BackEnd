@@ -7,27 +7,23 @@ use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    
     public function up(): void
     {
-        // Drop unique constraint if it exists
+        
         DB::statement('DROP INDEX IF EXISTS transactions_stripe_payment_intent_id_unique');
         
-        // Make the column nullable using raw SQL
+        
         DB::statement('ALTER TABLE transactions ALTER COLUMN stripe_payment_intent_id DROP NOT NULL');
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
-        // Make the column non-nullable
+        
         DB::statement('ALTER TABLE transactions ALTER COLUMN stripe_payment_intent_id SET NOT NULL');
         
-        // Add unique constraint back (only for non-null values)
+        
         DB::statement('
             CREATE UNIQUE INDEX transactions_stripe_payment_intent_id_unique 
             ON transactions(stripe_payment_intent_id) 

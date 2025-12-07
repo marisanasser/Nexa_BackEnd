@@ -23,7 +23,6 @@ const io = new Server(httpServer, {
     maxHttpBufferSize: 1e8
 });
 
-// Add HTTP endpoint for Laravel to emit events
 httpServer.on('request', (req, res) => {
     if (req.url && req.url.startsWith('/socket.io')) { return; }
     console.log(`📥 HTTP Request: ${req.method} ${req.url}`);
@@ -41,9 +40,9 @@ httpServer.on('request', (req, res) => {
                 console.log(`Received event from Laravel: ${event}`, data);
                 console.log(`Event data roomId: ${data?.roomId}, event type: ${event}`);
                 
-                // Emit the event to the appropriate room or all clients
+                
                 if (event === 'new_message' && data.roomId) {
-                    // Get all sockets in the room before emitting
+                    
                     io.in(data.roomId).fetchSockets().then(sockets => {
                         console.log(`📊 Room ${data.roomId} has ${sockets.length} connected sockets:`, sockets.map(s => s.id));
                     });
@@ -76,25 +75,22 @@ httpServer.on('request', (req, res) => {
     }
 });
 
-// Store connected users
 const connectedUsers = new Map();
 const userRooms = new Map();
 
-// Store user socket rooms for notifications
 const userNotificationRooms = new Map();
 
-// Make socket instance available globally for Laravel
 global.socket_server = io;
 
 io.on('connection', (socket) => {
     console.log(`New client connected: ${socket.id}`);
     
-    // Handle connection errors
+    
     socket.on('error', (error) => {
         console.error(`Socket error for ${socket.id}:`, error);
     });
     
-    // User joins with authentication
+    
     socket.on('user_join', (data) => {
         const { userId, userRole } = data;
         
@@ -106,14 +102,14 @@ io.on('connection', (socket) => {
         
         userRooms.set(userId, socket.id);
         
-        // Join user's notification room
+        
         const notificationRoom = `user_${userId}`;
         socket.join(notificationRoom);
         userNotificationRooms.set(userId, notificationRoom);
         
     });
 
-    // Join a specific chat room
+    
     socket.on('join_room', (roomId) => {
         if (!roomId || typeof roomId !== 'string') {
             console.error(`Invalid roomId provided: ${roomId}`);
@@ -123,7 +119,7 @@ io.on('connection', (socket) => {
         socket.join(roomId);
         console.log(`🚪 Socket ${socket.id} joined room ${roomId}`);
         
-        // Log all sockets in the room
+        
         io.in(roomId).fetchSockets().then(sockets => {
             console.log(`📊 Room ${roomId} now has ${sockets.length} sockets:`, sockets.map(s => s.id));
         }).catch(error => {
@@ -131,7 +127,7 @@ io.on('connection', (socket) => {
         });
     });
 
-    // Leave a specific chat room
+    
     socket.on('leave_room', (roomId) => {
         if (!roomId || typeof roomId !== 'string') {
             console.error(`Invalid roomId provided for leave: ${roomId}`);
@@ -142,7 +138,7 @@ io.on('connection', (socket) => {
         console.log(`Socket ${socket.id} left room ${roomId}`);
     });
 
-    // Handle new message
+    
     socket.on('send_message', (data) => {
         console.log('📨 Received send_message event:', data);
         
@@ -154,11 +150,11 @@ io.on('connection', (socket) => {
         const { roomId, message, senderId, senderName, senderAvatar, messageType, fileData } = data;
         console.log(`📤 Broadcasting message to room ${roomId} from user ${senderId}`);
         
-        // Broadcast message to ALL users in the room (including sender for synchronization)
-        // Use io.to() for more reliable delivery
+        
+        
         io.to(roomId).emit('new_message', {
             roomId,
-            messageId: data.messageId, // Include the message ID from the database
+            messageId: data.messageId, 
             message,
             senderId,
             senderName,
@@ -168,23 +164,23 @@ io.on('connection', (socket) => {
             timestamp: new Date().toISOString()
         });
         
-        // Log all sockets in the room
+        
         io.in(roomId).fetchSockets().then(sockets => {
             const otherSockets = sockets.filter(s => s.id !== socket.id);
             console.log(`📊 Room ${roomId} has ${sockets.length} total sockets, ${otherSockets.length} other sockets`);
         });
     });
 
-    // Handle typing indicator
+    
     socket.on('typing_start', (data) => {
         const { roomId, userId, userName } = data;
         
-        // Get all sockets in the room
+        
         io.in(roomId).fetchSockets().then(sockets => {
             const otherSockets = sockets.filter(s => s.id !== socket.id);
         });
         
-        // Broadcast typing indicator to other users in the room
+        
         socket.to(roomId).emit('user_typing', {
             roomId,
             userId,
@@ -197,12 +193,12 @@ io.on('connection', (socket) => {
     socket.on('typing_stop', (data) => {
         const { roomId, userId, userName } = data;
         
-        // Get all sockets in the room
+        
         io.in(roomId).fetchSockets().then(sockets => {
             const otherSockets = sockets.filter(s => s.id !== socket.id);
         });
         
-        // Broadcast typing stop to other users in the room
+        
         socket.to(roomId).emit('user_typing', {
             roomId,
             userId,
@@ -212,11 +208,11 @@ io.on('connection', (socket) => {
         
     });
 
-    // Handle message read status
+    
     socket.on('mark_read', (data) => {
         const { roomId, messageIds, userId } = data;
         
-        // Broadcast read status to all users in the room (including sender for their own messages)
+        
         io.to(roomId).emit('messages_read', {
             roomId,
             messageIds,
@@ -226,11 +222,11 @@ io.on('connection', (socket) => {
         
     });
 
-    // Handle file upload progress
+    
     socket.on('file_upload_progress', (data) => {
         const { roomId, fileName, progress } = data;
         
-        // Broadcast upload progress to other users in the room
+        
         socket.to(roomId).emit('file_upload_progress', {
             roomId,
             fileName,
@@ -238,11 +234,11 @@ io.on('connection', (socket) => {
         });
     });
 
-    // NEW: Handle offer creation
+    
     socket.on('offer_created', (data) => {
         const { roomId, offerData, senderId } = data;
         
-        // Broadcast offer creation to all users in the room
+        
         io.to(roomId).emit('offer_created', {
             roomId,
             offerData,
@@ -250,7 +246,7 @@ io.on('connection', (socket) => {
             timestamp: new Date().toISOString()
         });
         
-        // Also send to specific user notification room
+        
         if (offerData.creator_id) {
             const creatorNotificationRoom = `user_${offerData.creator_id}`;
             io.to(creatorNotificationRoom).emit('new_offer_notification', {
@@ -261,11 +257,11 @@ io.on('connection', (socket) => {
         }
     });
 
-    // NEW: Handle offer acceptance
+    
     socket.on('offer_accepted', (data) => {
         const { roomId, offerData, contractData, senderId } = data;
         
-        // Broadcast offer acceptance to all users in the room
+        
         io.to(roomId).emit('offer_accepted', {
             roomId,
             offerData,
@@ -274,7 +270,7 @@ io.on('connection', (socket) => {
             timestamp: new Date().toISOString()
         });
         
-        // Also send to brand notification room
+        
         if (offerData.brand_id) {
             const brandNotificationRoom = `user_${offerData.brand_id}`;
             io.to(brandNotificationRoom).emit('offer_accepted_notification', {
@@ -286,13 +282,13 @@ io.on('connection', (socket) => {
         }
     });
 
-    // NEW: Handle offer acceptance confirmation message
+    
     socket.on('send_offer_acceptance_message', (data) => {
         console.log('Received send_offer_acceptance_message event:', data);
         
         const { roomId, offerData, contractData, senderId, senderName, senderAvatar } = data;
         
-        // Broadcast the acceptance confirmation message to all users in the room
+        
         console.log(`Broadcasting offer_acceptance_message to room ${roomId}`);
         io.to(roomId).emit('offer_acceptance_message', {
             roomId,
@@ -304,17 +300,17 @@ io.on('connection', (socket) => {
             timestamp: new Date().toISOString()
         });
         
-        // Log all sockets in the room
+        
         io.in(roomId).fetchSockets().then(sockets => {
             console.log(`Room ${roomId} has ${sockets.length} sockets:`, sockets.map(s => s.id));
         });
     });
 
-    // NEW: Handle offer rejection
+    
     socket.on('offer_rejected', (data) => {
         const { roomId, offerData, senderId, rejectionReason } = data;
         
-        // Broadcast offer rejection to all users in the room
+        
         io.to(roomId).emit('offer_rejected', {
             roomId,
             offerData,
@@ -323,7 +319,7 @@ io.on('connection', (socket) => {
             timestamp: new Date().toISOString()
         });
         
-        // Also send to brand notification room
+        
         if (offerData.brand_id) {
             const brandNotificationRoom = `user_${offerData.brand_id}`;
             io.to(brandNotificationRoom).emit('offer_rejected_notification', {
@@ -335,11 +331,11 @@ io.on('connection', (socket) => {
         }
     });
 
-    // NEW: Handle offer cancellation
+    
     socket.on('offer_cancelled', (data) => {
         const { roomId, offerData, senderId } = data;
         
-        // Broadcast offer cancellation to all users in the room
+        
         io.to(roomId).emit('offer_cancelled', {
             roomId,
             offerData,
@@ -347,7 +343,7 @@ io.on('connection', (socket) => {
             timestamp: new Date().toISOString()
         });
         
-        // Also send to creator notification room
+        
         if (offerData.creator_id) {
             const creatorNotificationRoom = `user_${offerData.creator_id}`;
             io.to(creatorNotificationRoom).emit('offer_cancelled_notification', {
@@ -358,11 +354,11 @@ io.on('connection', (socket) => {
         }
     });
 
-    // NEW: Handle contract completion
+    
     socket.on('contract_completed', (data) => {
         const { roomId, contractData, senderId } = data;
         
-        // Broadcast contract completion to all users in the room
+        
         io.to(roomId).emit('contract_completed', {
             roomId,
             contractData,
@@ -370,7 +366,7 @@ io.on('connection', (socket) => {
             timestamp: new Date().toISOString()
         });
         
-        // Also send to both users' notification rooms
+        
         if (contractData.creator_id) {
             const creatorNotificationRoom = `user_${contractData.creator_id}`;
             io.to(creatorNotificationRoom).emit('contract_completed_notification', {
@@ -390,11 +386,11 @@ io.on('connection', (socket) => {
         }
     });
 
-    // NEW: Handle contract termination
+    
     socket.on('contract_terminated', (data) => {
         const { roomId, contractData, senderId, terminationReason } = data;
         
-        // Broadcast contract termination to all users in the room
+        
         io.to(roomId).emit('contract_terminated', {
             roomId,
             contractData,
@@ -403,7 +399,7 @@ io.on('connection', (socket) => {
             timestamp: new Date().toISOString()
         });
         
-        // Also send to both users' notification rooms
+        
         if (contractData.creator_id) {
             const creatorNotificationRoom = `user_${contractData.creator_id}`;
             io.to(creatorNotificationRoom).emit('contract_terminated_notification', {
@@ -425,11 +421,11 @@ io.on('connection', (socket) => {
         }
     });
 
-    // NEW: Handle contract activation
+    
     socket.on('contract_activated', (data) => {
         const { roomId, contractData, senderId } = data;
         
-        // Broadcast contract activation to all users in the room
+        
         io.to(roomId).emit('contract_activated', {
             roomId,
             contractData,
@@ -437,7 +433,7 @@ io.on('connection', (socket) => {
             timestamp: new Date().toISOString()
         });
         
-        // Also send to both users' notification rooms
+        
         if (contractData.creator_id) {
             const creatorNotificationRoom = `user_${contractData.creator_id}`;
             io.to(creatorNotificationRoom).emit('contract_activated_notification', {
@@ -457,11 +453,11 @@ io.on('connection', (socket) => {
         }
     });
 
-    // NEW: Handle general contract status updates
+    
     socket.on('contract_status_update', (data) => {
         const { roomId, contractData, terminationReason, timestamp } = data;
         
-        // Broadcast contract status update to all users in the room
+        
         io.to(roomId).emit('contract_status_update', {
             roomId,
             contractData,
@@ -469,7 +465,7 @@ io.on('connection', (socket) => {
             timestamp: timestamp || new Date().toISOString()
         });
         
-        // Also send to both users' notification rooms
+        
         if (contractData.creator_id) {
             const creatorNotificationRoom = `user_${contractData.creator_id}`;
             io.to(creatorNotificationRoom).emit('contract_status_update_notification', {
@@ -489,14 +485,14 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Handle disconnection
+    
     socket.on('disconnect', (reason) => {
         const userData = connectedUsers.get(socket.id);
         
         if (userData) {
             const { userId } = userData;
             
-            // Remove from connected users
+            
             connectedUsers.delete(socket.id);
             userRooms.delete(userId);
             userNotificationRooms.delete(userId);

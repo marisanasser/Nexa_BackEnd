@@ -3,13 +3,11 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\DB; // Added missing import for DB facade
+use Illuminate\Support\Facades\DB; 
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
+    
     public function up(): void
     {
         Schema::create('subscription_plans', function (Blueprint $table) {
@@ -24,7 +22,7 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Insert the three subscription plans
+        
         DB::table('subscription_plans')->insert([
             [
                 'name' => 'Plano Mensal',
@@ -46,7 +44,7 @@ return new class extends Migration
             [
                 'name' => 'Plano Semestral',
                 'description' => 'Assinatura de 6 meses do Nexa Premium',
-                'price' => 119.94, // 19.99 * 6 months
+                'price' => 119.94, 
                 'duration_months' => 6,
                 'is_active' => true,
                 'features' => json_encode([
@@ -64,7 +62,7 @@ return new class extends Migration
             [
                 'name' => 'Plano Anual',
                 'description' => 'Assinatura de 12 meses do Nexa Premium',
-                'price' => 1799.28, // 24.99 * 12 months * 6 years
+                'price' => 1799.28, 
                 'duration_months' => 72,
                 'is_active' => true,
                 'features' => json_encode([
@@ -83,9 +81,7 @@ return new class extends Migration
         ]);
     }
 
-    /**
-     * Reverse the migrations.
-     */
+    
     public function down(): void
     {
         Schema::dropIfExists('subscription_plans');
