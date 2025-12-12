@@ -22,13 +22,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
         
-        \Log::info('Getting chat rooms', [
-            'user_id' => $user->id,
-            'user_role' => $user->role,
-            'is_brand' => $user->isBrand(),
-            'is_creator' => $user->isCreator(),
-            'is_admin' => $user->isAdmin(),
-        ]);
+        // \Log::info('Getting chat rooms', [ ... ]);
         
         $chatRooms = collect();
 
@@ -39,11 +33,7 @@ class ChatController extends Controller
                 ->orderBy('last_message_at', 'desc') 
                 ->get();
                 
-            \Log::info('Found chat rooms for brand', [
-                'brand_id' => $user->id,
-                'room_count' => $chatRooms->count(),
-                'room_ids' => $chatRooms->pluck('room_id')->toArray(),
-            ]);
+            // \Log::info('Found chat rooms for brand', [ ... ]);
         } elseif ($user->isCreator() || $user->isStudent()) {
             $chatRooms = ChatRoom::where('creator_id', $user->id)
                 ->with(['brand', 'campaign', 'lastMessage.sender'])
@@ -51,12 +41,7 @@ class ChatController extends Controller
                 ->orderBy('last_message_at', 'desc') 
                 ->get();
                 
-            \Log::info('Found chat rooms for creator/student', [
-                'user_id' => $user->id,
-                'user_role' => $user->role,
-                'room_count' => $chatRooms->count(),
-                'room_ids' => $chatRooms->pluck('room_id')->toArray(),
-            ]);
+            // \Log::info('Found chat rooms for creator/student', [ ... ]);
         } elseif ($user->isAdmin()) {
             
             $chatRooms = ChatRoom::with(['creator', 'brand', 'campaign', 'lastMessage.sender'])
@@ -64,11 +49,7 @@ class ChatController extends Controller
                 ->orderBy('last_message_at', 'desc') 
                 ->get();
                 
-            \Log::info('Found chat rooms for admin', [
-                'admin_id' => $user->id,
-                'room_count' => $chatRooms->count(),
-                'room_ids' => $chatRooms->pluck('room_id')->toArray(),
-            ]);
+            // \Log::info('Found chat rooms for admin', [ ... ]);
         }
 
         $formattedRooms = $chatRooms->map(function ($room) use ($user) {
@@ -136,10 +117,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        \Log::info('Getting messages for room', [
-            'room_id' => $roomId,
-            'user_id' => $user->id,
-        ]);
+        // \Log::info('Getting messages for room', [ ... ]);
 
         
         if ($user->isAdmin()) {
@@ -156,22 +134,14 @@ class ChatController extends Controller
         }
 
         if (!$room) {
-            \Log::error('Chat room not found for messages', [
-                'room_id' => $roomId,
-                'user_id' => $user->id,
-            ]);
+            // \Log::error('Chat room not found for messages', [ ... ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Chat room not found',
             ], 404);
         }
 
-        \Log::info('Found chat room for messages', [
-            'room_id' => $room->room_id,
-            'chat_room_id' => $room->id,
-            'brand_id' => $room->brand_id,
-            'creator_id' => $room->creator_id,
-        ]);
+        // \Log::info('Found chat room for messages', [ ... ]);
 
         
         if ($user->isBrand() && $room->campaign_id && !$room->messages()->exists()) {

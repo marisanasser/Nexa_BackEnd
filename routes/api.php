@@ -230,11 +230,11 @@ Route::get('/subscription/plans', [SubscriptionController::class, 'getPlans']);
 Route::post('/payment/create-subscription-from-checkout-public', [StripeBillingController::class, 'createSubscriptionFromCheckoutPublic'])->middleware(['throttle:payment']);
 
 Route::middleware(['auth:sanctum'])->group(function () {
-    Route::get('/payment/methods', [PaymentController::class, 'getPaymentMethods'])->middleware(['throttle:dashboard']);
-    Route::post('/payment/methods', [PaymentController::class, 'createPaymentMethod']);
-    Route::delete('/payment/methods/{cardId}', [PaymentController::class, 'deletePaymentMethod']);
-    Route::post('/payment/process', [PaymentController::class, 'processPayment']);
-    Route::get('/payment/history', [PaymentController::class, 'getPaymentHistory'])->middleware(['throttle:dashboard']);
+    // Route::get('/payment/methods', [PaymentController::class, 'getPaymentMethods'])->middleware(['throttle:dashboard']);
+    // Route::post('/payment/methods', [PaymentController::class, 'createPaymentMethod']);
+    // Route::delete('/payment/methods/{cardId}', [PaymentController::class, 'deletePaymentMethod']);
+    // Route::post('/payment/process', [PaymentController::class, 'processPayment']);
+    // Route::get('/payment/history', [PaymentController::class, 'getPaymentHistory'])->middleware(['throttle:dashboard']);
     
     
     Route::middleware(['throttle:payment'])->group(function () {
@@ -245,17 +245,17 @@ Route::middleware(['auth:sanctum'])->group(function () {
     });
     
     
-    Route::post('/payment/debug', [PaymentController::class, 'debugPayment']);
-    Route::post('/payment/test', function(Request $request) {
-        return response()->json([
-            'success' => true,
-            'message' => 'Test endpoint working',
-            'data' => $request->all(),
-            'headers' => $request->headers->all(),
-            'auth' => auth()->check(),
-            'user' => auth()->user()
-        ]);
-    });
+    // Route::post('/payment/debug', [PaymentController::class, 'debugPayment']);
+    // Route::post('/payment/test', function(Request $request) {
+    //     return response()->json([
+    //         'success' => true,
+    //         'message' => 'Test endpoint working',
+    //         'data' => $request->all(),
+    //         'headers' => $request->headers->all(),
+    //         'auth' => auth()->check(),
+    //         'user' => auth()->user()
+    //     ]);
+    // });
     
     
     Route::get('/subscription/history', [SubscriptionController::class, 'getSubscriptionHistory'])->middleware(['throttle:dashboard']);
@@ -273,14 +273,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/register-bank', [PaymentController::class, 'registerBankAccount']); 
         Route::get('/bank-info', [PaymentController::class, 'getBankInfo']); 
         Route::put('/bank-info', [PaymentController::class, 'updateBankInfo']); 
-        Route::delete('/bank-info', [PaymentController::class, 'deleteBankInfo']); 
+        Route::delete('/bank-info', [PaymentController::class, 'deleteBankInfo']);  
         
         
         Route::get('/withdrawals', [WithdrawalController::class, 'index']); 
         Route::post('/withdrawals', [WithdrawalController::class, 'store']); 
         
         
-        Route::get('/earnings', [PaymentController::class, 'getEarnings']); 
+        // Route::get('/earnings', [PaymentController::class, 'getEarnings']); 
         Route::get('/withdrawal-methods', [CreatorBalanceController::class, 'withdrawalMethods']); 
         Route::post('/stripe-payment-method-checkout', [CreatorBalanceController::class, 'createStripePaymentMethodCheckout']); 
         Route::post('/stripe-payment-method-checkout-success', [CreatorBalanceController::class, 'handleCheckoutSuccess']); 

@@ -1,0 +1,122 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\BankAccount;
+use App\Http\Requests\StoreBankAccountRequest;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
+
+class PaymentController extends Controller
+{
+    /**
+     * Register or update a bank account for the authenticated user.
+     *
+     * @param StoreBankAccountRequest $request
+     * @return JsonResponse
+     */
+    public function registerBankAccount(StoreBankAccountRequest $request): JsonResponse
+    {
+        $user = auth()->user();
+
+        Log::info('Registering bank account', ['user_id' => $user->id]);
+
+        $data = $request->validated();
+        $data['user_id'] = $user->id;
+
+        // Check if user already has a bank account
+        $bankAccount = BankAccount::where('user_id', $user->id)->first();
+
+        if ($bankAccount) {
+            $bankAccount->update($data);
+            $message = 'Bank account updated successfully';
+        } else {
+            $bankAccount = BankAccount::create($data);
+            $message = 'Bank account registered successfully';
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'data' => $bankAccount
+        ]);
+    }
+
+    /**
+     * Get the bank account information for the authenticated user.
+     *
+     * @return JsonResponse
+     */
+    public function getBankInfo(): JsonResponse
+    {
+        $user = auth()->user();
+        $bankAccount = BankAccount::where('user_id', $user->id)->first();
+
+        if (!$bankAccount) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No bank account found',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $bankAccount
+        ]);
+    }
+
+    /**
+     * Update the bank account information (alias for register).
+     *
+     * @param StoreBankAccountRequest $request
+     * @return JsonResponse
+     */
+    public function updateBankInfo(StoreBankAccountRequest $request): JsonResponse
+    {
+        return $this->registerBankAccount($request);
+    }
+
+    /**
+     * Delete the bank account information.
+     *
+     * @return JsonResponse
+     */
+    public function deleteBankInfo(): JsonResponse
+    {
+        $user = auth()->user();
+        $bankAccount = BankAccount::where('user_id', $user->id)->first();
+
+        if (!$bankAccount) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No bank account found',
+            ], 404);
+        }
+
+        $bankAccount->delete();
+
+        Log::info('Bank account deleted', ['user_id' => $user->id]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Bank account deleted successfully',
+        ]);
+    }
+
+    /**
+     * Debug endpoint (kept for reference but should be used with caution).
+     */
+    public function debugPayment(Request $request)
+    {
+        if (!config('app.debug')) {
+            abort(404);
+        }
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Debug payment endpoint',
+            'data' => $request->all(),
+        ]);
+    }
+}

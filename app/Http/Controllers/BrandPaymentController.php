@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\BrandPaymentMethod;
 use App\Models\User;
+use App\Http\Requests\StoreBrandPaymentMethodRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Http;
@@ -34,7 +35,7 @@ class BrandPaymentController extends Controller
     }
 
     
-    public function savePaymentMethod(Request $request): JsonResponse
+    public function savePaymentMethod(StoreBrandPaymentMethodRequest $request): JsonResponse
     {
         $user = auth()->user();
 
@@ -42,29 +43,6 @@ class BrandPaymentController extends Controller
             'user_id' => $user->id,
             'request_data' => $request->all()
         ]);
-
-        
-        if (!$user->isBrand()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only brands can save payment methods',
-            ], 403);
-        }
-
-        $validator = Validator::make($request->all(), [
-            'card_hash' => 'required|string',
-            'card_holder_name' => 'required|string|max:255',
-            'cnpj' => 'required|string|regex:/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/',
-            'is_default' => 'boolean',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
 
         try {
             

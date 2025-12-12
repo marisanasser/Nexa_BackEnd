@@ -42,6 +42,6 @@ Route::post('/google/auth', [GoogleController::class, 'handleGoogleWithRole'])
     ->middleware('throttle:auth')
     ->name('google.auth');
 
-Route::post('/pagarme/auth', [PagarMeAuthController::class, 'authenticate'])
-    ->middleware('throttle:auth')
-    ->name('pagarme.auth');
+// Route::post('/pagarme/auth', [PagarMeAuthController::class, 'authenticate'])
+//    ->middleware('throttle:auth')
+//    ->name('pagarme.auth');
