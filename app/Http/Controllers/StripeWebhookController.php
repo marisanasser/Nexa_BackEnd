@@ -105,9 +105,8 @@ class StripeWebhookController extends Controller
                 'created' => $event->created ?? null,
             ]);
             
-            try {
-                switch ($event->type) {
-                    case 'checkout.session.completed':
+            switch ($event->type) {
+                case 'checkout.session.completed':
                         $session = $event->data->object;
                         
                         Log::info('Stripe checkout.session.completed event received', [

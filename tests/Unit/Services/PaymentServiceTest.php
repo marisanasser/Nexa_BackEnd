@@ -59,6 +59,12 @@ class PaymentServiceTest extends TestCase
         $mockPaymentMethod->shouldReceive('getAttribute')->with('id')->andReturn(10);
         $mockPaymentMethod->shouldReceive('getAttribute')->with('stripe_payment_method_id')->andReturn('pm_123');
         
+        // Expect duplicate check
+        $this->paymentRepository->shouldReceive('findBrandPaymentMethodByCardHash')
+            ->once()
+            ->with(1, 'hash_ending_1234')
+            ->andReturnNull();
+
         // Expect repository create
         $this->paymentRepository->shouldReceive('createBrandPaymentMethod')
             ->once()
@@ -161,6 +167,8 @@ class PaymentServiceTest extends TestCase
         $mockPaymentMethod->user_id = 1;
         $mockPaymentMethod->stripe_payment_method_id = $stripePaymentMethodId;
         $mockPaymentMethod->is_default = false;
+        $mockPaymentMethod->shouldReceive('getAttribute')->with('is_default')->andReturn(false);
+        $mockPaymentMethod->shouldReceive('getAttribute')->with('stripe_payment_method_id')->andReturn($stripePaymentMethodId);
         
         $this->paymentRepository->shouldReceive('findBrandPaymentMethod')
             ->once()
@@ -172,13 +180,41 @@ class PaymentServiceTest extends TestCase
             ->with(1)
             ->andReturn(2);
             
-        $mockPaymentMethod->shouldReceive('update')
+        $this->paymentRepository->shouldReceive('deactivatePaymentMethod')
             ->once()
-            ->with(['is_active' => false]);
+            ->with($mockPaymentMethod);
             
         $this->paymentService->deleteBrandPaymentMethod($this->user, $paymentMethodId);
         
         $this->assertTrue(true);
+    }
+
+    public function test_get_brand_payment_method_success()
+    {
+        $paymentMethodId = 10;
+        $mockPaymentMethod = new BrandPaymentMethod(['id' => $paymentMethodId]);
+        
+        $this->paymentRepository->shouldReceive('findBrandPaymentMethod')
+            ->once()
+            ->with(1, $paymentMethodId)
+            ->andReturn($mockPaymentMethod);
+
+        $result = $this->paymentService->getBrandPaymentMethod($this->user, $paymentMethodId);
+        
+        $this->assertEquals($mockPaymentMethod, $result);
+    }
+
+    public function test_get_brand_payment_method_throws_exception_if_not_found()
+    {
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Payment method not found');
+
+        $this->paymentRepository->shouldReceive('findBrandPaymentMethod')
+            ->once()
+            ->with(1, 999)
+            ->andReturn(null);
+
+        $this->paymentService->getBrandPaymentMethod($this->user, 999);
     }
 
     public function test_delete_brand_payment_method_throws_exception_if_not_found()

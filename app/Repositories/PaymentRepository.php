@@ -79,4 +79,9 @@ class PaymentRepository
             ->orderBy('created_at', 'desc')
             ->first();
     }
+
+    public function deactivatePaymentMethod(BrandPaymentMethod $paymentMethod): void
+    {
+        $paymentMethod->update(['is_active' => false]);
+    }
 }

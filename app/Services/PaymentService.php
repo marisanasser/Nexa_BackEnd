@@ -153,6 +153,25 @@ class PaymentService
     }
 
     /**
+     * Get a specific payment method for a user.
+     *
+     * @param User $user
+     * @param int $paymentMethodId
+     * @return BrandPaymentMethod
+     * @throws \Exception
+     */
+    public function getBrandPaymentMethod(User $user, int $paymentMethodId): BrandPaymentMethod
+    {
+        $paymentMethod = $this->paymentRepository->findBrandPaymentMethod($user->id, $paymentMethodId);
+        
+        if (!$paymentMethod) {
+            throw new \Exception('Payment method not found');
+        }
+
+        return $paymentMethod;
+    }
+
+    /**
      * Delete a payment method.
      *
      * @param User $user
@@ -176,7 +195,7 @@ class PaymentService
         $paymentMethodStripeId = $paymentMethod->stripe_payment_method_id;
 
         // Soft delete
-        $paymentMethod->update(['is_active' => false]);
+        $this->paymentRepository->deactivatePaymentMethod($paymentMethod);
         
         if ($wasDefault && $user->stripe_payment_method_id === $paymentMethodStripeId) {
             $nextDefault = $this->paymentRepository->getFirstActivePaymentMethod($user->id);

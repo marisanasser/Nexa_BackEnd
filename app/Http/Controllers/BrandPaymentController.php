@@ -109,7 +109,7 @@ class BrandPaymentController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'payment_method_id' => 'required|exists:brand_payment_methods,id,user_id,' . $user->id,
+            'payment_method_id' => 'required|integer',
         ]);
 
         if ($validator->fails()) {
@@ -120,19 +120,26 @@ class BrandPaymentController extends Controller
             ], 422);
         }
 
-        $paymentMethod = BrandPaymentMethod::find($request->payment_method_id);
-        
-        $this->paymentService->setAsDefault($user, $paymentMethod);
+        try {
+            $paymentMethod = $this->paymentService->getBrandPaymentMethod($user, $request->payment_method_id);
+            
+            $this->paymentService->setAsDefault($user, $paymentMethod);
 
-        Log::info('Updated user default payment method', [
-            'user_id' => $user->id,
-            'payment_method_id' => $paymentMethod->id,
-        ]);
+            Log::info('Updated user default payment method', [
+                'user_id' => $user->id,
+                'payment_method_id' => $paymentMethod->id,
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Default payment method updated successfully',
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Default payment method updated successfully',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
     }
 
     
@@ -148,7 +155,7 @@ class BrandPaymentController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'payment_method_id' => 'required|exists:brand_payment_methods,id,user_id,' . $user->id,
+            'payment_method_id' => 'required|integer',
         ]);
 
         if ($validator->fails()) {
