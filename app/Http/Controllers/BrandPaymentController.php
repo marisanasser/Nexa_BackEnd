@@ -41,7 +41,7 @@ class BrandPaymentController extends Controller
 
         Log::info('Save payment method request', [
             'user_id' => $user->id,
-            'request_data' => $request->all()
+            'is_default' => $request->boolean('is_default')
         ]);
 
         try {

@@ -31,10 +31,20 @@ class PaymentController extends Controller
         if ($bankAccount) {
             $bankAccount->update($data);
             $message = 'Bank account updated successfully';
+            $action = 'update';
         } else {
             $bankAccount = BankAccount::create($data);
             $message = 'Bank account registered successfully';
+            $action = 'create';
         }
+
+        Log::info("Bank account {$action}d", [
+            'user_id' => $user->id,
+            'bank_code' => $data['bank_code'],
+            'agencia' => $data['agencia'],
+            'conta_last4' => substr($data['conta'], -4),
+            'cpf_masked' => substr($data['cpf'], 0, 3) . '.***.***-' . substr($data['cpf'], -2),
+        ]);
 
         return response()->json([
             'success' => true,
