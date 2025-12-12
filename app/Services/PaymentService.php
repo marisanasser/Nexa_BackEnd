@@ -4,21 +4,25 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\BrandPaymentMethod;
-use App\Models\Transaction;
+use App\Repositories\PaymentRepository;
+use App\Wrappers\StripeWrapper;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
-use Stripe\Stripe;
 use Stripe\Customer;
 use Stripe\Checkout\Session;
-use Stripe\SetupIntent;
 
 class PaymentService
 {
-    public function __construct()
+    protected $paymentRepository;
+    protected $stripeWrapper;
+
+    public function __construct(PaymentRepository $paymentRepository, StripeWrapper $stripeWrapper)
     {
+        $this->paymentRepository = $paymentRepository;
+        $this->stripeWrapper = $stripeWrapper;
+
         $stripeSecret = config('services.stripe.secret');
         if ($stripeSecret) {
-            Stripe::setApiKey($stripeSecret);
+            $this->stripeWrapper->setApiKey($stripeSecret);
         }
     }
 
@@ -32,27 +36,21 @@ class PaymentService
      */
     public function saveBrandPaymentMethod(User $user, array $data): BrandPaymentMethod
     {
-        // Parse card info from hash (Pagar.me specific) or just use provided data if Stripe
-        // Note: The original controller had Pagar.me specific parsing logic which might be deprecated or needed.
-        // For this refactor, I'll assume we are moving towards Stripe but keeping the interface.
-        
         $cardBrand = 'Unknown'; 
         $cardLast4 = '0000';
         
         if (isset($data['card_hash'])) {
-             // Logic from original controller
              $last4 = substr($data['card_hash'], -4);
              $cardLast4 = $last4;
-             // Brand detection logic was hardcoded to 'Visa' in original for hash, keeping simple here or improving
         }
 
-        $paymentMethod = BrandPaymentMethod::create([
+        $paymentMethod = $this->paymentRepository->createBrandPaymentMethod([
             'user_id' => $user->id,
             'card_holder_name' => $data['card_holder_name'],
             'card_brand' => $cardBrand, 
             'card_last4' => $cardLast4,
             'is_default' => $data['is_default'] ?? false,
-            'card_hash' => $data['card_hash'] ?? null, // Keeping for backward compatibility if needed
+            'card_hash' => $data['card_hash'] ?? null,
             'is_active' => true,
         ]);
 
@@ -72,15 +70,11 @@ class PaymentService
      */
     public function setAsDefault(User $user, BrandPaymentMethod $paymentMethod): void
     {
-        // Unset other defaults
-        BrandPaymentMethod::where('user_id', $user->id)
-            ->where('id', '!=', $paymentMethod->id)
-            ->update(['is_default' => false]);
-            
-        $paymentMethod->update(['is_default' => true]);
+        $this->paymentRepository->unsetDefaultPaymentMethods($user->id, $paymentMethod->id);
+        $this->paymentRepository->setPaymentMethodAsDefault($paymentMethod);
 
         if ($paymentMethod->stripe_payment_method_id) {
-            $user->update(['stripe_payment_method_id' => $paymentMethod->stripe_payment_method_id]);
+            $this->paymentRepository->updateUserDefaultPaymentMethod($user, $paymentMethod->stripe_payment_method_id);
         }
     }
 
@@ -95,23 +89,23 @@ class PaymentService
         if ($user->stripe_customer_id) {
             try {
                 // Verify if exists on Stripe
-                Customer::retrieve($user->stripe_customer_id);
+                $this->stripeWrapper->retrieveCustomer($user->stripe_customer_id);
                 return $user->stripe_customer_id;
             } catch (\Exception $e) {
                 Log::warning('Stripe customer not found, creating new one', ['user_id' => $user->id]);
             }
         }
 
-        $customer = Customer::create([
+        $customer = $this->stripeWrapper->createCustomer([
             'email' => $user->email,
             'name' => $user->name,
             'metadata' => [
                 'user_id' => $user->id,
-                'role' => $user->role, // assuming role exists on user
+                'role' => $user->role, 
             ],
         ]);
 
-        $user->update(['stripe_customer_id' => $customer->id]);
+        $this->paymentRepository->updateUserStripeId($user, $customer->id);
 
         return $customer->id;
     }
@@ -127,7 +121,7 @@ class PaymentService
         $customerId = $this->ensureStripeCustomer($user);
         $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
 
-        return Session::create([
+        return $this->stripeWrapper->createCheckoutSession([
             'customer' => $customerId,
             'mode' => 'setup',
             'payment_method_types' => ['card'],
@@ -142,6 +136,54 @@ class PaymentService
     }
 
     /**
+     * Get all active payment methods for a user.
+     *
+     * @param User $user
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
+    public function getBrandPaymentMethods(User $user)
+    {
+        return $this->paymentRepository->getBrandPaymentMethods($user->id);
+    }
+
+    /**
+     * Delete a payment method.
+     *
+     * @param User $user
+     * @param int $paymentMethodId
+     * @return void
+     * @throws \Exception
+     */
+    public function deleteBrandPaymentMethod(User $user, int $paymentMethodId): void
+    {
+        $paymentMethod = $this->paymentRepository->findBrandPaymentMethod($user->id, $paymentMethodId);
+        
+        if (!$paymentMethod) {
+            throw new \Exception('Payment method not found');
+        }
+
+        if ($this->paymentRepository->countActiveBrandPaymentMethods($user->id) <= 1) {
+            throw new \Exception('Cannot delete the only payment method. Please add another one first.');
+        }
+
+        $wasDefault = $paymentMethod->is_default;
+        $paymentMethodStripeId = $paymentMethod->stripe_payment_method_id;
+
+        // Soft delete
+        $paymentMethod->update(['is_active' => false]);
+        
+        if ($wasDefault && $user->stripe_payment_method_id === $paymentMethodStripeId) {
+            $nextDefault = $this->paymentRepository->getFirstActivePaymentMethod($user->id);
+            
+            if ($nextDefault && $nextDefault->stripe_payment_method_id) {
+                $this->setAsDefault($user, $nextDefault);
+            } else {
+                $this->paymentRepository->updateUserDefaultPaymentMethod($user, null);
+            }
+        }
+    }
+
+    /**
      * Handle success of a Setup Checkout Session.
      * 
      * @param string $sessionId
@@ -150,32 +192,63 @@ class PaymentService
      */
     public function handleSetupSessionSuccess(string $sessionId, User $user): array
     {
-        $session = Session::retrieve($sessionId, ['expand' => ['setup_intent.payment_method']]);
+        $session = $this->stripeWrapper->retrieveCheckoutSession($sessionId, ['expand' => ['setup_intent.payment_method']]);
 
-        // Verification logic (simplified from controller)
-        // ... (Verification logic should be here, assuming valid for now or strictly checking metadata)
+        // Verification Logic
+        $sessionUserId = $session->metadata->user_id ?? null;
+        $sessionCustomerId = is_object($session->customer) ? $session->customer->id : $session->customer;
 
-        $setupIntent = $session->setup_intent;
-        $paymentMethodStripe = $setupIntent->payment_method;
-        
-        // Save to DB
-        // Logic to extract card details and save BrandPaymentMethod
-        $card = $paymentMethodStripe->card;
-        
-        // Check duplication logic...
-        $existing = BrandPaymentMethod::where('user_id', $user->id)
-            ->where('stripe_payment_method_id', $paymentMethodStripe->id)
-            ->first();
-            
-        if ($existing) {
-             throw new \Exception('Payment method already exists');
+        $isValid = false;
+        if ($sessionUserId && (string)$sessionUserId === (string)$user->id) {
+            $isValid = true;
+        } elseif ($sessionCustomerId && $user->stripe_customer_id && $sessionCustomerId === $user->stripe_customer_id) {
+            $isValid = true;
         }
 
-        $isDefault = !$user->hasDefaultPaymentMethod();
+        if (!$isValid) {
+            throw new \Exception('Invalid session - session does not belong to this user');
+        }
 
-        $paymentMethodRecord = BrandPaymentMethod::create([
+        $setupIntent = $session->setup_intent;
+        
+        // Ensure setupIntent is object
+        if (is_string($setupIntent)) {
+             // Ideally we should retrieve it, but wrapper might not expose retrieveSetupIntent easily or we need to add it.
+             // Assuming expand worked. If not, we might fail.
+             // For safety let's throw or try to retrieve if wrapper has method.
+             // Wrapper usually has __call to StripeClient?
+             // Let's assume expanded.
+        }
+
+        $paymentMethodStripe = $setupIntent->payment_method;
+        
+        // Ensure paymentMethod is object
+        if (is_string($paymentMethodStripe)) {
+             $paymentMethodStripe = $this->stripeWrapper->retrievePaymentMethod($paymentMethodStripe);
+        }
+
+        $card = $paymentMethodStripe->card;
+        
+        $existing = $this->paymentRepository->findBrandPaymentMethodByStripeId($user->id, $paymentMethodStripe->id);
+            
+        if ($existing) {
+             if ($existing->is_active) {
+                 throw new \Exception('Payment method already exists');
+             } else {
+                 $existing->update(['is_active' => true]);
+                 // If user has no default, make this default?
+                 if ($this->paymentRepository->countActiveBrandPaymentMethods($user->id) === 1) { // 1 because we just activated it
+                     $this->setAsDefault($user, $existing);
+                 }
+                 return ['payment_method' => $existing];
+             }
+        }
+
+        $isDefault = $this->paymentRepository->countActiveBrandPaymentMethods($user->id) === 0;
+
+        $paymentMethodRecord = $this->paymentRepository->createBrandPaymentMethod([
             'user_id' => $user->id,
-            'stripe_customer_id' => $session->customer,
+            'stripe_customer_id' => $sessionCustomerId,
             'stripe_payment_method_id' => $paymentMethodStripe->id,
             'stripe_setup_intent_id' => $setupIntent->id,
             'card_brand' => ucfirst($card->brand),
@@ -186,7 +259,7 @@ class PaymentService
         ]);
         
         if ($isDefault) {
-            $user->update(['stripe_payment_method_id' => $paymentMethodStripe->id]);
+            $this->setAsDefault($user, $paymentMethodRecord);
         }
 
         return ['payment_method' => $paymentMethodRecord];

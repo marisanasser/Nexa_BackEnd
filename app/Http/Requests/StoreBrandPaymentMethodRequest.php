@@ -39,12 +39,11 @@ class StoreBrandPaymentMethodRequest extends FormRequest
      *
      * @return array<string, mixed>
      */
-    public function rules()
+    public function rules(): array
     {
         return [
-            'card_hash' => 'required|string',
             'card_holder_name' => 'required|string|max:255',
-            'cnpj' => 'required|string|regex:/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/',
+            'card_hash' => 'nullable|string',
             'is_default' => 'boolean',
         ];
     }
