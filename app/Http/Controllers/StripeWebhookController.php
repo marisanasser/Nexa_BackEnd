@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use App\Models\WebhookEvent;
 use Stripe\Subscription as StripeSubscription;
 use App\Models\Subscription as LocalSubscription;
 use App\Models\SubscriptionPlan;
@@ -54,10 +55,44 @@ class StripeWebhookController extends Controller
                 'livemode' => $event->livemode ?? false,
             ]);
 
-            
+            // Idempotency check using Database
             $eventId = $event->id ?? null;
+            if ($eventId) {
+                // First check if we have already processed this event
+                $existingEvent = WebhookEvent::where('stripe_event_id', $eventId)->first();
+                
+                if ($existingEvent && $existingEvent->status === 'processed') {
+                    Log::info('Stripe event already processed (Database)', ['event_id' => $eventId]);
+                    return response()->json(['status' => 'duplicate', 'source' => 'database']);
+                }
+                
+                // If it exists but failed or is processing, we might want to retry or just log it
+                // For now, let's treat 'processing' as duplicate to avoid race conditions
+                if ($existingEvent && $existingEvent->status === 'processing') {
+                     Log::info('Stripe event currently processing', ['event_id' => $eventId]);
+                     return response()->json(['status' => 'processing']);
+                }
+
+                // If not exists, create record
+                if (!$existingEvent) {
+                    try {
+                        WebhookEvent::create([
+                            'stripe_event_id' => $eventId,
+                            'type' => $event->type,
+                            'payload' => json_decode($payload, true),
+                            'status' => 'processing',
+                        ]);
+                    } catch (\Exception $e) {
+                         // Fallback for race condition where another request created it just now
+                         Log::warning('Could not create WebhookEvent record, might be duplicate', ['error' => $e->getMessage()]);
+                         return response()->json(['status' => 'duplicate']);
+                    }
+                }
+            }
+            
+            // Fallback to Cache for extra safety (or if DB fails)
             if ($eventId && \Illuminate\Support\Facades\Cache::has('stripe_event_'.$eventId)) {
-                return response()->json(['status' => 'duplicate']);
+                return response()->json(['status' => 'duplicate', 'source' => 'cache']);
             }
             if ($eventId) {
                 \Illuminate\Support\Facades\Cache::put('stripe_event_'.$eventId, true, 3600);
@@ -70,34 +105,32 @@ class StripeWebhookController extends Controller
                 'created' => $event->created ?? null,
             ]);
             
-            switch ($event->type) {
-                case 'checkout.session.completed':
-                    $session = $event->data->object;
-                    
-                    Log::info('Stripe checkout.session.completed event received', [
-                        'event_id' => $event->id,
-                        'session_id' => $session->id ?? 'no_id',
-                        'customer_id' => $session->customer ?? 'no_customer',
-                        'subscription_id' => $session->subscription ?? null,
-                        'mode' => $session->mode ?? 'unknown',
-                    ]);
-                    
-                    
-                    if ($session->mode === 'subscription' && $session->subscription) {
-                        $this->handleCheckoutSessionCompleted($session);
-                    }
-                    
-                    elseif ($session->mode === 'payment') {
-                        $this->handleContractFundingCheckout($session);
-                    }
-                    
-                    elseif ($session->mode === 'setup') {
-                        $this->handleSetupModeCheckout($session);
-                    }
-                    break;
-                    
-                case 'invoice.paid':
-                    $invoice = $event->data->object;
+            try {
+                switch ($event->type) {
+                    case 'checkout.session.completed':
+                        $session = $event->data->object;
+                        
+                        Log::info('Stripe checkout.session.completed event received', [
+                            'event_id' => $event->id,
+                            'session_id' => $session->id ?? 'no_id',
+                            'customer_id' => $session->customer ?? 'no_customer',
+                            'subscription_id' => $session->subscription ?? null,
+                            'mode' => $session->mode ?? 'unknown',
+                        ]);
+                        
+                        if ($session->mode === 'subscription' && $session->subscription) {
+                            $this->handleCheckoutSessionCompleted($session);
+                        }
+                        elseif ($session->mode === 'payment') {
+                            $this->handleContractFundingCheckout($session);
+                        }
+                        elseif ($session->mode === 'setup') {
+                            $this->handleSetupModeCheckout($session);
+                        }
+                        break;
+                        
+                    case 'invoice.paid':
+                        $invoice = $event->data->object;
                     $stripeSubscriptionId = $invoice->subscription ?? null;
                     
                     Log::info('Stripe invoice.paid event received', [
@@ -179,6 +212,17 @@ class StripeWebhookController extends Controller
                     ]);
             }
 
+            // Update event status to processed
+            if (isset($existingEvent)) {
+                $existingEvent->update(['status' => 'processed']);
+            } elseif ($eventId) {
+                try {
+                    WebhookEvent::where('stripe_event_id', $eventId)->update(['status' => 'processed']);
+                } catch (\Exception $e) {
+                     // Ignore if update fails
+                }
+            }
+
             return response()->json(['received' => true]);
         } catch (\UnexpectedValueException $e) {
             Log::error('Stripe webhook payload error', ['error' => $e->getMessage()]);
@@ -187,7 +231,28 @@ class StripeWebhookController extends Controller
             Log::error('Stripe webhook signature error', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Invalid signature'], 400);
         } catch (\Exception $e) {
-            Log::error('Stripe webhook processing error', ['error' => $e->getMessage()]);
+            Log::error('Stripe webhook processing error', [
+                'error' => $e->getMessage(),
+                'event_id' => $event->id ?? 'unknown',
+            ]);
+
+            // Update event status to failed
+            if (isset($existingEvent)) {
+                $existingEvent->update([
+                    'status' => 'failed',
+                    'error_message' => $e->getMessage()
+                ]);
+            } elseif (isset($eventId)) {
+                try {
+                    WebhookEvent::where('stripe_event_id', $eventId)->update([
+                        'status' => 'failed',
+                        'error_message' => $e->getMessage()
+                    ]);
+                } catch (\Exception $ex) {
+                     // Ignore
+                }
+            }
+
             return response()->json(['error' => 'Webhook processing failed'], 500);
         }
     }
