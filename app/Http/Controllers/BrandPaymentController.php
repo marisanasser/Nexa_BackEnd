@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\BrandPaymentMethod;
 use App\Models\User;
 use App\Http\Requests\StoreBrandPaymentMethodRequest;
+use App\Services\PaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Http;
@@ -19,19 +20,11 @@ use Stripe\SetupIntent;
 
 class BrandPaymentController extends Controller
 {
-    private string $apiKey;
-    private string $baseUrl;
+    private PaymentService $paymentService;
 
-    public function __construct()
+    public function __construct(PaymentService $paymentService)
     {
-        $this->apiKey = env('PAGARME_API_KEY', '');
-        $this->baseUrl = 'https://api.pagar.me/core/v5';
-        
-        
-        $stripeSecret = config('services.stripe.secret');
-        if ($stripeSecret) {
-            Stripe::setApiKey($stripeSecret);
-        }
+        $this->paymentService = $paymentService;
     }
 
     
@@ -45,11 +38,7 @@ class BrandPaymentController extends Controller
         ]);
 
         try {
-            
-            
-            $cardInfo = $this->parseCardInfo($request->card_hash, $request->card_holder_name);
-
-            
+            // Check for duplicate (Pagar.me hash specific)
             $existingMethod = BrandPaymentMethod::where('user_id', $user->id)
                 ->where('card_hash', $request->card_hash)
                 ->where('is_active', true)
@@ -62,42 +51,17 @@ class BrandPaymentController extends Controller
                 ], 400);
             }
 
-            
-            $paymentMethod = BrandPaymentMethod::create([
-                'user_id' => $user->id,
-                'card_holder_name' => $request->card_holder_name,
-                'card_brand' => $cardInfo['brand'],
-                'card_last4' => $cardInfo['last4'],
-                'is_default' => $request->is_default ?? false,
-                'card_hash' => $request->card_hash,
-                'is_active' => true,
-            ]);
-
-            
-            if ($request->is_default) {
-                BrandPaymentMethod::where('user_id', $user->id)
-                    ->where('id', '!=', $paymentMethod->id)
-                    ->update(['is_default' => false]);
-            }
+            $paymentMethod = $this->paymentService->saveBrandPaymentMethod($user, $request->all());
 
             Log::info('Payment method created successfully', [
                 'user_id' => $user->id,
                 'payment_method_id' => $paymentMethod->id,
-                'card_brand' => $cardInfo['brand'],
-                'card_last4' => $cardInfo['last4']
             ]);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Payment method added successfully',
-                'data' => [
-                    'payment_method_id' => $paymentMethod->id,
-                    'card_holder_name' => $paymentMethod->card_holder_name,
-                    'card_brand' => $paymentMethod->card_brand,
-                    'card_last4' => $paymentMethod->card_last4,
-                    'is_default' => $paymentMethod->is_default,
-                    'created_at' => $paymentMethod->created_at
-                ]
+                'data' => $paymentMethod
             ]);
 
         } catch (\Exception $e) {
@@ -174,17 +138,13 @@ class BrandPaymentController extends Controller
         }
 
         $paymentMethod = BrandPaymentMethod::find($request->payment_method_id);
-        $paymentMethod->setAsDefault();
-
         
-        if ($paymentMethod->stripe_payment_method_id) {
-            $user->update(['stripe_payment_method_id' => $paymentMethod->stripe_payment_method_id]);
-            Log::info('Updated user default payment method', [
-                'user_id' => $user->id,
-                'stripe_payment_method_id' => $paymentMethod->stripe_payment_method_id,
-                'payment_method_id' => $paymentMethod->id,
-            ]);
-        }
+        $this->paymentService->setAsDefault($user, $paymentMethod);
+
+        Log::info('Updated user default payment method', [
+            'user_id' => $user->id,
+            'payment_method_id' => $paymentMethod->id,
+        ]);
 
         return response()->json([
             'success' => true,
@@ -284,83 +244,12 @@ class BrandPaymentController extends Controller
                 'user_id' => $user->id,
             ]);
 
-            
-            $customerId = $user->stripe_customer_id;
-            
-            if (!$customerId) {
-                Log::info('Creating new Stripe customer for brand', [
-                    'user_id' => $user->id,
-                    'email' => $user->email,
-                ]);
-
-                $customer = Customer::create([
-                    'email' => $user->email,
-                    'name' => $user->name,
-                    'metadata' => [
-                        'user_id' => $user->id,
-                        'role' => 'brand',
-                    ],
-                ]);
-
-                $customerId = $customer->id;
-                $user->update(['stripe_customer_id' => $customerId]);
-
-                Log::info('Stripe customer created for brand', [
-                    'user_id' => $user->id,
-                    'customer_id' => $customerId,
-                ]);
-            } else {
-                
-                try {
-                    Customer::retrieve($customerId);
-                } catch (\Exception $e) {
-                    Log::warning('Stripe customer not found, creating new one', [
-                        'user_id' => $user->id,
-                        'old_customer_id' => $customerId,
-                    ]);
-
-                    $customer = Customer::create([
-                        'email' => $user->email,
-                        'name' => $user->name,
-                        'metadata' => [
-                            'user_id' => $user->id,
-                            'role' => 'brand',
-                        ],
-                    ]);
-
-                    $customerId = $customer->id;
-                    $user->update(['stripe_customer_id' => $customerId]);
-                }
-            }
-
-            
-            $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
-
-            
-            $session = Session::create([
-                'customer' => $customerId,
-                'mode' => 'setup',
-                'payment_method_types' => ['card'],
-                'locale' => 'pt-BR',
-                'success_url' => $frontendUrl . '/brand/payment-methods?success=true&session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url' => $frontendUrl . '/brand/payment-methods?canceled=true',
-                'metadata' => [
-                    'user_id' => (string) $user->id, 
-                    'type' => 'payment_method_setup',
-                ],
-            ]);
-            
-            Log::info('Checkout session created with metadata', [
-                'session_id' => $session->id,
-                'user_id' => $user->id,
-                'customer_id' => $customerId,
-                'metadata' => $session->metadata ?? null,
-            ]);
+            $session = $this->paymentService->createSetupCheckoutSession($user);
 
             Log::info('Stripe Checkout Session created', [
                 'user_id' => $user->id,
                 'session_id' => $session->id,
-                'customer_id' => $customerId,
+                'customer_id' => $session->customer,
             ]);
 
             return response()->json([
