@@ -36,14 +36,9 @@ use App\Http\Controllers\StudentController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\StripeController;
 use App\Http\Controllers\StripeWebhookController;
+use App\Http\Controllers\HealthCheckController;
 
-Route::get('/health', function () {
-    return response()->json([
-        'status' => 'ok',
-        'message' => 'Nexa API is running',
-        'timestamp' => now()->toISOString()
-    ]);
-});
+Route::get('/health', HealthCheckController::class);
 
 require __DIR__.'/auth.php';
 
