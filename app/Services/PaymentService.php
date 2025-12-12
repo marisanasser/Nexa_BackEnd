@@ -40,6 +40,12 @@ class PaymentService
         $cardLast4 = '0000';
         
         if (isset($data['card_hash'])) {
+             // Check for duplicates
+             $existing = $this->paymentRepository->findBrandPaymentMethodByCardHash($user->id, $data['card_hash']);
+             if ($existing) {
+                 throw new \Exception('This payment method already exists');
+             }
+
              $last4 = substr($data['card_hash'], -4);
              $cardLast4 = $last4;
         }

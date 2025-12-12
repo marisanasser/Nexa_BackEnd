@@ -12,6 +12,14 @@ class PaymentRepository
         return BrandPaymentMethod::create($data);
     }
 
+    public function findBrandPaymentMethodByCardHash(int $userId, string $cardHash): ?BrandPaymentMethod
+    {
+        return BrandPaymentMethod::where('user_id', $userId)
+            ->where('card_hash', $cardHash)
+            ->where('is_active', true)
+            ->first();
+    }
+
     public function unsetDefaultPaymentMethods(int $userId, int $excludeMethodId): void
     {
         BrandPaymentMethod::where('user_id', $userId)

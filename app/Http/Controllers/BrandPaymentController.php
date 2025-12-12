@@ -38,31 +38,6 @@ class BrandPaymentController extends Controller
         ]);
 
         try {
-            // Check for duplicate (Pagar.me hash specific)
-            // Use Repository instead of direct Model access to avoid DB issues in tests without driver
-            // But for now, we can mock the Repository in the service, but here in controller we use Eloquent directly.
-            // Let's delegate this check to PaymentService too!
-            
-            // $existingMethod = BrandPaymentMethod::where('user_id', $user->id)
-            //     ->where('card_hash', $request->card_hash)
-            //     ->where('is_active', true)
-            //     ->first();
-
-            // if ($existingMethod) {
-            //     return response()->json([
-            //         'success' => false,
-            //         'message' => 'This payment method already exists',
-            //     ], 400);
-            // }
-
-            // Refactored: Moved duplicate check inside service or just call service directly.
-            // If we move it to service, we need to update service.
-            // For now, let's just assume the service handles it or we wrap this in a repository call if we want to be pure.
-            // To fix the test quickly without DB driver, we must avoid BrandPaymentMethod::where here.
-            
-            // Let's verify if we can skip this check or move it to Service.
-            // The user wants "Complete Flow" refactoring. Moving logic to Service is good.
-            
             $paymentMethod = $this->paymentService->saveBrandPaymentMethod($user, $request->all());
 
             Log::info('Payment method created successfully', [
