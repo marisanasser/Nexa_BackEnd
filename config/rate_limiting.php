@@ -5,7 +5,7 @@ return [
 
     'auth' => [
         'login' => [
-            'attempts' => 30,        
+            'attempts' => 10,        
             'decay_minutes' => 1,    
             'lockout_minutes' => 3,  
         ],
@@ -23,7 +23,7 @@ return [
 
     'api' => [
         'general' => [
-            'attempts' => 1000,      
+            'attempts' => 300,      
             'decay_minutes' => 1,    
         ],
         'notifications' => [
@@ -35,7 +35,7 @@ return [
             'decay_minutes' => 1,    
         ],
         'payment' => [
-            'attempts' => 100,       
+            'attempts' => 60,       
             'decay_minutes' => 1,    
         ],
     ],

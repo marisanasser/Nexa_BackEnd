@@ -17,7 +17,7 @@ return [
 
     
 
-    'expiration' => 60 * 24, 
+    'expiration' => env('SANCTUM_EXPIRATION', 60 * 24), 
 
     
 

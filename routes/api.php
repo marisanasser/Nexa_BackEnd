@@ -268,7 +268,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/brand/transactions', [ContractPaymentController::class, 'getBrandTransactionHistory'])->middleware(['throttle:dashboard']);
     
     
-    Route::prefix('freelancer')->group(function () {
+    Route::prefix('freelancer')->middleware(['throttle:payment'])->group(function () {
         
         Route::post('/register-bank', [PaymentController::class, 'registerBankAccount']); 
         Route::get('/bank-info', [PaymentController::class, 'getBankInfo']); 
@@ -287,7 +287,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     });
 
     
-    Route::prefix('brand-payment')->group(function () {
+    Route::prefix('brand-payment')->middleware(['throttle:payment'])->group(function () {
         Route::post('/save-method', [BrandPaymentController::class, 'savePaymentMethod']);
         Route::get('/methods', [BrandPaymentController::class, 'getPaymentMethods']);
         Route::post('/set-default', [BrandPaymentController::class, 'setDefaultPaymentMethod']);
