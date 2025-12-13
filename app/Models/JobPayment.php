@@ -178,7 +178,7 @@ class JobPayment extends Model
         $balance->increment('available_balance', $this->creator_amount);
     }
 
-    public function refund(string $reason = null): bool
+    public function refund(?string $reason = null): bool
     {
         if (!$this->isCompleted()) {
             return false;

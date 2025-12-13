@@ -213,7 +213,7 @@ class CampaignTimeline extends Model
         return true;
     }
 
-    public function markAsApproved(string $comment = null): bool
+    public function markAsApproved(?string $comment = null): bool
     {
         if (!$this->canBeApproved()) {
             return false;
@@ -227,7 +227,7 @@ class CampaignTimeline extends Model
         return true;
     }
 
-    public function markAsDelayed(string $justification = null): bool
+    public function markAsDelayed(?string $justification = null): bool
     {
         $this->update([
             'status' => 'delayed',

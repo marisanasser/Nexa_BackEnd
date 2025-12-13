@@ -1382,4 +1382,95 @@ class NotificationService
             ]);
         }
     }
+
+    public static function notifyUserOfContractCancelled($contract, ?string $reason = null): void
+    {
+        try {
+            $users = [$contract->brand_id, $contract->creator_id];
+            
+            foreach ($users as $userId) {
+                $notification = Notification::create([
+                    'user_id' => $userId,
+                    'type' => 'contract_cancelled',
+                    'title' => 'Contrato Cancelado',
+                    'message' => "O contrato '{$contract->title}' foi cancelado." . ($reason ? " Motivo: {$reason}" : ""),
+                    'data' => [
+                        'contract_id' => $contract->id,
+                        'contract_title' => $contract->title,
+                        'cancelled_at' => $contract->cancelled_at ? $contract->cancelled_at->toISOString() : now()->toISOString(),
+                        'reason' => $reason,
+                    ],
+                    'is_read' => false,
+                ]);
+                
+                self::sendSocketNotification($userId, $notification);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to notify users of contract cancellation', [
+                'contract_id' => $contract->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public static function notifyAdminOfContractDispute($contract, ?string $reason = null): void
+    {
+        try {
+            $adminUsers = User::where('role', 'admin')->get();
+            
+            foreach ($adminUsers as $admin) {
+                $notification = Notification::create([
+                    'user_id' => $admin->id,
+                    'type' => 'contract_dispute',
+                    'title' => 'Disputa de Contrato',
+                    'message' => "O contrato '{$contract->title}' entrou em disputa." . ($reason ? " Motivo: {$reason}" : ""),
+                    'data' => [
+                        'contract_id' => $contract->id,
+                        'contract_title' => $contract->title,
+                        'brand_id' => $contract->brand_id,
+                        'creator_id' => $contract->creator_id,
+                        'reason' => $reason,
+                        'disputed_at' => now()->toISOString(),
+                    ],
+                    'is_read' => false,
+                ]);
+                
+                self::sendSocketNotification($admin->id, $notification);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to notify admin of contract dispute', [
+                'contract_id' => $contract->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public static function notifyUserOfPaymentRefunded($jobPayment, ?string $reason = null): void
+    {
+        try {
+            $notification = Notification::create([
+                'user_id' => $jobPayment->creator_id,
+                'type' => 'payment_refunded',
+                'title' => 'Pagamento Estornado',
+                'message' => "O pagamento de R$ " . number_format($jobPayment->creator_amount, 2, ',', '.') . " foi estornado." . ($reason ? " Motivo: {$reason}" : ""),
+                'data' => [
+                    'job_payment_id' => $jobPayment->id,
+                    'contract_id' => $jobPayment->contract_id,
+                    'amount' => $jobPayment->creator_amount,
+                    'formatted_amount' => 'R$ ' . number_format($jobPayment->creator_amount, 2, ',', '.'),
+                    'refund_reason' => $reason,
+                    'refunded_at' => now()->toISOString(),
+                ],
+                'is_read' => false,
+            ]);
+            
+            self::sendSocketNotification($jobPayment->creator_id, $notification);
+        } catch (\Exception $e) {
+            Log::error('Failed to notify user of payment refunded', [
+                'job_payment_id' => $jobPayment->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
 } 

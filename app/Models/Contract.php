@@ -134,7 +134,7 @@ class Contract extends Model
         ];
     }
 
-    public function messages(): HasMany
+    public function messages(): HasManyThrough
     {
         return $this->hasManyThrough(Message::class, Offer::class, 'id', 'chat_room_id', 'offer_id', 'chat_room_id');
     }
@@ -219,7 +219,7 @@ class Contract extends Model
     }
 
     
-    public function terminate(string $reason = null): bool
+    public function terminate(?string $reason = null): bool
     {
         if (!$this->canBeTerminated()) {
             return false;
@@ -749,7 +749,7 @@ class Contract extends Model
     
     
 
-    public function cancel(string $reason = null): bool
+    public function cancel(?string $reason = null): bool
     {
         if (!$this->canBeCancelled()) {
             return false;
@@ -822,7 +822,7 @@ class Contract extends Model
         }
     }
 
-    public function dispute(string $reason = null): bool
+    public function dispute(?string $reason = null): bool
     {
         if (!$this->isActive()) {
             return false;
@@ -838,7 +838,7 @@ class Contract extends Model
         return true;
     }
 
-    private function updateCreatorBalance(float $amount = null): void
+    private function updateCreatorBalance(?float $amount = null): void
     {
         $amount = $amount ?? $this->creator_amount;
         
