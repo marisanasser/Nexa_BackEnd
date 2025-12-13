@@ -108,6 +108,57 @@ class BrandPaymentControllerTest extends TestCase
         $this->assertEquals('http://test-url.com', $data['url']);
     }
 
+    public function test_delete_payment_method_success()
+    {
+        $requestData = ['payment_method_id' => 10];
+        $request = new Request($requestData);
+        
+        // Mock Validator
+        Validator::shouldReceive('make')->once()->andReturnUsing(function ($data, $rules) {
+            $validator = Mockery::mock(\Illuminate\Validation\Validator::class);
+            $validator->shouldReceive('fails')->andReturn(false);
+            return $validator;
+        });
+
+        $this->paymentService->shouldReceive('deleteBrandPaymentMethod')
+            ->once()
+            ->with($this->user, 10);
+
+        $response = $this->controller->deletePaymentMethod($request);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertTrue($response->getData(true)['success']);
+    }
+
+    public function test_set_default_payment_method_success()
+    {
+        $requestData = ['payment_method_id' => 10];
+        $request = new Request($requestData);
+        
+        // Mock Validator
+        Validator::shouldReceive('make')->once()->andReturnUsing(function ($data, $rules) {
+            $validator = Mockery::mock(\Illuminate\Validation\Validator::class);
+            $validator->shouldReceive('fails')->andReturn(false);
+            return $validator;
+        });
+
+        $mockPaymentMethod = new BrandPaymentMethod(['id' => 10]);
+
+        $this->paymentService->shouldReceive('getBrandPaymentMethod')
+            ->once()
+            ->with($this->user, 10)
+            ->andReturn($mockPaymentMethod);
+
+        $this->paymentService->shouldReceive('setAsDefault')
+            ->once()
+            ->with($this->user, $mockPaymentMethod);
+
+        $response = $this->controller->setDefaultPaymentMethod($request);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertTrue($response->getData(true)['success']);
+    }
+
     public function test_create_checkout_session_fails_if_not_brand()
     {
         // Debugging Conclusion 3:
