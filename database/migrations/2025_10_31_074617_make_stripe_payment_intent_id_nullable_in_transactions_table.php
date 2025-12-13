@@ -13,15 +13,19 @@ return new class extends Migration
         
         DB::statement('DROP INDEX IF EXISTS transactions_stripe_payment_intent_id_unique');
         
-        
-        DB::statement('ALTER TABLE transactions ALTER COLUMN stripe_payment_intent_id DROP NOT NULL');
+        if (DB::getDriverName() !== 'sqlite') {
+            
+            DB::statement('ALTER TABLE transactions ALTER COLUMN stripe_payment_intent_id DROP NOT NULL');
+        }
     }
 
     
     public function down(): void
     {
-        
-        DB::statement('ALTER TABLE transactions ALTER COLUMN stripe_payment_intent_id SET NOT NULL');
+        if (DB::getDriverName() !== 'sqlite') {
+            
+            DB::statement('ALTER TABLE transactions ALTER COLUMN stripe_payment_intent_id SET NOT NULL');
+        }
         
         
         DB::statement('

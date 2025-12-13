@@ -46,3 +46,4 @@ auth.json
 .env.backup
 .env.production
 .env.test
+*.sqlite

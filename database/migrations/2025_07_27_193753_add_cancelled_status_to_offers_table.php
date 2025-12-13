@@ -10,20 +10,24 @@ return new class extends Migration
     
     public function up(): void
     {
-        
-        DB::statement("ALTER TABLE offers DROP CONSTRAINT offers_status_check");
-        
-        
-        DB::statement("ALTER TABLE offers ADD CONSTRAINT offers_status_check CHECK (status = ANY (ARRAY['pending', 'accepted', 'rejected', 'expired', 'cancelled']))");
+        if (DB::getDriverName() !== 'sqlite') {
+            
+            DB::statement("ALTER TABLE offers DROP CONSTRAINT offers_status_check");
+            
+            
+            DB::statement("ALTER TABLE offers ADD CONSTRAINT offers_status_check CHECK (status = ANY (ARRAY['pending', 'accepted', 'rejected', 'expired', 'cancelled']))");
+        }
     }
 
     
     public function down(): void
     {
-        
-        DB::statement("ALTER TABLE offers DROP CONSTRAINT offers_status_check");
-        
-        
-        DB::statement("ALTER TABLE offers ADD CONSTRAINT offers_status_check CHECK (status = ANY (ARRAY['pending', 'accepted', 'rejected', 'expired']))");
+        if (DB::getDriverName() !== 'sqlite') {
+            
+            DB::statement("ALTER TABLE offers DROP CONSTRAINT offers_status_check");
+            
+            
+            DB::statement("ALTER TABLE offers ADD CONSTRAINT offers_status_check CHECK (status = ANY (ARRAY['pending', 'accepted', 'rejected', 'expired']))");
+        }
     }
 };

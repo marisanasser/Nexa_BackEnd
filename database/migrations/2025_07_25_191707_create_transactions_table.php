@@ -12,7 +12,7 @@ return new class extends Migration
         Schema::create('transactions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->string('pagarme_transaction_id')->unique();
+            $table->string('pagarme_transaction_id')->nullable()->unique();
             $table->string('status'); 
             $table->decimal('amount', 10, 2); 
             $table->string('payment_method'); 

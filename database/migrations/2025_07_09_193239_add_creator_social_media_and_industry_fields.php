@@ -27,8 +27,10 @@ return new class extends Migration
         DB::statement("UPDATE users SET gender = 'other' WHERE gender IS NULL");
         
         
-        DB::statement('ALTER TABLE users ALTER COLUMN birth_date SET NOT NULL');
-        DB::statement('ALTER TABLE users ALTER COLUMN gender SET NOT NULL');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE users ALTER COLUMN birth_date SET NOT NULL');
+            DB::statement('ALTER TABLE users ALTER COLUMN gender SET NOT NULL');
+        }
     }
 
     
@@ -46,7 +48,9 @@ return new class extends Migration
         });
         
         
-        DB::statement('ALTER TABLE users ALTER COLUMN birth_date DROP NOT NULL');
-        DB::statement('ALTER TABLE users ALTER COLUMN gender DROP NOT NULL');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE users ALTER COLUMN birth_date DROP NOT NULL');
+            DB::statement('ALTER TABLE users ALTER COLUMN gender DROP NOT NULL');
+        }
     }
 }; 

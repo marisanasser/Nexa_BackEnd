@@ -12,7 +12,7 @@ return new class extends Migration
         Schema::create('messages', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('chat_room_id');
-            $table->unsignedBigInteger('sender_id');
+            $table->unsignedBigInteger('sender_id')->nullable();
             $table->text('message');
             $table->string('message_type')->default('text'); 
             $table->string('file_path')->nullable(); 
