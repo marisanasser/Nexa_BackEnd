@@ -29,7 +29,7 @@ class UserFactory extends Factory
             'student_expires_at' => null,
             'gender' => fake()->randomElement(['male', 'female', 'other']),
             'state' => fake()->optional()->state(),
-            'language' => fake()->randomElement(['en', 'es', 'fr', 'de']),
+            'languages' => [fake()->randomElement(['en', 'es', 'fr', 'de'])],
             'has_premium' => false,
             'premium_expires_at' => null,
             'free_trial_expires_at' => null,

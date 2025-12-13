@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -46,13 +47,13 @@ class BrandProfileController extends Controller
                     'whatsapp_number' => $user->whatsapp_number,
                     'gender' => $user->gender,
                     'state' => $user->state,
-                    'languages' => $user->languages ? json_decode($user->languages, true) : [],
+                    'languages' => $user->languages ?? [],
                     'role' => $user->role,
                     'created_at' => $user->created_at,
                     'updated_at' => $user->updated_at,
                 ]
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to retrieve profile: ' . $e->getMessage()
@@ -176,13 +177,13 @@ class BrandProfileController extends Controller
                     'whatsapp_number' => $user->whatsapp_number,
                     'gender' => $user->gender,
                     'state' => $user->state,
-                    'languages' => $user->languages ? json_decode($user->languages, true) : [],
+                    'languages' => $user->languages ?? [],
                     'role' => $user->role,
                     'created_at' => $user->created_at,
                     'updated_at' => $user->updated_at,
                 ]
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             error_log("Brand Profile - Error: " . $e->getMessage());
             return response()->json([
                 'success' => false,
@@ -243,7 +244,7 @@ class BrandProfileController extends Controller
                 'success' => true,
                 'message' => 'Password changed successfully'
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to change password: ' . $e->getMessage()
@@ -388,7 +389,7 @@ class BrandProfileController extends Controller
                     'updated_at' => $user->updated_at
                 ]
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to upload avatar: ' . $e->getMessage()
@@ -429,7 +430,7 @@ class BrandProfileController extends Controller
                 'success' => true,
                 'message' => 'Avatar deleted successfully'
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to delete avatar: ' . $e->getMessage()
@@ -560,7 +561,7 @@ class BrandProfileController extends Controller
                 'success' => true,
                 'avatar_url' => $avatarUrl
             ];
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return [
                 'success' => false,
                 'message' => 'Failed to process image: ' . $e->getMessage()
