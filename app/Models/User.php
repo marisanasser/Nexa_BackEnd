@@ -296,6 +296,26 @@ class User extends Authenticatable
     }
 
     
+    public function isBrand(): bool
+    {
+        return $this->role === 'brand';
+    }
+
+    public function isCreator(): bool
+    {
+        return $this->role === 'creator';
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isStudent(): bool
+    {
+        return $this->student_verified;
+    }
+
     public function getWithdrawalMethods()
     {
         $methods = WithdrawalMethod::getActiveMethods()
