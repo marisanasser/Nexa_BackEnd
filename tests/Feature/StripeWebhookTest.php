@@ -11,7 +11,6 @@ use Stripe\Checkout\Session;
 use Illuminate\Support\Facades\Event;
 use Mockery;
 use App\Services\PaymentService;
-
 use App\Repositories\WebhookEventRepository;
 
 class StripeWebhookTest extends TestCase
@@ -69,7 +68,9 @@ class StripeWebhookTest extends TestCase
             // Mock finding the user
             $mock->shouldReceive('findUserById')
                 ->once()
-                ->with($user->id) // The controller passes the value, PHP type juggling handles string/int match usually
+                ->with(Mockery::on(function ($arg) use ($user) {
+                    return (int)$arg === $user->id;
+                }))
                 ->andReturn($user);
 
             $mock->shouldReceive('handleSetupSessionSuccess')
@@ -127,14 +128,10 @@ class StripeWebhookTest extends TestCase
         $signature = $this->generateSignature($payloadJson, 'whsec_test_secret', $timestamp);
 
         // Mock PaymentService
-        // Use instance mock to allow for exact expectations in this test
-        // NOTE: Since we already mocked WebhookEventRepository in setUp via $this->mock, 
-        // we can just mock PaymentService here.
-        
         $this->mock(PaymentService::class, function ($mock) {
             $mock->shouldReceive('findUserById')
                 ->once()
-                ->with('999')
+                ->with(999) // Expect int 999
                 ->andReturnNull();
 
             // Should NOT call handleSetupSessionSuccess
@@ -148,13 +145,7 @@ class StripeWebhookTest extends TestCase
         ]);
 
         // 3. Assert
-        // Since we mock WebhookEventRepository, the code proceeds.
-        // It falls through to legacy logic.
-        // Legacy logic tries to find user by Stripe Customer ID (which doesn't exist).
-        // It logs a warning and returns void (success).
-        // So we expect 200 OK.
-        
-        $response->assertStatus(200); 
+        $response->assertStatus(200);
     }
 
     private function generateSignature($payload, $secret, $timestamp)

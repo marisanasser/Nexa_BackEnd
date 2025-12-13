@@ -84,4 +84,9 @@ class PaymentRepository
     {
         $paymentMethod->update(['is_active' => false]);
     }
+
+    public function findUserById(int $userId): ?User
+    {
+        return User::find($userId);
+    }
 }

@@ -208,6 +208,11 @@ class PaymentService
         }
     }
 
+    public function findUserById(int $userId): ?User
+    {
+        return $this->paymentRepository->findUserById($userId);
+    }
+
     /**
      * Handle success of a Setup Checkout Session.
      * 
