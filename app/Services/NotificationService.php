@@ -9,8 +9,6 @@ use App\Models\Bid;
 use App\Models\Message;
 use App\Models\DirectMessage;
 use App\Models\CampaignApplication;
-use App\Models\Portfolio;
-use App\Models\PortfolioItem;
 use App\Events\NotificationSent;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -362,6 +360,42 @@ class NotificationService
         }
     }
 
+    public static function notifyCreatorOfContractStarted(\App\Models\Contract $contract): void
+    {
+        try {
+            $notification = Notification::createContractStarted($contract->creator_id, [
+                'contract_id' => $contract->id,
+                'contract_title' => $contract->title,
+                'brand_name' => $contract->brand->name ?? 'Marca',
+            ]);
+            
+            self::sendSocketNotification($contract->creator_id, $notification);
+        } catch (\Exception $e) {
+            Log::error('Failed to notify creator of contract started', [
+                'contract_id' => $contract->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public static function notifyBrandOfContractStarted(\App\Models\Contract $contract): void
+    {
+        try {
+            $notification = Notification::createContractStarted($contract->brand_id, [
+                'contract_id' => $contract->id,
+                'contract_title' => $contract->title,
+                'creator_name' => $contract->creator->name ?? 'Criador',
+            ]);
+            
+            self::sendSocketNotification($contract->brand_id, $notification);
+        } catch (\Exception $e) {
+            Log::error('Failed to notify brand of contract started', [
+                'contract_id' => $contract->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
     
     public static function notifyCreatorsOfNewProject(Campaign $campaign): void
     {
@@ -388,7 +422,7 @@ class NotificationService
     }
 
     
-    public static function notifyBrandOfProjectStatus(Campaign $campaign, string $status, string $reason = null): void
+    public static function notifyBrandOfProjectStatus(Campaign $campaign, string $status, ?string $reason = null): void
     {
         try {
             if ($status === 'approved') {
@@ -435,7 +469,7 @@ class NotificationService
     }
 
     
-    public static function notifyCreatorOfProposalStatus(Bid $bid, string $status, string $reason = null): void
+    public static function notifyCreatorOfProposalStatus(Bid $bid, string $status, ?string $reason = null): void
     {
         try {
             $campaign = $bid->campaign;
@@ -648,7 +682,7 @@ class NotificationService
     }
 
     
-    public static function notifyUserOfOfferRejected($offer, string $reason = null): void
+    public static function notifyUserOfOfferRejected($offer, ?string $reason = null): void
     {
         try {
             $notification = Notification::create([
@@ -772,7 +806,7 @@ class NotificationService
     }
 
     
-    public static function notifyUserOfContractTerminated($contract, string $reason = null): void
+    public static function notifyUserOfContractTerminated($contract, ?string $reason = null): void
     {
         try {
             
@@ -1275,7 +1309,7 @@ class NotificationService
     }
 
     
-    public static function notifyUserOfPaymentFailed($jobPayment, string $reason = null): void
+    public static function notifyUserOfPaymentFailed($jobPayment, ?string $reason = null): void
     {
         try {
             $notification = Notification::create([

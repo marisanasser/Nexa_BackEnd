@@ -55,12 +55,12 @@ class BrandPaymentControllerTest extends TestCase
         $requestData = [
             'card_holder_name' => 'John Doe',
             'is_default' => true,
+            'card_hash' => 'some_hash',
         ];
 
         $request = Mockery::mock(StoreBrandPaymentMethodRequest::class);
         $request->shouldReceive('boolean')->with('is_default')->andReturn(true);
         $request->shouldReceive('all')->andReturn($requestData);
-        $request->card_hash = 'some_hash'; // Attribute access
 
         $mockPaymentMethod = new BrandPaymentMethod([
             'id' => 10,

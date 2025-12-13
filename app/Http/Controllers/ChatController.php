@@ -21,9 +21,13 @@ class ChatController extends Controller
     
     public function getChatRooms(): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
-        // \Log::info('Getting chat rooms', [ ... ]);
+        Log::info('Getting chat rooms', [
+            'user_id' => $user->id,
+            'role' => $user->role
+        ]);
         
         $chatRooms = collect();
 
@@ -34,7 +38,7 @@ class ChatController extends Controller
                 ->orderBy('last_message_at', 'desc') 
                 ->get();
                 
-            // \Log::info('Found chat rooms for brand', [ ... ]);
+            // Log::info('Found chat rooms for brand', [ ... ]);
         } elseif ($user->isCreator() || $user->isStudent()) {
             $chatRooms = ChatRoom::where('creator_id', $user->id)
                 ->with(['brand', 'campaign', 'lastMessage.sender'])
@@ -42,7 +46,7 @@ class ChatController extends Controller
                 ->orderBy('last_message_at', 'desc') 
                 ->get();
                 
-            // \Log::info('Found chat rooms for creator/student', [ ... ]);
+            // Log::info('Found chat rooms for creator/student', [ ... ]);
         } elseif ($user->isAdmin()) {
             
             $chatRooms = ChatRoom::with(['creator', 'brand', 'campaign', 'lastMessage.sender'])
@@ -50,7 +54,7 @@ class ChatController extends Controller
                 ->orderBy('last_message_at', 'desc') 
                 ->get();
                 
-            // \Log::info('Found chat rooms for admin', [ ... ]);
+            // Log::info('Found chat rooms for admin', [ ... ]);
         }
 
         $formattedRooms = $chatRooms->map(function ($room) use ($user) {
@@ -71,7 +75,7 @@ class ChatController extends Controller
             
             
             if (!$otherUser) {
-                \Log::warning('Skipping chat room with null other user', [
+                Log::warning('Skipping chat room with null other user', [
                     'room_id' => $room->room_id,
                     'brand_id' => $room->brand_id,
                     'creator_id' => $room->creator_id,
@@ -520,6 +524,7 @@ class ChatController extends Controller
             ], 422);
         }
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         if ($user->isAdmin()) {
@@ -573,6 +578,7 @@ class ChatController extends Controller
             ], 422);
         }
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         if (!$user->isBrand() && !$user->isAdmin()) {
@@ -630,6 +636,7 @@ class ChatController extends Controller
     
     public function sendGuideMessages(Request $request, string $roomId): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         Log::info('sendGuideMessages called', [

@@ -272,6 +272,19 @@ class Notification extends Model
         ]);
     }
 
+    public static function createContractStarted($userId, $contractData = []): self
+    {
+        $contractTitle = $contractData['contract_title'] ?? 'Contrato';
+        
+        return self::create([
+            'user_id' => $userId,
+            'type' => 'contract_started',
+            'title' => 'Contrato Iniciado',
+            'message' => "O contrato '{$contractTitle}' foi iniciado.",
+            'data' => $contractData,
+        ]);
+    }
+
     public static function createContractTerminated($userId, $contractData = []): self
     {
         $reason = $contractData['reason'] ?? 'Contrato encerrado';

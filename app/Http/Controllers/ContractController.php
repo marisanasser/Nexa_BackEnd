@@ -21,13 +21,13 @@ class ContractController extends Controller
 {
     use OfferChatMessageTrait;
 
-    
+
     private function createSystemMessage(ChatRoom $chatRoom, string $message, array $data = []): void
     {
         try {
             $messageData = [
                 'chat_room_id' => $chatRoom->id,
-                'sender_id' => null, 
+                'sender_id' => null,
                 'message' => $message,
                 'message_type' => 'system',
                 'offer_data' => json_encode($data),
@@ -35,9 +35,8 @@ class ContractController extends Controller
 
             \App\Models\Message::create($messageData);
 
-            
-            $chatRoom->update(['last_message_at' => now()]);
 
+            $chatRoom->update(['last_message_at' => now()]);
         } catch (\Exception $e) {
             Log::error('Failed to create system message', [
                 'chat_room_id' => $chatRoom->id,
@@ -47,12 +46,12 @@ class ContractController extends Controller
         }
     }
 
-    
+
     private function sendContractCompletionMessage(Contract $contract, User $brand): void
     {
         try {
             $chatRoom = $contract->offer->chatRoom ?? null;
-            
+
             if (!$chatRoom) {
                 Log::warning('No chat room found for contract completion message', [
                     'contract_id' => $contract->id,
@@ -61,10 +60,10 @@ class ContractController extends Controller
                 return;
             }
 
-            
+
             $message = \App\Models\Message::create([
                 'chat_room_id' => $chatRoom->id,
-                'sender_id' => null, 
+                'sender_id' => null,
                 'message' => '🎉 O contrato foi finalizado com sucesso! Para liberar o valor para saque, você precisa avaliar a marca clicando no botão abaixo.',
                 'message_type' => 'contract_completion',
                 'offer_data' => json_encode([
@@ -81,13 +80,12 @@ class ContractController extends Controller
                 'is_system_message' => true,
             ]);
 
-            
+
             $chatRoom->update(['last_message_at' => now()]);
 
             // Dispatch event for system message
             $offerData = json_decode($message->offer_data, true);
             event(new NewMessage($message, $chatRoom, $offerData));
-
         } catch (\Exception $e) {
             Log::error('Failed to send contract completion message', [
                 'contract_id' => $contract->id,
@@ -97,9 +95,9 @@ class ContractController extends Controller
         }
     }
 
-    
-    
-    // emitSocketEvent is no longer used
+
+
+    // emitSocketEvent deprecado, mudado para PHP reverb 
     // private function emitSocketEvent(string $event, array $data): void
     // {
     //     try {
@@ -128,12 +126,12 @@ class ContractController extends Controller
     //     }
     // }
 
-    
+
     private function sendApprovalMessages($contract): void
     {
         try {
             $chatRoom = $contract->offer->chatRoom;
-            
+
             if (!$chatRoom) {
                 Log::warning('No chat room found for contract', [
                     'contract_id' => $contract->id,
@@ -142,7 +140,7 @@ class ContractController extends Controller
                 return;
             }
 
-            
+
             $this->createSystemMessage($chatRoom, "🎉 Contrato finalizado com sucesso! O projeto foi concluído e está aguardando avaliação.", [
                 'contract_id' => $contract->id,
                 'status' => 'completed',
@@ -150,9 +148,8 @@ class ContractController extends Controller
                 'message_type' => 'contract_completed',
             ]);
 
-            
-            ContractCompleted::dispatch($contract, $chatRoom, 0);
 
+            ContractCompleted::dispatch($contract, $chatRoom, 0);
         } catch (\Exception $e) {
             Log::error('Failed to send approval messages', [
                 'contract_id' => $contract->id,
@@ -161,23 +158,26 @@ class ContractController extends Controller
         }
     }
 
-    
+
     public function index(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
+
+        /** @var \App\Models\User $user */
         $user = Auth::user();
-        $status = $request->get('status'); 
-        $workflowStatus = $request->get('workflow_status'); 
+        $status = $request->get('status');
+        $workflowStatus = $request->get('workflow_status');
 
         try {
-            $query = $user->isBrand() 
-                ? $user->brandContracts() 
+            $query = $user->isBrand()
+                ? $user->brandContracts()
                 : $user->creatorContracts();
 
             if ($status) {
                 $query->where('status', $status);
             }
 
-            
+
             if ($workflowStatus) {
                 $query->where('workflow_status', $workflowStatus);
             }
@@ -188,7 +188,7 @@ class ContractController extends Controller
 
             $contracts->getCollection()->transform(function ($contract) use ($user) {
                 $otherUser = $user->isBrand() ? $contract->creator : $contract->brand;
-                
+
                 return [
                     'id' => $contract->id,
                     'title' => $contract->title,
@@ -251,7 +251,6 @@ class ContractController extends Controller
                 'success' => true,
                 'data' => $contracts,
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching contracts', [
                 'user_id' => $user->id,
@@ -265,16 +264,18 @@ class ContractController extends Controller
         }
     }
 
-    
+
     public function show(int $id): JsonResponse
     {
+        /** @var \App\Models\User $user */
+
         $user = Auth::user();
 
         try {
             $contract = Contract::with(['brand:id,name,avatar_url', 'creator:id,name,avatar_url', 'offer'])
                 ->where(function ($query) use ($user) {
                     $query->where('brand_id', $user->id)
-                          ->orWhere('creator_id', $user->id);
+                        ->orWhere('creator_id', $user->id);
                 })
                 ->find($id);
 
@@ -286,7 +287,7 @@ class ContractController extends Controller
             }
 
             $otherUser = $user->isBrand() ? $contract->creator : $contract->brand;
-            
+
             $contractData = [
                 'id' => $contract->id,
                 'title' => $contract->title,
@@ -316,7 +317,7 @@ class ContractController extends Controller
                 'has_brand_review' => $contract->has_brand_review,
                 'has_creator_review' => $contract->has_creator_review,
                 'has_both_reviews' => $contract->has_both_reviews,
-                'can_review' => !$contract->has_creator_review, 
+                'can_review' => !$contract->has_creator_review,
                 'creator' => [
                     'id' => $contract->creator->id,
                     'name' => $contract->creator->name,
@@ -348,7 +349,6 @@ class ContractController extends Controller
                 'success' => true,
                 'data' => $contractData,
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching contract', [
                 'user_id' => $user->id,
@@ -363,16 +363,18 @@ class ContractController extends Controller
         }
     }
 
-    
+
     public function getContractsForChatRoom(Request $request, string $roomId): JsonResponse
     {
+        /** @var \App\Models\User $user */
+
         $user = Auth::user();
-        
-        
+
+
         $chatRoom = \App\Models\ChatRoom::where('room_id', $roomId)
             ->where(function ($query) use ($user) {
                 $query->where('brand_id', $user->id)
-                      ->orWhere('creator_id', $user->id);
+                    ->orWhere('creator_id', $user->id);
             })
             ->first();
 
@@ -384,75 +386,74 @@ class ContractController extends Controller
         }
 
         try {
-            
+
             $contracts = Contract::whereHas('offer', function ($query) use ($chatRoom) {
                 $query->where('chat_room_id', $chatRoom->id);
             })
-            ->with(['brand:id,name,avatar_url', 'creator:id,name,avatar_url', 'offer'])
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($contract) use ($user) {
-                $otherUser = $user->isBrand() ? $contract->creator : $contract->brand;
-                
-                return [
-                    'id' => $contract->id,
-                    'title' => $contract->title,
-                    'description' => $contract->description,
-                    'budget' => $contract->formatted_budget,
-                    'creator_amount' => $contract->formatted_creator_amount,
-                    'platform_fee' => $contract->formatted_platform_fee,
-                    'estimated_days' => $contract->estimated_days,
-                    'requirements' => $contract->requirements,
-                    'status' => $contract->status,
-                    'started_at' => $contract->started_at->format('Y-m-d H:i:s'),
-                    'expected_completion_at' => $contract->expected_completion_at->format('Y-m-d H:i:s'),
-                    'completed_at' => $contract->completed_at?->format('Y-m-d H:i:s'),
-                    'cancelled_at' => $contract->cancelled_at?->format('Y-m-d H:i:s'),
-                    'cancellation_reason' => $contract->cancellation_reason,
-                    'days_until_completion' => $contract->days_until_completion,
-                    'progress_percentage' => $contract->progress_percentage,
-                    'is_overdue' => $contract->isOverdue(),
-                    'is_near_completion' => $contract->is_near_completion,
-                    'can_be_completed' => $contract->canBeCompleted(),
-                    'can_be_cancelled' => $contract->canBeCancelled(),
-                    'can_be_terminated' => $contract->canBeTerminated(),
-                    'can_be_started' => $contract->canBeStarted(),
-                    'has_brand_review' => $contract->has_brand_review,
-                    'has_creator_review' => $contract->has_creator_review,
-                    'has_both_reviews' => $contract->has_both_reviews,
-                    'creator' => [
-                        'id' => $contract->creator->id,
-                        'name' => $contract->creator->name,
-                        'avatar_url' => $contract->creator->avatar_url,
-                    ],
-                    'other_user' => [
-                        'id' => $otherUser->id,
-                        'name' => $otherUser->name,
-                        'avatar_url' => $otherUser->avatar_url,
-                    ],
-                    'payment' => $contract->payment ? [
-                        'id' => $contract->payment->id,
-                        'status' => $contract->payment->status,
-                        'total_amount' => $contract->payment->formatted_total_amount,
-                        'creator_amount' => $contract->payment->formatted_creator_amount,
-                        'platform_fee' => $contract->payment->formatted_platform_fee,
-                        'processed_at' => $contract->payment->processed_at?->format('Y-m-d H:i:s'),
-                                    ] : null,
-                'review' => ($userReview = $contract->userReview($user->id)->first()) ? [
-                    'id' => $userReview->id,
-                    'rating' => $userReview->rating,
-                    'comment' => $userReview->comment,
-                    'created_at' => $userReview->created_at->format('Y-m-d H:i:s'),
-                ] : null,
-                    'created_at' => $contract->created_at->format('Y-m-d H:i:s'),
-                ];
-            });
+                ->with(['brand:id,name,avatar_url', 'creator:id,name,avatar_url', 'offer'])
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($contract) use ($user) {
+                    $otherUser = $user->isBrand() ? $contract->creator : $contract->brand;
+
+                    return [
+                        'id' => $contract->id,
+                        'title' => $contract->title,
+                        'description' => $contract->description,
+                        'budget' => $contract->formatted_budget,
+                        'creator_amount' => $contract->formatted_creator_amount,
+                        'platform_fee' => $contract->formatted_platform_fee,
+                        'estimated_days' => $contract->estimated_days,
+                        'requirements' => $contract->requirements,
+                        'status' => $contract->status,
+                        'started_at' => $contract->started_at->format('Y-m-d H:i:s'),
+                        'expected_completion_at' => $contract->expected_completion_at->format('Y-m-d H:i:s'),
+                        'completed_at' => $contract->completed_at?->format('Y-m-d H:i:s'),
+                        'cancelled_at' => $contract->cancelled_at?->format('Y-m-d H:i:s'),
+                        'cancellation_reason' => $contract->cancellation_reason,
+                        'days_until_completion' => $contract->days_until_completion,
+                        'progress_percentage' => $contract->progress_percentage,
+                        'is_overdue' => $contract->isOverdue(),
+                        'is_near_completion' => $contract->is_near_completion,
+                        'can_be_completed' => $contract->canBeCompleted(),
+                        'can_be_cancelled' => $contract->canBeCancelled(),
+                        'can_be_terminated' => $contract->canBeTerminated(),
+                        'can_be_started' => $contract->canBeStarted(),
+                        'has_brand_review' => $contract->has_brand_review,
+                        'has_creator_review' => $contract->has_creator_review,
+                        'has_both_reviews' => $contract->has_both_reviews,
+                        'creator' => [
+                            'id' => $contract->creator->id,
+                            'name' => $contract->creator->name,
+                            'avatar_url' => $contract->creator->avatar_url,
+                        ],
+                        'other_user' => [
+                            'id' => $otherUser->id,
+                            'name' => $otherUser->name,
+                            'avatar_url' => $otherUser->avatar_url,
+                        ],
+                        'payment' => $contract->payment ? [
+                            'id' => $contract->payment->id,
+                            'status' => $contract->payment->status,
+                            'total_amount' => $contract->payment->formatted_total_amount,
+                            'creator_amount' => $contract->payment->formatted_creator_amount,
+                            'platform_fee' => $contract->payment->formatted_platform_fee,
+                            'processed_at' => $contract->payment->processed_at?->format('Y-m-d H:i:s'),
+                        ] : null,
+                        'review' => ($userReview = $contract->userReview($user->id)->first()) ? [
+                            'id' => $userReview->id,
+                            'rating' => $userReview->rating,
+                            'comment' => $userReview->comment,
+                            'created_at' => $userReview->created_at->format('Y-m-d H:i:s'),
+                        ] : null,
+                        'created_at' => $contract->created_at->format('Y-m-d H:i:s'),
+                    ];
+                });
 
             return response()->json([
                 'success' => true,
                 'data' => $contracts,
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error fetching contracts for chat room', [
                 'user_id' => $user->id,
@@ -467,12 +468,14 @@ class ContractController extends Controller
         }
     }
 
-    
+
     public function activate(int $id): JsonResponse
     {
+        /** @var \App\Models\User $user */
+
         $user = Auth::user();
 
-        
+
         if (!$user->isBrand()) {
             return response()->json([
                 'success' => false,
@@ -505,10 +508,10 @@ class ContractController extends Controller
                 'started_at' => now(),
             ]);
 
-            
+
             $this->sendApprovalMessages($contract);
 
-            
+
             event(new ContractActivated($contract, $contract->offer->chatRoom, $user->id));
 
             Log::info('Contract activated successfully', [
@@ -527,7 +530,6 @@ class ContractController extends Controller
                     'next_step' => 'work_in_progress',
                 ],
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error activating contract', [
                 'user_id' => $user->id,
@@ -542,12 +544,13 @@ class ContractController extends Controller
         }
     }
 
-    
+
     public function complete(int $id): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        
+
         if (!$user->isBrand()) {
             Log::warning('Non-brand user attempted to complete contract', [
                 'user_id' => $user->id,
@@ -556,7 +559,7 @@ class ContractController extends Controller
                 'is_brand' => $user->isBrand(),
                 'is_creator' => $user->isCreator(),
             ]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Apenas marcas podem finalizar contratos',
@@ -583,10 +586,10 @@ class ContractController extends Controller
             }
 
             if ($contract->complete()) {
-                
+
                 $this->sendContractCompletionMessage($contract, $user);
 
-                
+
                 event(new ContractCompleted($contract, $contract->offer->chatRoom, $user->id));
 
                 Log::info('Campaign completed successfully', [
@@ -613,7 +616,6 @@ class ContractController extends Controller
                     'message' => 'Falha ao finalizar campanha',
                 ], 500);
             }
-
         } catch (\Exception $e) {
             Log::error('Error completing campaign', [
                 'user_id' => $user->id,
@@ -628,7 +630,7 @@ class ContractController extends Controller
         }
     }
 
-    
+
     public function cancel(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -643,15 +645,16 @@ class ContractController extends Controller
             ], 422);
         }
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         try {
             $contract = Contract::where(function ($query) use ($user) {
                 $query->where('brand_id', $user->id)
-                      ->orWhere('creator_id', $user->id);
+                    ->orWhere('creator_id', $user->id);
             })
-            ->where('status', 'active')
-            ->find($id);
+                ->where('status', 'active')
+                ->find($id);
 
             if (!$contract) {
                 return response()->json([
@@ -688,7 +691,6 @@ class ContractController extends Controller
                     'message' => 'Falha ao cancelar contrato',
                 ], 500);
             }
-
         } catch (\Exception $e) {
             Log::error('Error cancelling contract', [
                 'user_id' => $user->id,
@@ -703,7 +705,7 @@ class ContractController extends Controller
         }
     }
 
-    
+
     public function terminate(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -718,9 +720,10 @@ class ContractController extends Controller
             ], 422);
         }
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        
+
         if (!$user->isBrand()) {
             return response()->json([
                 'success' => false,
@@ -748,14 +751,14 @@ class ContractController extends Controller
             }
 
             if ($contract->terminate($request->reason)) {
-                
+
                 $chatRoom = $contract->offer->chatRoom ?? null;
-                
+
                 if ($chatRoom) {
-                    
+
                     $this->createOfferChatMessage($chatRoom, 'contract_terminated', [
                         'sender_id' => $user->id,
-                        'message' => $request->reason ? 
+                        'message' => $request->reason ?
                             "Contrato terminado pela marca. Motivo: " . $request->reason :
                             "Contrato terminado pela marca.",
                         'offer_data' => [
@@ -778,8 +781,8 @@ class ContractController extends Controller
                         ],
                     ]);
                 }
-                
-                
+
+
                 event(new ContractTerminated($contract, $contract->offer->chatRoom, $user->id, $request->reason));
 
                 Log::info('Contract terminated successfully', [
@@ -803,7 +806,6 @@ class ContractController extends Controller
                     'message' => 'Falha ao terminar contrato',
                 ], 500);
             }
-
         } catch (\Exception $e) {
             Log::error('Error terminating contract', [
                 'user_id' => $user->id,
@@ -818,7 +820,7 @@ class ContractController extends Controller
         }
     }
 
-    
+
     public function dispute(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -833,15 +835,17 @@ class ContractController extends Controller
             ], 422);
         }
 
+        /** @var \App\Models\User $user */
+
         $user = Auth::user();
 
         try {
             $contract = Contract::where(function ($query) use ($user) {
                 $query->where('brand_id', $user->id)
-                      ->orWhere('creator_id', $user->id);
+                    ->orWhere('creator_id', $user->id);
             })
-            ->where('status', 'active')
-            ->find($id);
+                ->where('status', 'active')
+                ->find($id);
 
             if (!$contract) {
                 return response()->json([
@@ -871,7 +875,6 @@ class ContractController extends Controller
                     'message' => 'Falha ao disputar contrato',
                 ], 500);
             }
-
         } catch (\Exception $e) {
             Log::error('Error disputing contract', [
                 'user_id' => $user->id,
@@ -885,4 +888,4 @@ class ContractController extends Controller
             ], 500);
         }
     }
-} 
+}

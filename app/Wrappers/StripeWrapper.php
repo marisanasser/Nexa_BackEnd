@@ -8,6 +8,7 @@ use Stripe\Stripe;
 use Stripe\Subscription;
 use Stripe\PaymentMethod;
 use Stripe\PaymentIntent;
+use Stripe\SetupIntent;
 
 class StripeWrapper
 {
@@ -54,5 +55,10 @@ class StripeWrapper
     public function retrievePaymentIntent(string $id, array $params = []): PaymentIntent
     {
         return PaymentIntent::retrieve($id, $params);
+    }
+
+    public function retrieveSetupIntent(string $id, array $params = []): SetupIntent
+    {
+        return SetupIntent::retrieve($id, $params);
     }
 }
