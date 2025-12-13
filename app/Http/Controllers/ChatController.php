@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\NewMessage;
 use App\Models\ChatRoom;
 use App\Models\Message;
 use App\Models\UserOnlineStatus;
@@ -473,7 +474,10 @@ class ChatController extends Controller
             ];
             
             \Log::info('Emitting socket event for message', $socketData);
-            $this->emitSocketEvent('new_message', $socketData);
+            
+            // Dispatch event for Reverb/Broadcasting
+            $offerData = $message->offer_data ? json_decode($message->offer_data, true) : null;
+            event(new NewMessage($message, $room, $offerData));
 
             \Log::info('Message sent successfully', [
                 'message_id' => $message->id,
@@ -894,21 +898,23 @@ class ChatController extends Controller
     }
 
     
-    private function emitSocketEvent(string $event, array $data): void
-    {
-        try {
-            
-            \Illuminate\Support\Facades\Http::post('http://localhost:3000/emit', [
-                'event' => $event,
-                'data' => $data,
-            ]);
-            
-            \Log::info("Socket event emitted via HTTP: {$event}", $data);
-        } catch (\Exception $e) {
-            \Log::error('Failed to emit socket event via HTTP', [
-                'event' => $event,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
+    
+    // emitSocketEvent is no longer used
+    // private function emitSocketEvent(string $event, array $data): void
+    // {
+    //     try {
+    //         
+    //         \Illuminate\Support\Facades\Http::post('http://localhost:3000/emit', [
+    //             'event' => $event,
+    //             'data' => $data,
+    //         ]);
+    //         
+    //         \Log::info("Socket event emitted via HTTP: {$event}", $data);
+    //     } catch (\Exception $e) {
+    //         \Log::error('Failed to emit socket event via HTTP', [
+    //             'event' => $event,
+    //             'error' => $e->getMessage(),
+    //         ]);
+    //     }
+    // }
 }

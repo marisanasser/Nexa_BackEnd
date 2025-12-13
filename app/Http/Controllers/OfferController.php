@@ -3,6 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Offer;
+use App\Events\OfferCreated;
+use App\Events\OfferAccepted;
+use App\Events\OfferRejected;
+use App\Events\OfferCancelled;
+use App\Models\Contract;
 use App\Models\ChatRoom;
 use App\Models\User;
 use App\Models\Message;
@@ -308,24 +313,7 @@ class OfferController extends Controller
             ]);
 
             
-            $this->emitSocketEvent('offer_created', [
-                'roomId' => $chatRoom->room_id,
-                'offerData' => [
-                    'id' => $offer->id,
-                    'title' => $offer->title,
-                    'description' => $offer->description,
-                    'budget' => $offer->budget,
-                    'formatted_budget' => $offer->formatted_budget,
-                    'estimated_days' => $offer->estimated_days,
-                    'status' => 'pending',
-                    'expires_at' => $offer->expires_at->format('Y-m-d H:i:s'),
-                    'days_until_expiry' => $offer->days_until_expiry,
-                    'brand_id' => $user->id,
-                    'creator_id' => $creator->id,
-                    'chat_room_id' => $chatRoom->room_id,
-                ],
-                'senderId' => $user->id,
-            ]);
+            event(new OfferCreated($offer, $chatRoom, $user->id));
 
             Log::info('Offer created successfully', [
                 'offer_id' => $offer->id,
@@ -384,20 +372,22 @@ class OfferController extends Controller
     }
 
     
-    private function emitSocketEvent(string $event, array $data): void
-    {
-        try {
-            if (isset($GLOBALS['socket_server'])) {
-                $io = $GLOBALS['socket_server'];
-                $io->emit($event, $data);
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to emit socket event', [
-                'event' => $event,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
+    
+    // The emitSocketEvent method is no longer used and can be removed
+    // private function emitSocketEvent(string $event, array $data): void
+    // {
+    //     try {
+    //         if (isset($GLOBALS['socket_server'])) {
+    //             $io = $GLOBALS['socket_server'];
+    //             $io->emit($event, $data);
+    //         }
+    //     } catch (\Exception $e) {
+    //         Log::error('Failed to emit socket event', [
+    //             'event' => $event,
+    //             'error' => $e->getMessage(),
+    //         ]);
+    //     }
+    // }
 
     
     public function index(Request $request): JsonResponse
@@ -680,32 +670,7 @@ class OfferController extends Controller
                         'is_system_message' => true,
                     ]);
                     
-                    $this->emitSocketEvent('offer_accepted', [
-                        'roomId' => $chatRoom->room_id,
-                        'offerData' => [
-                            'id' => $offer->id,
-                            'title' => $offer->title,
-                            'description' => $offer->description,
-                            'budget' => $offer->budget,
-                            'formatted_budget' => $offer->formatted_budget,
-                            'estimated_days' => $offer->estimated_days,
-                            'status' => $offer->status,
-                            'brand_id' => $offer->brand_id,
-                            'creator_id' => $offer->creator_id,
-                            'chat_room_id' => $chatRoom->room_id,
-                        ],
-                        'contractData' => $contract ? [
-                            'id' => $contract->id,
-                            'title' => $contract->title,
-                            'description' => $contract->description,
-                            'status' => $contract->status,
-                            'workflow_status' => $contract->workflow_status,
-                            'brand_id' => $contract->brand_id,
-                            'creator_id' => $contract->creator_id,
-                            'can_be_completed' => $contract->canBeCompleted(),
-                        ] : null,
-                        'senderId' => $user->id,
-                    ]);
+                    event(new OfferAccepted($offer, $chatRoom, $contract));
                 }
 
                 Log::info('Offer accepted successfully', [
@@ -843,23 +808,7 @@ class OfferController extends Controller
                     ]);
 
                     
-                    $this->emitSocketEvent('offer_rejected', [
-                        'roomId' => $chatRoom->room_id,
-                        'offerData' => [
-                            'id' => $offer->id,
-                            'title' => $offer->title,
-                            'description' => $offer->description,
-                            'budget' => $offer->budget,
-                            'formatted_budget' => $offer->formatted_budget,
-                            'estimated_days' => $offer->estimated_days,
-                            'status' => $offer->status,
-                            'brand_id' => $offer->brand_id,
-                            'creator_id' => $offer->creator_id,
-                            'chat_room_id' => $chatRoom->room_id,
-                        ],
-                        'senderId' => $user->id,
-                        'rejectionReason' => $request->reason,
-                    ]);
+                    event(new OfferRejected($offer, $chatRoom, $user->id, $request->reason));
                 }
 
                 Log::info('Offer rejected successfully', [
@@ -952,22 +901,7 @@ class OfferController extends Controller
                 ]);
 
                 
-                $this->emitSocketEvent('offer_cancelled', [
-                    'roomId' => $chatRoom->room_id,
-                    'offerData' => [
-                        'id' => $offer->id,
-                        'title' => $offer->title,
-                        'description' => $offer->description,
-                        'budget' => $offer->budget,
-                        'formatted_budget' => $offer->formatted_budget,
-                        'estimated_days' => $offer->estimated_days,
-                        'status' => $offer->status,
-                        'brand_id' => $offer->brand_id,
-                        'creator_id' => $offer->creator_id,
-                        'chat_room_id' => $chatRoom->room_id,
-                    ],
-                    'senderId' => $user->id,
-                ]);
+                event(new OfferCancelled($offer, $chatRoom, $user->id));
             }
 
             

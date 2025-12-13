@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\ContractTerminated;
+use App\Events\ContractCompleted;
+use App\Events\ContractActivated;
+use App\Events\NewMessage;
 use App\Models\Contract;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -80,28 +84,9 @@ class ContractController extends Controller
             
             $chatRoom->update(['last_message_at' => now()]);
 
-            
-            $this->emitSocketEvent('new_message', [
-                'roomId' => $chatRoom->room_id,
-                'messageId' => $message->id,
-                'message' => $message->message,
-                'messageType' => $message->message_type,
-                'senderId' => null,
-                'senderName' => 'Sistema',
-                'senderAvatar' => null,
-                'offerData' => json_decode($message->offer_data, true),
-                'timestamp' => $message->created_at->toISOString(),
-                'isSystemMessage' => true,
-            ]);
-
-            Log::info('Contract completion message sent successfully', [
-                'contract_id' => $contract->id,
-                'chat_room_id' => $chatRoom->id,
-                'message_id' => $message->id,
-                'offer_data' => $message->offer_data,
-                'message_type' => $message->message_type,
-                'socket_offer_data' => json_decode($message->offer_data, true),
-            ]);
+            // Dispatch event for system message
+            $offerData = json_decode($message->offer_data, true);
+            event(new NewMessage($message, $chatRoom, $offerData));
 
         } catch (\Exception $e) {
             Log::error('Failed to send contract completion message', [
@@ -113,33 +98,35 @@ class ContractController extends Controller
     }
 
     
-    private function emitSocketEvent(string $event, array $data): void
-    {
-        try {
-            if (isset($GLOBALS['socket_server'])) {
-                $io = $GLOBALS['socket_server'];
-                $io->emit($event, $data);
-                Log::info("Socket event emitted: {$event}", $data);
-                
-                
-                if (in_array($event, ['contract_completed', 'contract_terminated', 'contract_activated'])) {
-                    $io->emit('contract_status_update', [
-                        'roomId' => $data['roomId'],
-                        'contractData' => $data['contractData'],
-                        'terminationReason' => $data['terminationReason'] ?? null,
-                        'timestamp' => now()->toISOString(),
-                    ]);
-                }
-            } else {
-                Log::warning("Socket server not available for event: {$event}");
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to emit socket event', [
-                'event' => $event,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
+    
+    // emitSocketEvent is no longer used
+    // private function emitSocketEvent(string $event, array $data): void
+    // {
+    //     try {
+    //         if (isset($GLOBALS['socket_server'])) {
+    //             $io = $GLOBALS['socket_server'];
+    //             $io->emit($event, $data);
+    //             Log::info("Socket event emitted: {$event}", $data);
+    //             
+    //             
+    //             if (in_array($event, ['contract_completed', 'contract_terminated', 'contract_activated'])) {
+    //                 $io->emit('contract_status_update', [
+    //                     'roomId' => $data['roomId'],
+    //                     'contractData' => $data['contractData'],
+    //                     'terminationReason' => $data['terminationReason'] ?? null,
+    //                     'timestamp' => now()->toISOString(),
+    //                 ]);
+    //             }
+    //         } else {
+    //             Log::warning("Socket server not available for event: {$event}");
+    //         }
+    //     } catch (\Exception $e) {
+    //         Log::error('Failed to emit socket event', [
+    //             'event' => $event,
+    //             'error' => $e->getMessage(),
+    //         ]);
+    //     }
+    // }
 
     
     private function sendApprovalMessages($contract): void
@@ -164,35 +151,7 @@ class ContractController extends Controller
             ]);
 
             
-            $this->emitSocketEvent('contract_completed', [
-                'roomId' => $chatRoom->room_id,
-                'contractData' => [
-                    'id' => $contract->id,
-                    'title' => $contract->title,
-                    'description' => $contract->description,
-                    'status' => $contract->status,
-                    'workflow_status' => $contract->workflow_status,
-                    'brand_id' => $contract->brand_id,
-                    'creator_id' => $contract->creator_id,
-                    'can_be_completed' => $contract->canBeCompleted(),
-                    'can_be_cancelled' => $contract->canBeCancelled(),
-                    'can_be_terminated' => $contract->canBeTerminated(),
-                    'can_be_started' => $contract->canBeStarted(),
-                    'budget' => $contract->formatted_budget,
-                    'creator_amount' => $contract->formatted_creator_amount,
-                    'platform_fee' => $contract->formatted_platform_fee,
-                    'estimated_days' => $contract->estimated_days,
-                    'started_at' => $contract->started_at?->format('Y-m-d H:i:s'),
-                    'expected_completion_at' => $contract->expected_completion_at?->format('Y-m-d H:i:s'),
-                    'completed_at' => $contract->completed_at?->format('Y-m-d H:i:s'),
-                    'days_until_completion' => $contract->days_until_completion,
-                    'progress_percentage' => $contract->progress_percentage,
-                    'is_overdue' => $contract->isOverdue(),
-                    'is_near_completion' => $contract->is_near_completion,
-                    'can_review' => true,
-                ],
-                'senderId' => 0, 
-            ]);
+            ContractCompleted::dispatch($contract, $chatRoom, 0);
 
         } catch (\Exception $e) {
             Log::error('Failed to send approval messages', [
@@ -550,33 +509,7 @@ class ContractController extends Controller
             $this->sendApprovalMessages($contract);
 
             
-            $this->emitSocketEvent('contract_activated', [
-                'roomId' => $contract->offer->chatRoom->room_id ?? null,
-                'contractData' => [
-                    'id' => $contract->id,
-                    'title' => $contract->title,
-                    'description' => $contract->description,
-                    'status' => $contract->status,
-                    'workflow_status' => $contract->workflow_status,
-                    'brand_id' => $contract->brand_id,
-                                            'creator_id' => $contract->creator_id,
-                        'can_be_completed' => $contract->canBeCompleted(),
-                        'can_be_cancelled' => $contract->canBeCancelled(),
-                        'can_be_terminated' => $contract->canBeTerminated(),
-                        'can_be_started' => $contract->canBeStarted(),
-                        'budget' => $contract->formatted_budget,
-                        'creator_amount' => $contract->formatted_creator_amount,
-                        'platform_fee' => $contract->formatted_platform_fee,
-                    'estimated_days' => $contract->estimated_days,
-                    'started_at' => $contract->started_at?->format('Y-m-d H:i:s'),
-                    'expected_completion_at' => $contract->expected_completion_at?->format('Y-m-d H:i:s'),
-                    'days_until_completion' => $contract->days_until_completion,
-                    'progress_percentage' => $contract->progress_percentage,
-                    'is_overdue' => $contract->isOverdue(),
-                    'is_near_completion' => $contract->is_near_completion,
-                ],
-                'senderId' => $user->id,
-            ]);
+            event(new ContractActivated($contract, $contract->offer->chatRoom, $user->id));
 
             Log::info('Contract activated successfully', [
                 'contract_id' => $contract->id,
@@ -654,34 +587,7 @@ class ContractController extends Controller
                 $this->sendContractCompletionMessage($contract, $user);
 
                 
-                $this->emitSocketEvent('contract_completed', [
-                    'roomId' => $contract->offer->chatRoom->room_id ?? null,
-                    'contractData' => [
-                        'id' => $contract->id,
-                        'title' => $contract->title,
-                        'description' => $contract->description,
-                        'status' => $contract->status,
-                        'workflow_status' => $contract->workflow_status,
-                        'brand_id' => $contract->brand_id,
-                        'creator_id' => $contract->creator_id,
-                        'can_be_completed' => $contract->canBeCompleted(),
-                        'can_be_cancelled' => $contract->canBeCancelled(),
-                        'can_be_started' => $contract->canBeStarted(),
-                        'budget' => $contract->formatted_budget,
-                        'creator_amount' => $contract->formatted_creator_amount,
-                        'platform_fee' => $contract->formatted_platform_fee,
-                        'estimated_days' => $contract->estimated_days,
-                        'started_at' => $contract->started_at?->format('Y-m-d H:i:s'),
-                        'expected_completion_at' => $contract->expected_completion_at?->format('Y-m-d H:i:s'),
-                        'completed_at' => $contract->completed_at?->format('Y-m-d H:i:s'),
-                        'days_until_completion' => $contract->days_until_completion,
-                        'progress_percentage' => $contract->progress_percentage,
-                        'is_overdue' => $contract->isOverdue(),
-                        'is_near_completion' => $contract->is_near_completion,
-                        'can_review' => true,
-                    ],
-                    'senderId' => $user->id,
-                ]);
+                event(new ContractCompleted($contract, $contract->offer->chatRoom, $user->id));
 
                 Log::info('Campaign completed successfully', [
                     'contract_id' => $contract->id,
@@ -874,22 +780,7 @@ class ContractController extends Controller
                 }
                 
                 
-                $this->emitSocketEvent('contract_terminated', [
-                    'roomId' => $contract->offer->chatRoom->room_id ?? null,
-                    'contractData' => [
-                        'id' => $contract->id,
-                        'title' => $contract->title,
-                        'description' => $contract->description,
-                        'status' => $contract->status,
-                        'workflow_status' => $contract->workflow_status,
-                        'brand_id' => $contract->brand_id,
-                        'creator_id' => $contract->creator_id,
-                        'cancelled_at' => $contract->cancelled_at?->format('Y-m-d H:i:s'),
-                        'cancellation_reason' => $contract->cancellation_reason,
-                    ],
-                    'senderId' => $user->id,
-                    'terminationReason' => $request->reason,
-                ]);
+                event(new ContractTerminated($contract, $contract->offer->chatRoom, $user->id, $request->reason));
 
                 Log::info('Contract terminated successfully', [
                     'contract_id' => $contract->id,

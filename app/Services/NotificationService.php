@@ -11,6 +11,7 @@ use App\Models\DirectMessage;
 use App\Models\CampaignApplication;
 use App\Models\Portfolio;
 use App\Models\PortfolioItem;
+use App\Events\NotificationSent;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -538,45 +539,15 @@ class NotificationService
     public static function sendSocketNotification(int $userId, Notification $notification): void
     {
         try {
+            // Dispatch the event for Reverb/Broadcasting
+            event(new NotificationSent($notification));
             
-            $socketServer = null;
-            
-            
-            if (app()->bound('socket.server')) {
-                $socketServer = app('socket.server');
-            }
-            
-            
-            if (!$socketServer && isset($GLOBALS['socket_server'])) {
-                $socketServer = $GLOBALS['socket_server'];
-            }
-            
-            if ($socketServer) {
-                $notificationData = [
-                    'id' => $notification->id,
-                    'type' => $notification->type,
-                    'title' => $notification->title,
-                    'message' => $notification->message,
-                    'data' => $notification->data,
-                    'is_read' => $notification->is_read,
-                    'created_at' => $notification->created_at->toISOString(),
-                ];
-                
-                $socketServer->to("user_{$userId}")->emit('new_notification', $notificationData);
-                
-                Log::info('Socket notification sent successfully', [
-                    'user_id' => $userId,
-                    'notification_id' => $notification->id,
-                    'room' => "user_{$userId}"
-                ]);
-            } else {
-                Log::warning('Socket server not available for notification', [
-                    'user_id' => $userId,
-                    'notification_id' => $notification->id
-                ]);
-            }
+            Log::info('Notification broadcast event dispatched', [
+                'user_id' => $userId,
+                'notification_id' => $notification->id
+            ]);
         } catch (\Exception $e) {
-            Log::error('Failed to send socket notification', [
+            Log::error('Failed to dispatch notification broadcast event', [
                 'user_id' => $userId,
                 'notification_id' => $notification->id,
                 'error' => $e->getMessage(),
