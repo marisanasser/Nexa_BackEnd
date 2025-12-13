@@ -4,6 +4,9 @@ namespace App\Repositories;
 
 use App\Models\BrandPaymentMethod;
 use App\Models\User;
+use App\Models\SubscriptionPlan;
+use App\Models\Subscription as LocalSubscription;
+use App\Models\Transaction;
 
 class PaymentRepository
 {
@@ -88,5 +91,35 @@ class PaymentRepository
     public function findUserById(int $userId): ?User
     {
         return User::find($userId);
+    }
+
+    public function findUserByStripeCustomerId(string $stripeCustomerId): ?User
+    {
+        return User::where('stripe_customer_id', $stripeCustomerId)->first();
+    }
+
+    public function findSubscriptionPlan(int $id): ?SubscriptionPlan
+    {
+        return SubscriptionPlan::find($id);
+    }
+
+    public function findSubscriptionPlanByStripePriceId(string $priceId): ?SubscriptionPlan
+    {
+        return SubscriptionPlan::where('stripe_price_id', $priceId)->first();
+    }
+
+    public function findLocalSubscriptionByStripeId(string $stripeSubscriptionId): ?LocalSubscription
+    {
+        return LocalSubscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
+    }
+
+    public function createTransaction(array $data): Transaction
+    {
+        return Transaction::create($data);
+    }
+
+    public function createSubscription(array $data): LocalSubscription
+    {
+        return LocalSubscription::create($data);
     }
 }

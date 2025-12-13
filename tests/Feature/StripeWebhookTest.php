@@ -65,20 +65,11 @@ class StripeWebhookTest extends TestCase
 
         // Mock PaymentService
         $this->mock(PaymentService::class, function ($mock) use ($user) {
-            // Mock finding the user
-            $mock->shouldReceive('findUserById')
+            $mock->shouldReceive('handleGeneralSetupCheckout')
                 ->once()
-                ->with(Mockery::on(function ($arg) use ($user) {
-                    return (int)$arg === $user->id;
-                }))
-                ->andReturn($user);
-
-            $mock->shouldReceive('handleSetupSessionSuccess')
-                ->once()
-                ->with('cs_test_123', Mockery::on(function ($arg) use ($user) {
-                    return $arg->id === $user->id;
-                }))
-                ->andReturn(['payment_method' => new BrandPaymentMethod()]);
+                ->with(Mockery::on(function ($arg) {
+                    return $arg->id === 'cs_test_123';
+                }));
         });
 
         // 2. Act
@@ -129,14 +120,11 @@ class StripeWebhookTest extends TestCase
 
         // Mock PaymentService
         $this->mock(PaymentService::class, function ($mock) {
-            $mock->shouldReceive('findUserById')
+            $mock->shouldReceive('handleGeneralSetupCheckout')
                 ->once()
-                ->with(999) // Expect int 999
-                ->andReturnNull();
-
-            // Should NOT call handleSetupSessionSuccess
-            $mock->shouldReceive('handleSetupSessionSuccess')
-                ->never();
+                ->with(Mockery::on(function ($arg) {
+                    return $arg->id === 'cs_test_unknown';
+                }));
         });
 
         // 2. Act
