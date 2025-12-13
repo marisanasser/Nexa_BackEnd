@@ -13,9 +13,20 @@ use App\Models\SubscriptionPlan;
 use App\Models\Transaction;
 use App\Models\User;
 use Carbon\Carbon;
+use App\Services\PaymentService;
+use App\Repositories\WebhookEventRepository;
 
 class StripeWebhookController extends Controller
 {
+    protected $paymentService;
+    protected $webhookEventRepository;
+
+    public function __construct(PaymentService $paymentService, WebhookEventRepository $webhookEventRepository)
+    {
+        $this->paymentService = $paymentService;
+        $this->webhookEventRepository = $webhookEventRepository;
+    }
+
     public function handle(Request $request): JsonResponse
     {
         $payload = $request->getContent();
@@ -59,7 +70,7 @@ class StripeWebhookController extends Controller
             $eventId = $event->id ?? null;
             if ($eventId) {
                 // First check if we have already processed this event
-                $existingEvent = WebhookEvent::where('stripe_event_id', $eventId)->first();
+                $existingEvent = $this->webhookEventRepository->findByStripeEventId($eventId);
                 
                 if ($existingEvent && $existingEvent->status === 'processed') {
                     Log::info('Stripe event already processed (Database)', ['event_id' => $eventId]);
@@ -76,7 +87,7 @@ class StripeWebhookController extends Controller
                 // If not exists, create record
                 if (!$existingEvent) {
                     try {
-                        WebhookEvent::create([
+                        $this->webhookEventRepository->create([
                             'stripe_event_id' => $eventId,
                             'type' => $event->type,
                             'payload' => json_decode($payload, true),
@@ -212,11 +223,11 @@ class StripeWebhookController extends Controller
             }
 
             // Update event status to processed
-            if (isset($existingEvent)) {
-                $existingEvent->update(['status' => 'processed']);
+            if (isset($existingEvent) && $existingEvent) {
+                $this->webhookEventRepository->updateStatus($existingEvent, 'processed');
             } elseif ($eventId) {
                 try {
-                    WebhookEvent::where('stripe_event_id', $eventId)->update(['status' => 'processed']);
+                    $this->webhookEventRepository->updateStatusByStripeEventId($eventId, 'processed');
                 } catch (\Exception $e) {
                      // Ignore if update fails
                 }
@@ -236,17 +247,11 @@ class StripeWebhookController extends Controller
             ]);
 
             // Update event status to failed
-            if (isset($existingEvent)) {
-                $existingEvent->update([
-                    'status' => 'failed',
-                    'error_message' => $e->getMessage()
-                ]);
+            if (isset($existingEvent) && $existingEvent) {
+                $this->webhookEventRepository->updateStatus($existingEvent, 'failed', $e->getMessage());
             } elseif (isset($eventId)) {
                 try {
-                    WebhookEvent::where('stripe_event_id', $eventId)->update([
-                        'status' => 'failed',
-                        'error_message' => $e->getMessage()
-                    ]);
+                    $this->webhookEventRepository->updateStatusByStripeEventId($eventId, 'failed', $e->getMessage());
                 } catch (\Exception $ex) {
                      // Ignore
                 }
@@ -1279,6 +1284,27 @@ class StripeWebhookController extends Controller
                 'setup_intent' => $session->setup_intent ?? null,
             ]);
 
+            // Check if this is a Brand Payment Method setup
+            $metadata = $session->metadata ?? null;
+            $type = null;
+            $userId = null;
+
+            if (is_array($metadata)) {
+                $type = $metadata['type'] ?? null;
+                $userId = $metadata['user_id'] ?? null;
+            } elseif (is_object($metadata)) {
+                $type = $metadata->type ?? null;
+                $userId = $metadata->user_id ?? null;
+            }
+
+            if ($type === 'payment_method_setup' && $userId) {
+                $user = $this->paymentService->findUserById($userId);
+                if ($user) {
+                    Log::info('Delegating Brand Payment Method setup to PaymentService', ['user_id' => $userId]);
+                    $this->paymentService->handleSetupSessionSuccess($session->id, $user);
+                    return;
+                }
+            }
             
             $setupIntentId = $session->setup_intent ?? null;
             if (!$setupIntentId) {
