@@ -269,6 +269,7 @@ class ContractController extends Controller
     {
         /** @var \App\Models\User $user */
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         try {
@@ -368,6 +369,7 @@ class ContractController extends Controller
     {
         /** @var \App\Models\User $user */
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
 
@@ -473,6 +475,7 @@ class ContractController extends Controller
     {
         /** @var \App\Models\User $user */
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
 
@@ -837,6 +840,7 @@ class ContractController extends Controller
 
         /** @var \App\Models\User $user */
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         try {

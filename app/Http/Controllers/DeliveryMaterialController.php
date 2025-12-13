@@ -43,6 +43,7 @@ class DeliveryMaterialController extends Controller
     
     public function store(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -127,6 +128,7 @@ class DeliveryMaterialController extends Controller
     
     public function approve(Request $request, DeliveryMaterial $material): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -181,6 +183,7 @@ class DeliveryMaterialController extends Controller
     
     public function reject(Request $request, DeliveryMaterial $material): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -236,6 +239,7 @@ class DeliveryMaterialController extends Controller
     
     public function download(DeliveryMaterial $material): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         

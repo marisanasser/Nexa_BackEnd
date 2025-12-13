@@ -12,6 +12,7 @@ class CheckUserStatus
     
     public function handle(Request $request, Closure $next)
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         if ($user) {

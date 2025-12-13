@@ -937,6 +937,7 @@ class OfferController extends Controller
 
     public function getOffersForChatRoom(Request $request, string $roomId): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
 

@@ -98,6 +98,7 @@ class WithdrawalController extends Controller
     
     public function store(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         Log::info('Withdrawal request initiated', [
@@ -469,6 +470,7 @@ class WithdrawalController extends Controller
     
     public function index(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -535,6 +537,7 @@ class WithdrawalController extends Controller
     
     public function show(int $id): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -600,6 +603,7 @@ class WithdrawalController extends Controller
     
     public function cancel(int $id): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -667,6 +671,7 @@ class WithdrawalController extends Controller
     
     public function statistics(): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         

@@ -13,6 +13,7 @@ class NotificationController extends Controller
     
     public function index(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $perPage = $request->get('per_page', 20);
         $type = $request->get('type');
@@ -48,6 +49,7 @@ class NotificationController extends Controller
     
     public function unreadCount(): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $count = NotificationService::getUnreadCount($user->id);
 
@@ -60,6 +62,7 @@ class NotificationController extends Controller
     
     public function markAsRead(int $id): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $success = NotificationService::markAsRead($id, $user->id);
 
@@ -79,6 +82,7 @@ class NotificationController extends Controller
     
     public function markAllAsRead(): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $count = NotificationService::markAllAsRead($user->id);
 
@@ -92,6 +96,7 @@ class NotificationController extends Controller
     
     public function destroy(int $id): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $notification = Notification::where('id', $id)
             ->where('user_id', $user->id)
@@ -115,6 +120,7 @@ class NotificationController extends Controller
     
     public function statistics(): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         $total = Notification::where('user_id', $user->id)->count();

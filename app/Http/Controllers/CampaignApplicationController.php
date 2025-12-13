@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Log;
+use Laravel\Reverb\Loggers\Log;
 use Stripe\Stripe;
 use Stripe\Checkout\Session;
 use Stripe\Customer;
@@ -19,6 +19,7 @@ class CampaignApplicationController extends Controller
     
     public function index(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $query = CampaignApplication::with(['campaign', 'creator', 'reviewer'])
             ->whereHas('creator'); 
@@ -65,6 +66,7 @@ class CampaignApplicationController extends Controller
     
     public function store(Request $request, Campaign $campaign): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -123,6 +125,7 @@ class CampaignApplicationController extends Controller
     
     public function show(CampaignApplication $application): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -143,6 +146,7 @@ class CampaignApplicationController extends Controller
     
     public function approve(CampaignApplication $application): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -528,7 +532,7 @@ class CampaignApplicationController extends Controller
             if ($chatRoom->wasRecentlyCreated) {
                 $application->initiateFirstContact();
                 
-                \Log::info('Application workflow status updated to agreement_in_progress', [
+                Log::info('Application workflow status updated to agreement_in_progress', [
                     'application_id' => $application->id,
                     'campaign_id' => $application->campaign_id,
                     'creator_id' => $application->creator_id,
@@ -540,7 +544,7 @@ class CampaignApplicationController extends Controller
                 $chatController->sendInitialOfferIfNeeded($chatRoom);
             }
 
-            \Log::info('Chat room created automatically for approved proposal', [
+            Log::info('Chat room created automatically for approved proposal', [
                 'application_id' => $application->id,
                 'chat_room_id' => $chatRoom->id,
                 'room_id' => $chatRoom->room_id,
@@ -549,7 +553,7 @@ class CampaignApplicationController extends Controller
                 'creator_id' => $application->creator_id,
             ]);
         } catch (\Exception $e) {
-            \Log::error('Failed to create chat room for approved proposal', [
+            Log::error('Failed to create chat room for approved proposal', [
                 'application_id' => $application->id,
                 'campaign_id' => $application->campaign_id,
                 'brand_id' => $user->id,
@@ -582,6 +586,7 @@ class CampaignApplicationController extends Controller
     
     public function reject(Request $request, CampaignApplication $application): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -628,6 +633,7 @@ class CampaignApplicationController extends Controller
     
     public function withdraw(CampaignApplication $application): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -661,6 +667,7 @@ class CampaignApplicationController extends Controller
     
     public function campaignApplications(Campaign $campaign): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -687,6 +694,7 @@ class CampaignApplicationController extends Controller
     
     public function statistics(): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $query = CampaignApplication::query();
 

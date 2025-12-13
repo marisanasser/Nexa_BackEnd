@@ -17,6 +17,7 @@ class PostContractWorkflowController extends Controller
     
     public function getContractsWaitingForReview(): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         if (!$user->isBrand()) {
@@ -71,6 +72,7 @@ class PostContractWorkflowController extends Controller
     
     public function getContractsWithPaymentAvailable(): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         if (!$user->isCreator()) {

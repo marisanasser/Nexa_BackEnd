@@ -220,7 +220,7 @@ class Campaign extends Model
         return true;
     }
 
-    public function reject($adminId, $reason = null): bool
+    public function reject($adminId, ?string $reason = null): bool
     {
         $this->update([
             'status' => 'rejected',

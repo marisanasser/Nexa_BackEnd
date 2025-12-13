@@ -145,7 +145,7 @@ class CampaignApplication extends Model
         return true;
     }
 
-    public function reject($brandId, $reason = null): bool
+    public function reject($brandId, ?string $reason = null): bool
     {
         $this->update([
             'status' => 'rejected',

@@ -17,6 +17,7 @@ class AuthenticatedSessionController extends Controller
     {
         $request->authenticate();
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         

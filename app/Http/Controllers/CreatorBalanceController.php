@@ -20,6 +20,7 @@ class CreatorBalanceController extends Controller
     
     public function index(): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -171,6 +172,7 @@ class CreatorBalanceController extends Controller
             ], 422);
         }
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -305,6 +307,7 @@ class CreatorBalanceController extends Controller
     
     public function withdrawalMethods(): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -352,6 +355,7 @@ class CreatorBalanceController extends Controller
     
     public function workHistory(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         
@@ -434,7 +438,8 @@ class CreatorBalanceController extends Controller
     public function createStripePaymentMethodCheckout(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
+            /** @var \App\Models\User $user */
+        $user = Auth::user();
 
             if (!$user) {
                 return response()->json([
@@ -562,7 +567,8 @@ class CreatorBalanceController extends Controller
     public function handleCheckoutSuccess(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
+            /** @var \App\Models\User $user */
+        $user = Auth::user();
 
             if (!$user) {
                 return response()->json([

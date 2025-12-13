@@ -37,6 +37,7 @@ class ReviewController extends Controller
             ], 422);
         }
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         if (!$user) {
@@ -395,6 +396,7 @@ class ReviewController extends Controller
             ], 422);
         }
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         try {
@@ -448,6 +450,7 @@ class ReviewController extends Controller
     
     public function destroy(int $id): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         try {
@@ -491,7 +494,8 @@ class ReviewController extends Controller
     public function getContractReviewStatus(int $contractId): JsonResponse
     {
         try {
-            $user = Auth::user();
+            /** @var \App\Models\User $user */
+        $user = Auth::user();
             $contract = Contract::find($contractId);
 
             if (!$contract) {

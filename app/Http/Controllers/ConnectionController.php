@@ -30,6 +30,7 @@ class ConnectionController extends Controller
             ], 422);
         }
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $receiver = User::find($request->receiver_id);
 
@@ -80,6 +81,7 @@ class ConnectionController extends Controller
     
     public function acceptConnectionRequest(Request $request, int $requestId): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $connectionRequest = ConnectionRequest::findOrFail($requestId);
 
@@ -113,6 +115,7 @@ class ConnectionController extends Controller
     
     public function rejectConnectionRequest(Request $request, int $requestId): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $connectionRequest = ConnectionRequest::findOrFail($requestId);
 
@@ -134,6 +137,7 @@ class ConnectionController extends Controller
     
     public function cancelConnectionRequest(Request $request, int $requestId): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $connectionRequest = ConnectionRequest::findOrFail($requestId);
 
@@ -155,6 +159,7 @@ class ConnectionController extends Controller
     
     public function getConnectionRequests(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $type = $request->get('type', 'received'); 
 
@@ -185,6 +190,7 @@ class ConnectionController extends Controller
     
     public function getDirectChatRooms(): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         $directChatRooms = [];
 
@@ -240,6 +246,7 @@ class ConnectionController extends Controller
     
     public function getDirectMessages(Request $request, string $roomId): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         $room = DirectChatRoom::where('room_id', $roomId)
@@ -317,6 +324,7 @@ class ConnectionController extends Controller
             ], 422);
         }
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         $room = DirectChatRoom::where('room_id', $request->room_id)
@@ -391,6 +399,7 @@ class ConnectionController extends Controller
     
     public function searchCreators(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         if (!$user->isBrand()) {

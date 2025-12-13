@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
@@ -28,6 +30,7 @@ class AccountController extends Controller
             ], 422);
         }
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         
@@ -40,7 +43,7 @@ class AccountController extends Controller
 
         try {
             
-            \Log::info('User account removal initiated', [
+            Log::info('User account removal initiated', [
                 'user_id' => $user->id,
                 'email' => $user->email,
                 'reason' => $request->reason,
@@ -59,8 +62,8 @@ class AccountController extends Controller
                 'message' => 'Sua conta foi removida com sucesso. Você pode restaurá-la a qualquer momento entrando em contato com o suporte.',
             ], 200);
 
-        } catch (\Exception $e) {
-            \Log::error('Failed to remove user account', [
+        } catch (Exception $e) {
+            Log::error('Failed to remove user account', [
                 'user_id' => $user->id,
                 'error' => $e->getMessage(),
             ]);
@@ -123,7 +126,7 @@ class AccountController extends Controller
             $user->restore();
 
             
-            \Log::info('User account restored', [
+            Log::info('User account restored', [
                 'user_id' => $user->id,
                 'email' => $user->email,
                 'days_since_deletion' => $daysSinceDeletion,
@@ -150,8 +153,8 @@ class AccountController extends Controller
                 ],
             ], 200);
 
-        } catch (\Exception $e) {
-            \Log::error('Failed to restore user account', [
+        } catch (Exception $e) {
+            Log::error('Failed to restore user account', [
                 'email' => $request->email,
                 'error' => $e->getMessage(),
             ]);
@@ -203,8 +206,8 @@ class AccountController extends Controller
                 'deleted_at' => $removedUser->deleted_at->toISOString(),
             ], 200);
 
-        } catch (\Exception $e) {
-            \Log::error('Failed to check removed account', [
+        } catch (Exception $e) {
+            Log::error('Failed to check removed account', [
                 'email' => $request->email,
                 'error' => $e->getMessage(),
             ]);

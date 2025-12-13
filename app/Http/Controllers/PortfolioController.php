@@ -39,6 +39,7 @@ class PortfolioController extends Controller
     
     public function show(): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         if (!$user->isCreator() && !$user->isStudent()) {
@@ -114,6 +115,7 @@ class PortfolioController extends Controller
     
     public function updateProfile(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         if (!$user->isCreator() && !$user->isStudent()) {
@@ -459,6 +461,7 @@ class PortfolioController extends Controller
     
     public function testUpdate(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         
@@ -523,6 +526,7 @@ class PortfolioController extends Controller
     
     public function uploadMedia(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         if (!$user->isCreator() && !$user->isStudent()) {
@@ -1056,6 +1060,7 @@ class PortfolioController extends Controller
     
     public function updateItem(Request $request, PortfolioItem $item): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         if (!$user->isCreator() && !$user->isStudent()) {
@@ -1113,6 +1118,7 @@ class PortfolioController extends Controller
     
     public function deleteItem(PortfolioItem $item): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         if (!$user->isCreator() && !$user->isStudent()) {
@@ -1157,6 +1163,7 @@ class PortfolioController extends Controller
     
     public function reorderItems(Request $request): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         if (!$user->isCreator() && !$user->isStudent()) {
@@ -1221,6 +1228,7 @@ class PortfolioController extends Controller
     
     public function statistics(): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         if (!$user->isCreator() && !$user->isStudent()) {
@@ -1268,7 +1276,8 @@ class PortfolioController extends Controller
     {
         try {
             
-            $user = Auth::user();
+            /** @var \App\Models\User $user */
+        $user = Auth::user();
             if (!$user) {
                 return response()->json([
                     'success' => false,

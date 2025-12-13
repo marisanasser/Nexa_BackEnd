@@ -123,7 +123,7 @@ class DeliveryMaterial extends Model
         return $this->brand_id === $user->id && $this->isPending();
     }
 
-    public function approve($brandId, $comment = null): bool
+    public function approve($brandId, ?string $comment = null): bool
     {
         $this->update([
             'status' => 'approved',
@@ -136,7 +136,7 @@ class DeliveryMaterial extends Model
         return true;
     }
 
-    public function reject($brandId, $reason = null, $comment = null): bool
+    public function reject($brandId, ?string $reason = null, ?string $comment = null): bool
     {
         $this->update([
             'status' => 'rejected',

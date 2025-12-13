@@ -18,7 +18,8 @@ class ProfileController extends Controller
     public function show(): JsonResponse
     {
         try {
-            $user = Auth::user();
+            /** @var \App\Models\User $user */
+        $user = Auth::user();
             
             if (!$user) {
                 return response()->json([
@@ -83,7 +84,8 @@ class ProfileController extends Controller
         error_log("Raw content length: " . strlen($request->getContent()));
         
         try {
-            $user = Auth::user();
+            /** @var \App\Models\User $user */
+        $user = Auth::user();
 
             if (!$user) {
                 return response()->json([
@@ -292,7 +294,8 @@ class ProfileController extends Controller
     public function deleteAvatar(): JsonResponse
     {
         try {
-            $user = Auth::user();
+            /** @var \App\Models\User $user */
+        $user = Auth::user();
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -329,7 +332,8 @@ class ProfileController extends Controller
     public function uploadAvatar(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
+            /** @var \App\Models\User $user */
+        $user = Auth::user();
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -392,7 +396,8 @@ class ProfileController extends Controller
     public function uploadAvatarBase64(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
+            /** @var \App\Models\User $user */
+        $user = Auth::user();
             if (!$user) {
                 return response()->json([
                     'success' => false,

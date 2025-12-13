@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\NewMessage;
+use App\Events\MessagesRead;
 use App\Models\ChatRoom;
 use App\Models\Message;
 use App\Models\UserOnlineStatus;
@@ -120,9 +121,10 @@ class ChatController extends Controller
     
     public function getMessages(Request $request, string $roomId): JsonResponse
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // \Log::info('Getting messages for room', [ ... ]);
+        // Log::info('Getting messages for room', [ ... ]);
 
         
         if ($user->isAdmin()) {
@@ -139,14 +141,14 @@ class ChatController extends Controller
         }
 
         if (!$room) {
-            // \Log::error('Chat room not found for messages', [ ... ]);
+            // Log::error('Chat room not found for messages', [ ... ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Chat room not found',
             ], 404);
         }
 
-        // \Log::info('Found chat room for messages', [ ... ]);
+        // Log::info('Found chat room for messages', [ ... ]);
 
         
         if ($user->isBrand() && $room->campaign_id && !$room->messages()->exists()) {
@@ -178,7 +180,7 @@ class ChatController extends Controller
                 'read_at' => now()
             ]);
 
-            \Log::info('Marked messages as read', [
+            Log::info('Marked messages as read', [
                 'message_ids' => $messageIds,
                 'count' => count($messageIds),
             ]);
@@ -195,14 +197,14 @@ class ChatController extends Controller
         });
         
         if ($nullSenderMessages->count() > 0) {
-            \Log::warning('Found messages with null senders', [
+            Log::warning('Found messages with null senders', [
                 'room_id' => $roomId,
                 'null_sender_message_ids' => $nullSenderMessages->pluck('id')->toArray(),
                 'null_sender_user_ids' => $nullSenderMessages->pluck('sender_id')->toArray(),
             ]);
         }
 
-        \Log::info('Retrieved messages from database', [
+        Log::info('Retrieved messages from database', [
             'room_id' => $roomId,
             'user_id' => $user->id,
             'total_messages' => $messages->count(),
@@ -256,21 +258,21 @@ class ChatController extends Controller
                                     $offerData['contract_status'] = $contract->status;
                                     $offerData['can_be_completed'] = $contract->canBeCompleted();
                                     
-                                    \Log::info('Contract data included in offer message', [
+                                    Log::info('Contract data included in offer message', [
                                         'offer_id' => $currentOffer->id,
                                         'contract_id' => $contract->id,
                                         'contract_status' => $contract->status,
                                         'can_be_completed' => $contract->canBeCompleted(),
                                     ]);
                                 } else {
-                                    \Log::warning('No contract found for accepted offer', [
+                                    Log::warning('No contract found for accepted offer', [
                                         'offer_id' => $currentOffer->id,
                                         'offer_status' => $currentOffer->status,
                                     ]);
                                 }
                             } else {
                                 
-                                \Log::info('No contract data for offer', [
+                                Log::info('No contract data for offer', [
                                     'offer_id' => $currentOffer->id,
                                     'offer_status' => $currentOffer->status,
                                 ]);
@@ -282,7 +284,7 @@ class ChatController extends Controller
                     
                     
                     if ($message->message_type === 'contract_completion') {
-                        \Log::info('Contract completion message offer_data included', [
+                        Log::info('Contract completion message offer_data included', [
                             'message_id' => $message->id,
                             'message_type' => $message->message_type,
                             'offer_data' => $offerData,
@@ -297,7 +299,7 @@ class ChatController extends Controller
             return $messageData;
         });
 
-        \Log::info('Returning formatted messages', [
+        Log::info('Returning formatted messages', [
             'room_id' => $roomId,
             'formatted_count' => $formattedMessages->count(),
             'formatted_message_ids' => $formattedMessages->pluck('id')->toArray(),
@@ -334,9 +336,10 @@ class ChatController extends Controller
             ], 422);
         }
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
-        \Log::info('Sending message', [
+        Log::info('Sending message', [
             'room_id' => $request->room_id,
             'user_id' => $user->id,
             'message_length' => strlen($request->message ?? ''),
@@ -357,7 +360,7 @@ class ChatController extends Controller
         }
 
         if (!$room) {
-            \Log::error('Chat room not found', [
+            Log::error('Chat room not found', [
                 'room_id' => $request->room_id,
                 'user_id' => $user->id,
             ]);
@@ -367,7 +370,7 @@ class ChatController extends Controller
             ], 404);
         }
 
-        \Log::info('Found chat room', [
+        Log::info('Found chat room', [
             'room_id' => $room->room_id,
             'chat_room_id' => $room->id,
             'brand_id' => $room->brand_id,
@@ -399,12 +402,12 @@ class ChatController extends Controller
             $messageData['file_type'] = $file->getMimeType();
         }
 
-        \Log::info('Creating message', $messageData);
+        Log::info('Creating message', $messageData);
 
         try {
             $message = Message::create($messageData);
             
-            \Log::info('Message created successfully', [
+            Log::info('Message created successfully', [
                 'message_id' => $message->id,
                 'chat_room_id' => $message->chat_room_id,
                 'sender_id' => $message->sender_id,
@@ -477,13 +480,13 @@ class ChatController extends Controller
                 'timestamp' => $message->created_at->toISOString(),
             ];
             
-            \Log::info('Emitting socket event for message', $socketData);
+            Log::info('Emitting socket event for message', $socketData);
             
             // Dispatch event for Reverb/Broadcasting
             $offerData = $message->offer_data ? json_decode($message->offer_data, true) : null;
             event(new NewMessage($message, $room, $offerData));
 
-            \Log::info('Message sent successfully', [
+            Log::info('Message sent successfully', [
                 'message_id' => $message->id,
                 'response_data' => $responseData,
             ]);
@@ -494,7 +497,7 @@ class ChatController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Error creating message', [
+            Log::error('Error creating message', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'message_data' => $messageData,
@@ -555,6 +558,9 @@ class ChatController extends Controller
                 'is_read' => true,
                 'read_at' => now()
             ]);
+            
+        // Dispatch event for Reverb/Broadcasting
+        event(new MessagesRead($room, $request->message_ids, $user->id));
 
         return response()->json([
             'success' => true,
@@ -612,7 +618,7 @@ class ChatController extends Controller
         if ($room->wasRecentlyCreated) {
             $application->initiateFirstContact();
             
-            \Log::info('Application workflow status updated to agreement_in_progress', [
+            Log::info('Application workflow status updated to agreement_in_progress', [
                 'application_id' => $application->id,
                 'campaign_id' => $request->campaign_id,
                 'creator_id' => $request->creator_id,
@@ -789,6 +795,7 @@ class ChatController extends Controller
             ], 422);
         }
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         $onlineStatus = UserOnlineStatus::firstOrCreate(['user_id' => $user->id]);
@@ -888,7 +895,7 @@ class ChatController extends Controller
                 ],
             ]);
 
-            \Log::info('Initial offer sent automatically', [
+            Log::info('Initial offer sent automatically', [
                 'chat_room_id' => $chatRoom->id,
                 'offer_id' => $offer->id,
                 'is_barter' => $isBarter,
@@ -896,7 +903,7 @@ class ChatController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Error sending initial offer automatically', [
+            Log::error('Error sending initial offer automatically', [
                 'error' => $e->getMessage(),
                 'chat_room_id' => $chatRoom->id,
                 'campaign_id' => $chatRoom->campaign_id,
@@ -916,9 +923,9 @@ class ChatController extends Controller
     //             'data' => $data,
     //         ]);
     //         
-    //         \Log::info("Socket event emitted via HTTP: {$event}", $data);
+    //         Log::info("Socket event emitted via HTTP: {$event}", $data);
     //     } catch (\Exception $e) {
-    //         \Log::error('Failed to emit socket event via HTTP', [
+    //         Log::error('Failed to emit socket event via HTTP', [
     //             'event' => $event,
     //             'error' => $e->getMessage(),
     //         ]);

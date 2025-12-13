@@ -38,6 +38,8 @@ class Contract extends Model
         'has_both_reviews',
     ];
 
+    protected $appends = ['remaining_percentage'];
+
     protected $casts = [
         'budget' => 'decimal:2',
         'requirements' => 'array',
@@ -879,10 +881,24 @@ class Contract extends Model
 
     public function getProgressPercentageAttribute(): int
     {
+        if (!$this->started_at || !$this->expected_completion_at) {
+            return 0;
+        }
+
         $totalDays = $this->started_at->diffInDays($this->expected_completion_at);
+        
+        if ($totalDays <= 0) {
+            return 100;
+        }
+
         $elapsedDays = $this->started_at->diffInDays(now());
         
         return min(100, max(0, round(($elapsedDays / $totalDays) * 100)));
+    }
+
+    public function getRemainingPercentageAttribute(): int
+    {
+        return 100 - $this->progress_percentage;
     }
 
     public function getIsNearCompletionAttribute(): bool

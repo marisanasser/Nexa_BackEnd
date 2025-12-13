@@ -17,7 +17,8 @@ class BrandProfileController extends Controller
     public function show(): JsonResponse
     {
         try {
-            $user = Auth::user();
+            /** @var \App\Models\User $user */
+        $user = Auth::user();
             
             if (!$user) {
                 return response()->json([
@@ -63,7 +64,8 @@ class BrandProfileController extends Controller
     public function update(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
+            /** @var \App\Models\User $user */
+        $user = Auth::user();
 
             if (!$user) {
                 return response()->json([
@@ -193,7 +195,8 @@ class BrandProfileController extends Controller
     public function changePassword(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
+            /** @var \App\Models\User $user */
+        $user = Auth::user();
 
             if (!$user) {
                 return response()->json([
@@ -252,7 +255,8 @@ class BrandProfileController extends Controller
     public function uploadAvatar(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
+            /** @var \App\Models\User $user */
+        $user = Auth::user();
 
             if (!$user) {
                 return response()->json([
@@ -396,7 +400,8 @@ class BrandProfileController extends Controller
     public function deleteAvatar(): JsonResponse
     {
         try {
-            $user = Auth::user();
+            /** @var \App\Models\User $user */
+        $user = Auth::user();
 
             if (!$user) {
                 return response()->json([

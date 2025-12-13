@@ -210,7 +210,7 @@ class Notification extends Model
         ]);
     }
 
-    public static function createProjectRejected($userId, $campaignId, $campaignTitle, $reason = null): self
+    public static function createProjectRejected($userId, $campaignId, $campaignTitle, ?string $reason = null): self
     {
         return self::create([
             'user_id' => $userId,
@@ -240,7 +240,7 @@ class Notification extends Model
         ]);
     }
 
-    public static function createProposalRejected($userId, $campaignId, $campaignTitle, $brandName, $reason = null): self
+    public static function createProposalRejected($userId, $campaignId, $campaignTitle, $brandName, ?string $reason = null): self
     {
         return self::create([
             'user_id' => $userId,
