@@ -152,7 +152,7 @@ class Withdrawal extends Model
         }
     }
 
-    private function createWithdrawalNotification(string $status, string $reason = null): void
+    private function createWithdrawalNotification(string $status, ?string $reason = null): void
     {
         try {
             if ($status === 'completed') {
@@ -611,7 +611,7 @@ class Withdrawal extends Model
         }
     }
 
-    public function cancel(string $reason = null): bool
+    public function cancel(?string $reason = null): bool
     {
         if (!$this->canBeCancelled()) {
             return false;

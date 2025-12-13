@@ -286,7 +286,7 @@ class Offer extends Model
         }
     }
 
-    public function reject(string $reason = null): bool
+    public function reject(?string $reason = null): bool
     {
         if (!$this->canBeAccepted()) {
             return false;
