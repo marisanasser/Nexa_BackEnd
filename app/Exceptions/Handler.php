@@ -3,28 +3,23 @@
 namespace App\Exceptions;
 
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Http\JsonResponse;
-use Throwable;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class Handler extends ExceptionHandler
 {
-    
     protected $dontFlash = [
         'current_password',
         'password',
         'password_confirmation',
     ];
 
-    
     public function register(): void
     {
-        $this->reportable(function (Throwable $e) {
-            
-        });
+        $this->reportable(function (Throwable $e) {});
 
-        
         $this->renderable(function (ValidationException $e, $request) {
             if ($request->expectsJson()) {
                 Log::warning('Validation failed', [
@@ -32,13 +27,13 @@ class Handler extends ExceptionHandler
                     'method' => $request->method(),
                     'errors' => $e->errors(),
                     'user_id' => auth()->id(),
-                    'user_agent' => $request->userAgent()
+                    'user_agent' => $request->userAgent(),
                 ]);
 
                 return new JsonResponse([
                     'success' => false,
                     'message' => 'Os dados fornecidos são inválidos.',
-                    'errors' => $e->errors()
+                    'errors' => $e->errors(),
                 ], 422);
             }
         });

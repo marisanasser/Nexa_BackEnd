@@ -55,7 +55,6 @@ class ChatRoom extends Model
         return $this->hasMany(Message::class)->latest();
     }
 
-    
     public function updateLastMessageTimestamp(): void
     {
         $this->update(['last_message_at' => now()]);
@@ -69,7 +68,7 @@ class ChatRoom extends Model
     public static function findOrCreateRoom(int $campaignId, int $brandId, int $creatorId): self
     {
         $roomId = self::generateRoomId($campaignId, $brandId, $creatorId);
-        
+
         return self::firstOrCreate(
             [
                 'campaign_id' => $campaignId,
@@ -79,7 +78,7 @@ class ChatRoom extends Model
             [
                 'room_id' => $roomId,
                 'is_active' => true,
-                'last_message_at' => now(), 
+                'last_message_at' => now(),
             ]
         );
     }

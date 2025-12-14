@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    
     public function up(): void
     {
         Schema::table('campaign_timelines', function (Blueprint $table) {
@@ -18,7 +17,6 @@ return new class extends Migration
         });
     }
 
-    
     public function down(): void
     {
         Schema::table('campaign_timelines', function (Blueprint $table) {
@@ -26,4 +24,4 @@ return new class extends Migration
             $table->dropColumn(['extension_days', 'extension_reason', 'extended_at', 'extended_by']);
         });
     }
-}; 
+};

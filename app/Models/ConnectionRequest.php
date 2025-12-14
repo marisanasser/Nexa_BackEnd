@@ -25,7 +25,6 @@ class ConnectionRequest extends Model
         'rejected_at' => 'datetime',
     ];
 
-    
     public function sender(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sender_id');
@@ -41,7 +40,6 @@ class ConnectionRequest extends Model
         return $this->belongsTo(Campaign::class);
     }
 
-    
     public function scopePending($query)
     {
         return $query->where('status', 'pending');
@@ -67,7 +65,6 @@ class ConnectionRequest extends Model
         return $query->where('receiver_id', $receiverId);
     }
 
-    
     public function isPending(): bool
     {
         return $this->status === 'pending';
@@ -131,4 +128,4 @@ class ConnectionRequest extends Model
     {
         return $this->sender_id === $user->id && $this->isPending();
     }
-} 
+}

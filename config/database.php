@@ -4,11 +4,7 @@ use Illuminate\Support\Str;
 
 return [
 
-    
-
     'default' => env('DB_CONNECTION', 'mysql'),
-
-    
 
     'connections' => [
 
@@ -66,17 +62,12 @@ return [
             'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,
-            
-            
+
         ],
 
     ],
 
-    
-
     'migrations' => 'migrations',
-
-    
 
     'redis' => [
 

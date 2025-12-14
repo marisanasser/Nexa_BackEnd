@@ -23,34 +23,34 @@ class AuthenticationTest extends TestCase
         ]);
 
         $response->assertStatus(200)
-                ->assertJsonStructure([
-                    'success',
-                    'token',
-                    'token_type',
-                    'user' => [
-                        'id',
-                        'name',
-                        'email',
-                        'email_verified_at',
-                        'role',
-                        'whatsapp',
-                        'avatar_url',
-                        'bio',
-                        'company_name',
-                        'student_verified',
-                        'student_expires_at',
-                        'gender',
-                        'state',
-                        'language',
-                        'has_premium',
-                        'premium_expires_at',
-                        'free_trial_expires_at',
-                    ]
-                ])
-                ->assertJson([
-                    'success' => true,
-                    'token_type' => 'Bearer',
-                ]);
+            ->assertJsonStructure([
+                'success',
+                'token',
+                'token_type',
+                'user' => [
+                    'id',
+                    'name',
+                    'email',
+                    'email_verified_at',
+                    'role',
+                    'whatsapp',
+                    'avatar_url',
+                    'bio',
+                    'company_name',
+                    'student_verified',
+                    'student_expires_at',
+                    'gender',
+                    'state',
+                    'language',
+                    'has_premium',
+                    'premium_expires_at',
+                    'free_trial_expires_at',
+                ],
+            ])
+            ->assertJson([
+                'success' => true,
+                'token_type' => 'Bearer',
+            ]);
 
         $this->assertTrue($response->json('success'));
         $this->assertNotEmpty($response->json('token'));
@@ -86,14 +86,14 @@ class AuthenticationTest extends TestCase
         $token = $user->createToken('test-token')->plainTextToken;
 
         $response = $this->withHeaders([
-            'Authorization' => 'Bearer ' . $token,
+            'Authorization' => 'Bearer '.$token,
         ])->getJson('/api/user');
 
         $response->assertStatus(200)
-                ->assertJson([
-                    'id' => $user->id,
-                    'email' => $user->email,
-                ]);
+            ->assertJson([
+                'id' => $user->id,
+                'email' => $user->email,
+            ]);
     }
 
     public function test_unauthenticated_user_cannot_access_protected_routes(): void
@@ -109,18 +109,17 @@ class AuthenticationTest extends TestCase
         $token = $user->createToken('test-token')->plainTextToken;
 
         $response = $this->withHeaders([
-            'Authorization' => 'Bearer ' . $token,
+            'Authorization' => 'Bearer '.$token,
         ])->postJson('/api/logout');
 
         $response->assertStatus(200)
-                ->assertJson([
-                    'success' => true,
-                    'message' => 'Logged out successfully'
-                ]);
+            ->assertJson([
+                'success' => true,
+                'message' => 'Logged out successfully',
+            ]);
 
-        
         $response = $this->withHeaders([
-            'Authorization' => 'Bearer ' . $token,
+            'Authorization' => 'Bearer '.$token,
         ])->getJson('/api/user');
 
         $response->assertStatus(401);
@@ -131,7 +130,7 @@ class AuthenticationTest extends TestCase
         $response = $this->postJson('/api/login', []);
 
         $response->assertStatus(422)
-                ->assertJsonValidationErrors(['email', 'password']);
+            ->assertJsonValidationErrors(['email', 'password']);
     }
 
     public function test_login_validates_email_format(): void
@@ -142,7 +141,7 @@ class AuthenticationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-                ->assertJsonValidationErrors(['email']);
+            ->assertJsonValidationErrors(['email']);
     }
 
     public function test_user_response_includes_all_expected_fields(): void
@@ -160,7 +159,7 @@ class AuthenticationTest extends TestCase
         ]);
 
         $userData = $response->json('user');
-        
+
         $this->assertEquals($user->id, $userData['id']);
         $this->assertEquals($user->name, $userData['name']);
         $this->assertEquals($user->email, $userData['email']);
@@ -188,7 +187,6 @@ class AuthenticationTest extends TestCase
             'password' => bcrypt('Password123!'),
         ]);
 
-        
         $response = $this->postJson('/api/login', [
             'email' => 'creator@example.com',
             'password' => 'Password123!',
@@ -196,7 +194,6 @@ class AuthenticationTest extends TestCase
         $response->assertStatus(200);
         $this->assertEquals('creator', $response->json('user.role'));
 
-        
         $response = $this->postJson('/api/login', [
             'email' => 'brand@example.com',
             'password' => 'Password123!',
@@ -204,7 +201,6 @@ class AuthenticationTest extends TestCase
         $response->assertStatus(200);
         $this->assertEquals('brand', $response->json('user.role'));
 
-        
         $response = $this->postJson('/api/login', [
             'email' => 'admin@example.com',
             'password' => 'Password123!',

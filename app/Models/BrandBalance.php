@@ -24,7 +24,6 @@ class BrandBalance extends Model
         'total_spent' => 'decimal:2',
     ];
 
-    
     public function brand(): BelongsTo
     {
         return $this->belongsTo(User::class, 'brand_id');
@@ -36,20 +35,19 @@ class BrandBalance extends Model
             ->whereJsonContains('payment_data->type', 'platform_funding');
     }
 
-    
     public function getFormattedAvailableBalanceAttribute(): string
     {
-        return 'R$ ' . number_format($this->available_balance, 2, ',', '.');
+        return 'R$ '.number_format($this->available_balance, 2, ',', '.');
     }
 
     public function getFormattedTotalFundedAttribute(): string
     {
-        return 'R$ ' . number_format($this->total_funded, 2, ',', '.');
+        return 'R$ '.number_format($this->total_funded, 2, ',', '.');
     }
 
     public function getFormattedTotalSpentAttribute(): string
     {
-        return 'R$ ' . number_format($this->total_spent, 2, ',', '.');
+        return 'R$ '.number_format($this->total_spent, 2, ',', '.');
     }
 
     public function canSpend(float $amount): bool
@@ -65,7 +63,7 @@ class BrandBalance extends Model
 
     public function spend(float $amount): bool
     {
-        if (!$this->canSpend($amount)) {
+        if (! $this->canSpend($amount)) {
             return false;
         }
 
@@ -94,11 +92,11 @@ class BrandBalance extends Model
 
     public function getFormattedFundingThisMonthAttribute(): string
     {
-        return 'R$ ' . number_format($this->funding_this_month, 2, ',', '.');
+        return 'R$ '.number_format($this->funding_this_month, 2, ',', '.');
     }
 
     public function getFormattedFundingThisYearAttribute(): string
     {
-        return 'R$ ' . number_format($this->funding_this_year, 2, ',', '.');
+        return 'R$ '.number_format($this->funding_this_year, 2, ',', '.');
     }
 }

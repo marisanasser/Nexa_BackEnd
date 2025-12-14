@@ -15,7 +15,6 @@ class CampaignFavorite extends Model
         'campaign_id',
     ];
 
-    
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'creator_id');
@@ -25,4 +24,4 @@ class CampaignFavorite extends Model
     {
         return $this->belongsTo(Campaign::class);
     }
-} 
+}

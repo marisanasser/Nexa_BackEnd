@@ -2,28 +2,27 @@
 
 namespace App\Services;
 
-use App\Models\User;
 use App\Models\BrandPaymentMethod;
+use App\Models\Campaign;
+use App\Models\Contract;
+use App\Models\CreatorBalance;
+use App\Models\JobPayment;
+use App\Models\Notification;
+use App\Models\Subscription as LocalSubscription;
+use App\Models\Transaction;
+use App\Models\User;
 use App\Repositories\PaymentRepository;
 use App\Wrappers\StripeWrapper;
-use Illuminate\Support\Facades\Log;
-use Stripe\Customer;
-use Stripe\Checkout\Session;
 use Carbon\Carbon;
-use App\Models\SubscriptionPlan;
-use App\Models\Subscription as LocalSubscription;
-use App\Models\Contract;
-use App\Models\JobPayment;
-use App\Models\CreatorBalance;
-use App\Models\Campaign;
-use App\Models\Notification;
-use App\Models\Transaction;
-use App\Services\NotificationService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Stripe\Checkout\Session;
+use Stripe\Customer;
 
 class PaymentService
 {
     protected $paymentRepository;
+
     protected $stripeWrapper;
 
     public function __construct(PaymentRepository $paymentRepository, StripeWrapper $stripeWrapper)
@@ -40,31 +39,28 @@ class PaymentService
     /**
      * Save a new payment method for a brand user.
      *
-     * @param User $user
-     * @param array $data
-     * @return BrandPaymentMethod
      * @throws \Exception
      */
     public function saveBrandPaymentMethod(User $user, array $data): BrandPaymentMethod
     {
-        $cardBrand = 'Unknown'; 
+        $cardBrand = 'Unknown';
         $cardLast4 = '0000';
-        
-        if (isset($data['card_hash'])) {
-             // Check for duplicates
-             $existing = $this->paymentRepository->findBrandPaymentMethodByCardHash($user->id, $data['card_hash']);
-             if ($existing) {
-                 throw new \Exception('This payment method already exists');
-             }
 
-             $last4 = substr($data['card_hash'], -4);
-             $cardLast4 = $last4;
+        if (isset($data['card_hash'])) {
+            // Check for duplicates
+            $existing = $this->paymentRepository->findBrandPaymentMethodByCardHash($user->id, $data['card_hash']);
+            if ($existing) {
+                throw new \Exception('This payment method already exists');
+            }
+
+            $last4 = substr($data['card_hash'], -4);
+            $cardLast4 = $last4;
         }
 
         $paymentMethod = $this->paymentRepository->createBrandPaymentMethod([
             'user_id' => $user->id,
             'card_holder_name' => $data['card_holder_name'],
-            'card_brand' => $cardBrand, 
+            'card_brand' => $cardBrand,
             'card_last4' => $cardLast4,
             'is_default' => $data['is_default'] ?? false,
             'card_hash' => $data['card_hash'] ?? null,
@@ -80,10 +76,6 @@ class PaymentService
 
     /**
      * Set a payment method as default for a user.
-     *
-     * @param User $user
-     * @param BrandPaymentMethod $paymentMethod
-     * @return void
      */
     public function setAsDefault(User $user, BrandPaymentMethod $paymentMethod): void
     {
@@ -98,7 +90,6 @@ class PaymentService
     /**
      * Create a Stripe Customer if it doesn't exist.
      *
-     * @param User $user
      * @return string Customer ID
      */
     public function ensureStripeCustomer(User $user): string
@@ -107,6 +98,7 @@ class PaymentService
             try {
                 // Verify if exists on Stripe
                 $this->stripeWrapper->retrieveCustomer($user->stripe_customer_id);
+
                 return $user->stripe_customer_id;
             } catch (\Exception $e) {
                 Log::warning('Stripe customer not found, creating new one', ['user_id' => $user->id]);
@@ -118,7 +110,7 @@ class PaymentService
             'name' => $user->name,
             'metadata' => [
                 'user_id' => $user->id,
-                'role' => $user->role, 
+                'role' => $user->role,
             ],
         ]);
 
@@ -129,9 +121,6 @@ class PaymentService
 
     /**
      * Create a Checkout Session for setting up a payment method (Setup Mode).
-     *
-     * @param User $user
-     * @return Session
      */
     public function createSetupCheckoutSession(User $user): Session
     {
@@ -143,8 +132,8 @@ class PaymentService
             'mode' => 'setup',
             'payment_method_types' => ['card'],
             'locale' => 'pt-BR',
-            'success_url' => $frontendUrl . '/brand/payment-methods?success=true&session_id={CHECKOUT_SESSION_ID}',
-            'cancel_url' => $frontendUrl . '/brand/payment-methods?canceled=true',
+            'success_url' => $frontendUrl.'/brand/payment-methods?success=true&session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url' => $frontendUrl.'/brand/payment-methods?canceled=true',
             'metadata' => [
                 'user_id' => (string) $user->id,
                 'type' => 'payment_method_setup',
@@ -155,7 +144,6 @@ class PaymentService
     /**
      * Get all active payment methods for a user.
      *
-     * @param User $user
      * @return \Illuminate\Database\Eloquent\Collection
      */
     public function getBrandPaymentMethods(User $user)
@@ -166,16 +154,13 @@ class PaymentService
     /**
      * Get a specific payment method for a user.
      *
-     * @param User $user
-     * @param int $paymentMethodId
-     * @return BrandPaymentMethod
      * @throws \Exception
      */
     public function getBrandPaymentMethod(User $user, int $paymentMethodId): BrandPaymentMethod
     {
         $paymentMethod = $this->paymentRepository->findBrandPaymentMethod($user->id, $paymentMethodId);
-        
-        if (!$paymentMethod) {
+
+        if (! $paymentMethod) {
             throw new \Exception('Payment method not found');
         }
 
@@ -185,16 +170,13 @@ class PaymentService
     /**
      * Delete a payment method.
      *
-     * @param User $user
-     * @param int $paymentMethodId
-     * @return void
      * @throws \Exception
      */
     public function deleteBrandPaymentMethod(User $user, int $paymentMethodId): void
     {
         $paymentMethod = $this->paymentRepository->findBrandPaymentMethod($user->id, $paymentMethodId);
-        
-        if (!$paymentMethod) {
+
+        if (! $paymentMethod) {
             throw new \Exception('Payment method not found');
         }
 
@@ -207,10 +189,10 @@ class PaymentService
 
         // Soft delete
         $this->paymentRepository->deactivatePaymentMethod($paymentMethod);
-        
+
         if ($wasDefault && $user->stripe_payment_method_id === $paymentMethodStripeId) {
             $nextDefault = $this->paymentRepository->getFirstActivePaymentMethod($user->id);
-            
+
             if ($nextDefault && $nextDefault->stripe_payment_method_id) {
                 $this->setAsDefault($user, $nextDefault);
             } else {
@@ -226,9 +208,7 @@ class PaymentService
 
     /**
      * Handle success of a Setup Checkout Session.
-     * 
-     * @param string $sessionId
-     * @param User $user
+     *
      * @return array Result data
      */
     public function handleSetupSessionSuccess(string $sessionId, User $user): array
@@ -240,49 +220,50 @@ class PaymentService
         $sessionCustomerId = is_object($session->customer) ? $session->customer->id : $session->customer;
 
         $isValid = false;
-        if ($sessionUserId && (string)$sessionUserId === (string)$user->id) {
+        if ($sessionUserId && (string) $sessionUserId === (string) $user->id) {
             $isValid = true;
         } elseif ($sessionCustomerId && $user->stripe_customer_id && $sessionCustomerId === $user->stripe_customer_id) {
             $isValid = true;
         }
 
-        if (!$isValid) {
+        if (! $isValid) {
             throw new \Exception('Invalid session - session does not belong to this user');
         }
 
         $setupIntent = $session->setup_intent;
-        
+
         // Ensure setupIntent is object
         if (is_string($setupIntent)) {
-             // Ideally we should retrieve it, but wrapper might not expose retrieveSetupIntent easily or we need to add it.
-             // Assuming expand worked. If not, we might fail.
-             // For safety let's throw or try to retrieve if wrapper has method.
-             // Wrapper usually has __call to StripeClient?
-             // Let's assume expanded.
+            // Ideally we should retrieve it, but wrapper might not expose retrieveSetupIntent easily or we need to add it.
+            // Assuming expand worked. If not, we might fail.
+            // For safety let's throw or try to retrieve if wrapper has method.
+            // Wrapper usually has __call to StripeClient?
+            // Let's assume expanded.
         }
 
         $paymentMethodStripe = $setupIntent->payment_method;
-        
+
         // Ensure paymentMethod is object
         if (is_string($paymentMethodStripe)) {
-             $paymentMethodStripe = $this->stripeWrapper->retrievePaymentMethod($paymentMethodStripe);
+            $paymentMethodStripe = $this->stripeWrapper->retrievePaymentMethod($paymentMethodStripe);
         }
 
         $card = $paymentMethodStripe->card;
-        
+
         $existing = $this->paymentRepository->findBrandPaymentMethodByStripeId($user->id, $paymentMethodStripe->id);
-            
+
         if ($existing) {
-             if ($existing->is_active) {
-                 throw new \Exception('Payment method already exists');
-             } else {
-                 $existing->update(['is_active' => true]);
-                 // If user has no default, make this default?
-                 if ($this->paymentRepository->countActiveBrandPaymentMethods($user->id) === 1) { // 1 because we just activated it
-                     $this->setAsDefault($user, $existing);
-                 }
-                 return ['payment_method' => $existing];
-             }
+            if ($existing->is_active) {
+                throw new \Exception('Payment method already exists');
+            } else {
+                $existing->update(['is_active' => true]);
+                // If user has no default, make this default?
+                if ($this->paymentRepository->countActiveBrandPaymentMethods($user->id) === 1) { // 1 because we just activated it
+                    $this->setAsDefault($user, $existing);
+                }
+
+                return ['payment_method' => $existing];
+            }
         }
 
         $isDefault = $this->paymentRepository->countActiveBrandPaymentMethods($user->id) === 0;
@@ -298,7 +279,7 @@ class PaymentService
             'is_default' => $isDefault,
             'is_active' => true,
         ]);
-        
+
         if ($isDefault) {
             $this->setAsDefault($user, $paymentMethodRecord);
         }
@@ -308,9 +289,6 @@ class PaymentService
 
     /**
      * Handle checkout session completed for subscription.
-     *
-     * @param Session $session
-     * @return void
      */
     public function handleSubscriptionCheckout(Session $session): void
     {
@@ -325,23 +303,25 @@ class PaymentService
             $stripeSubscriptionId = $stripeSubscriptionId->id;
         }
 
-        if (!$stripeSubscriptionId) {
+        if (! $stripeSubscriptionId) {
             Log::warning('No subscription ID in checkout session', ['session_id' => $session->id]);
+
             return;
         }
 
         $stripeSub = $this->stripeWrapper->retrieveSubscription($stripeSubscriptionId, [
-            'expand' => ['latest_invoice.payment_intent']
+            'expand' => ['latest_invoice.payment_intent'],
         ]);
 
         $customerId = $stripeSub->customer;
         $user = $this->paymentRepository->findUserByStripeCustomerId($customerId);
 
-        if (!$user) {
+        if (! $user) {
             Log::warning('User not found for Stripe customer', [
                 'customer_id' => $customerId,
                 'subscription_id' => $stripeSubscriptionId,
             ]);
+
             return;
         }
 
@@ -354,7 +334,7 @@ class PaymentService
             }
         }
 
-        if (!$planId) {
+        if (! $planId) {
             $priceId = $stripeSub->items->data[0]->price->id ?? null;
             if ($priceId) {
                 $plan = $this->paymentRepository->findSubscriptionPlanByStripePriceId($priceId);
@@ -364,20 +344,22 @@ class PaymentService
             }
         }
 
-        if (!$planId) {
+        if (! $planId) {
             Log::error('Could not determine plan for checkout session', [
                 'session_id' => $session->id,
                 'subscription_id' => $stripeSubscriptionId,
             ]);
+
             return;
         }
 
         $plan = $this->paymentRepository->findSubscriptionPlan($planId);
-        if (!$plan) {
+        if (! $plan) {
             Log::error('Plan not found for checkout session', [
                 'plan_id' => $planId,
                 'session_id' => $session->id,
             ]);
+
             return;
         }
 
@@ -410,11 +392,12 @@ class PaymentService
             $paymentIntentStatus === 'succeeded'
         );
 
-        if (!$paymentSuccessful) {
+        if (! $paymentSuccessful) {
             Log::info('Payment not yet successful, subscription will be created when invoice.paid event is received', [
                 'subscription_id' => $stripeSubscriptionId,
                 'status' => $paymentStatus,
             ]);
+
             return;
         }
 
@@ -425,6 +408,7 @@ class PaymentService
                 'stripe_subscription_id' => $stripeSubscriptionId,
             ]);
             $this->syncSubscription($stripeSubscriptionId, $stripeSub->latest_invoice->id ?? null);
+
             return;
         }
 
@@ -432,14 +416,14 @@ class PaymentService
         // Note: DB transaction should be handled here, but Service shouldn't depend on DB facade strictly if we want pure repo pattern.
         // But for practicality, we can wrap in transaction or assume Repo handles it.
         // Given existing code uses DB::beginTransaction(), let's use it here or add a runInTransaction method to Repo.
-        // For now, I'll skip explicit DB transaction for brevity or add it if strictly needed. 
+        // For now, I'll skip explicit DB transaction for brevity or add it if strictly needed.
         // Or better, just proceed sequentially.
 
-        $currentPeriodEnd = isset($stripeSub->current_period_end) 
-            ? Carbon::createFromTimestamp($stripeSub->current_period_end) 
+        $currentPeriodEnd = isset($stripeSub->current_period_end)
+            ? Carbon::createFromTimestamp($stripeSub->current_period_end)
             : null;
-        $currentPeriodStart = isset($stripeSub->current_period_start) 
-            ? Carbon::createFromTimestamp($stripeSub->current_period_start) 
+        $currentPeriodStart = isset($stripeSub->current_period_start)
+            ? Carbon::createFromTimestamp($stripeSub->current_period_start)
             : null;
 
         $invoiceId = null;
@@ -456,16 +440,16 @@ class PaymentService
             $paymentIntentId = $stripeSub->latest_invoice->payment_intent->id ?? null;
         }
 
-        if (!$paymentIntentId && isset($stripeSub->latest_invoice) && is_object($stripeSub->latest_invoice)) {
+        if (! $paymentIntentId && isset($stripeSub->latest_invoice) && is_object($stripeSub->latest_invoice)) {
             if (is_string($stripeSub->latest_invoice->payment_intent ?? null)) {
                 $paymentIntentId = $stripeSub->latest_invoice->payment_intent;
             }
         }
 
-        $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_' . $stripeSubscriptionId;
-        $durationMonths = (int)($session->metadata->duration_months ?? 1);
+        $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_'.$stripeSubscriptionId;
+        $durationMonths = (int) ($session->metadata->duration_months ?? 1);
         $cancelAt = Carbon::now()->addMonths($durationMonths)->timestamp;
-        
+
         try {
             $this->stripeWrapper->updateSubscription($stripeSubscriptionId, [
                 'cancel_at' => $cancelAt,
@@ -527,8 +511,9 @@ class PaymentService
             $stripeSub = $this->stripeWrapper->retrieveSubscription($stripeSubscriptionId);
 
             $localSub = $this->paymentRepository->findLocalSubscriptionByStripeId($stripeSubscriptionId);
-            if (!$localSub) {
+            if (! $localSub) {
                 Log::warning('Local subscription not found for Stripe ID', ['stripe_subscription_id' => $stripeSubscriptionId]);
+
                 return;
             }
 
@@ -565,38 +550,41 @@ class PaymentService
     {
         try {
             $stripeSubscriptionId = $invoice->subscription ?? null;
-            if (!$stripeSubscriptionId) {
+            if (! $stripeSubscriptionId) {
                 return;
             }
 
             $stripeSub = $this->stripeWrapper->retrieveSubscription($stripeSubscriptionId, [
-                'expand' => ['latest_invoice.payment_intent']
+                'expand' => ['latest_invoice.payment_intent'],
             ]);
 
             $customerId = $stripeSub->customer;
             $user = $this->paymentRepository->findUserByStripeCustomerId($customerId);
 
-            if (!$user) {
+            if (! $user) {
                 Log::warning('User not found for Stripe customer in invoice.paid', [
                     'customer_id' => $customerId,
                 ]);
+
                 return;
             }
 
             $priceId = $stripeSub->items->data[0]->price->id ?? null;
-            if (!$priceId) {
+            if (! $priceId) {
                 Log::error('Could not get price ID from subscription', [
                     'subscription_id' => $stripeSubscriptionId,
                 ]);
+
                 return;
             }
 
             $plan = $this->paymentRepository->findSubscriptionPlanByStripePriceId($priceId);
-            if (!$plan) {
+            if (! $plan) {
                 Log::error('Plan not found for price ID', [
                     'price_id' => $priceId,
                     'subscription_id' => $stripeSubscriptionId,
                 ]);
+
                 return;
             }
 
@@ -606,16 +594,17 @@ class PaymentService
                     'subscription_id' => $existingSub->id,
                 ]);
                 $this->syncSubscription($stripeSubscriptionId, $invoice->id);
+
                 return;
             }
 
             DB::beginTransaction();
 
-            $currentPeriodEnd = isset($stripeSub->current_period_end) 
-                ? Carbon::createFromTimestamp($stripeSub->current_period_end) 
+            $currentPeriodEnd = isset($stripeSub->current_period_end)
+                ? Carbon::createFromTimestamp($stripeSub->current_period_end)
                 : null;
-            $currentPeriodStart = isset($stripeSub->current_period_start) 
-                ? Carbon::createFromTimestamp($stripeSub->current_period_start) 
+            $currentPeriodStart = isset($stripeSub->current_period_start)
+                ? Carbon::createFromTimestamp($stripeSub->current_period_start)
                 : null;
 
             $invoiceId = $invoice->id ?? null;
@@ -628,7 +617,7 @@ class PaymentService
                 }
             }
 
-            $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_' . $stripeSubscriptionId;
+            $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_'.$stripeSubscriptionId;
 
             $transaction = $this->paymentRepository->createTransaction([
                 'user_id' => $user->id,
@@ -730,15 +719,17 @@ class PaymentService
 
             if ($type === 'offer_funding') {
                 $this->handleOfferFundingCheckout($session, $userId, $amount);
+
                 return;
             }
 
-            if ($type !== 'contract_funding' || !$contractId) {
+            if ($type !== 'contract_funding' || ! $contractId) {
                 Log::info('Checkout session is not for contract or offer funding, skipping', [
                     'session_id' => $session->id,
                     'type' => $type,
                     'contract_id' => $contractId,
                 ]);
+
                 return;
             }
 
@@ -748,15 +739,17 @@ class PaymentService
                     'payment_status' => $session->payment_status,
                     'contract_id' => $contractId,
                 ]);
+
                 return;
             }
 
             $contract = Contract::find($contractId);
-            if (!$contract) {
+            if (! $contract) {
                 Log::error('Contract not found for funding checkout', [
                     'session_id' => $session->id,
                     'contract_id' => $contractId,
                 ]);
+
                 return;
             }
 
@@ -765,15 +758,17 @@ class PaymentService
                     'contract_id' => $contract->id,
                     'session_id' => $session->id,
                 ]);
+
                 return;
             }
 
             $paymentIntentId = $session->payment_intent ?? null;
-            if (!$paymentIntentId) {
+            if (! $paymentIntentId) {
                 Log::error('No payment intent in checkout session', [
                     'session_id' => $session->id,
                     'contract_id' => $contractId,
                 ]);
+
                 return;
             }
 
@@ -785,6 +780,7 @@ class PaymentService
                     'status' => $paymentIntent->status,
                     'contract_id' => $contractId,
                 ]);
+
                 return;
             }
 
@@ -806,8 +802,8 @@ class PaymentService
                 'contract_id' => $contract->id,
             ]);
 
-            $platformFee = $contract->budget * 0.05; 
-            $creatorAmount = $contract->budget * 0.95; 
+            $platformFee = $contract->budget * 0.05;
+            $creatorAmount = $contract->budget * 0.95;
 
             $jobPayment = JobPayment::create([
                 'contract_id' => $contract->id,
@@ -817,7 +813,7 @@ class PaymentService
                 'platform_fee' => $platformFee,
                 'creator_amount' => $creatorAmount,
                 'payment_method' => 'stripe_escrow',
-                'status' => 'completed', 
+                'status' => 'completed',
                 'transaction_id' => $transaction->id,
             ]);
 
@@ -876,6 +872,7 @@ class PaymentService
                     'session_id' => $session->id,
                     'payment_status' => $session->payment_status,
                 ]);
+
                 return;
             }
 
@@ -884,25 +881,27 @@ class PaymentService
                 $user = $this->paymentRepository->findUserById($userId);
             }
 
-            if (!$user && $session->customer) {
+            if (! $user && $session->customer) {
                 $user = $this->paymentRepository->findUserByStripeCustomerId($session->customer);
             }
 
-            if (!$user) {
+            if (! $user) {
                 Log::error('User not found for offer funding checkout', [
                     'session_id' => $session->id,
                     'user_id' => $userId,
                     'customer_id' => $session->customer,
                 ]);
+
                 return;
             }
 
             $paymentIntentId = $session->payment_intent ?? null;
-            if (!$paymentIntentId) {
+            if (! $paymentIntentId) {
                 Log::error('No payment intent in offer funding checkout session', [
                     'session_id' => $session->id,
                     'user_id' => $user->id,
                 ]);
+
                 return;
             }
 
@@ -916,6 +915,7 @@ class PaymentService
                     'status' => $paymentIntent->status,
                     'user_id' => $user->id,
                 ]);
+
                 return;
             }
 
@@ -963,7 +963,7 @@ class PaymentService
             $cardLast4 = null;
             $cardHolderName = null;
 
-            if (!empty($paymentIntent->charges->data)) {
+            if (! empty($paymentIntent->charges->data)) {
                 $charge = $paymentIntent->charges->data[0];
                 $paymentMethodDetails = $charge->payment_method_details->card ?? null;
                 if ($paymentMethodDetails) {
@@ -1013,7 +1013,7 @@ class PaymentService
                         'session_id' => $session->id,
                         'payment_intent_id' => $paymentIntent->id,
                     ];
-                    
+
                     if (is_array($metadata)) {
                         $fundingData['creator_id'] = $metadata['creator_id'] ?? null;
                         $fundingData['chat_room_id'] = $metadata['chat_room_id'] ?? null;
@@ -1023,15 +1023,15 @@ class PaymentService
                         $fundingData['chat_room_id'] = $metadata->chat_room_id ?? null;
                         $fundingData['campaign_id'] = $metadata->campaign_id ?? null;
                     }
-                    
+
                     $notification = Notification::createPlatformFundingSuccess(
                         $user->id,
                         $transactionAmount,
                         $fundingData
                     );
-                    
+
                     NotificationService::sendSocketNotification($user->id, $notification);
-                    
+
                     Log::info('Platform funding success notification created', [
                         'notification_id' => $notification->id,
                         'user_id' => $user->id,
@@ -1068,28 +1068,29 @@ class PaymentService
                 'stripe_subscription_id' => $stripeSubscriptionId,
                 'latest_invoice_id' => $latestInvoiceId,
             ]);
-            
+
             $localSub = $this->paymentRepository->findLocalSubscriptionByStripeId($stripeSubscriptionId);
-            if (!$localSub) {
+            if (! $localSub) {
                 Log::warning('Local subscription not found when marking payment failed', [
                     'stripe_subscription_id' => $stripeSubscriptionId,
                 ]);
+
                 return;
             }
-            
+
             $localSub->update([
                 'status' => LocalSubscription::STATUS_PENDING,
                 'stripe_status' => 'past_due',
                 'stripe_latest_invoice_id' => $latestInvoiceId,
             ]);
-            
+
             Log::info('Subscription payment marked as failed', [
                 'local_subscription_id' => $localSub->id,
                 'user_id' => $localSub->user_id,
                 'new_status' => $localSub->status,
                 'stripe_status' => $localSub->stripe_status,
             ]);
-            
+
         } catch (\Throwable $e) {
             Log::error('Failed to mark subscription payment failed', [
                 'stripe_subscription_id' => $stripeSubscriptionId,
@@ -1128,20 +1129,22 @@ class PaymentService
                 if ($user) {
                     Log::info('Delegating Brand Payment Method setup to PaymentService handleSetupSessionSuccess', ['user_id' => $userId]);
                     $this->handleSetupSessionSuccess($session->id, $user);
+
                     return;
                 }
             }
-            
+
             $setupIntentId = $session->setup_intent ?? null;
-            if (!$setupIntentId) {
+            if (! $setupIntentId) {
                 Log::warning('No setup intent in checkout session', [
                     'session_id' => $session->id,
                 ]);
+
                 return;
             }
 
             $setupIntent = $this->stripeWrapper->retrieveSetupIntent($setupIntentId, [
-                'expand' => ['payment_method']
+                'expand' => ['payment_method'],
             ]);
 
             if ($setupIntent->status !== 'succeeded') {
@@ -1149,9 +1152,10 @@ class PaymentService
                     'setup_intent_id' => $setupIntentId,
                     'status' => $setupIntent->status,
                 ]);
+
                 return;
             }
-            
+
             $paymentMethodId = null;
             if (is_object($setupIntent->payment_method)) {
                 $paymentMethodId = $setupIntent->payment_method->id ?? null;
@@ -1159,45 +1163,49 @@ class PaymentService
                 $paymentMethodId = $setupIntent->payment_method;
             }
 
-            if (!$paymentMethodId) {
+            if (! $paymentMethodId) {
                 Log::warning('No payment method in setup intent', [
                     'setup_intent_id' => $setupIntentId,
                 ]);
+
                 return;
             }
 
             $customerId = $session->customer;
-            if (!$customerId) {
+            if (! $customerId) {
                 Log::warning('No customer ID in checkout session', [
                     'session_id' => $session->id,
                 ]);
+
                 return;
             }
 
             $user = $this->paymentRepository->findUserByStripeCustomerId($customerId);
-            if (!$user) {
+            if (! $user) {
                 Log::warning('User not found for Stripe customer', [
                     'customer_id' => $customerId,
                     'session_id' => $session->id,
                 ]);
+
                 return;
             }
-            
+
             if ($user->stripe_payment_method_id === $paymentMethodId) {
                 Log::info('Payment method already stored, skipping webhook processing', [
                     'user_id' => $user->id,
                     'payment_method_id' => $paymentMethodId,
                     'session_id' => $session->id,
                 ]);
+
                 return;
             }
-            
+
             $isCreatorOrStudent = $user->isCreator() || $user->isStudent();
-            
+
             $paymentMethod = null;
             $cardBrand = null;
             $cardLast4 = null;
-            
+
             try {
                 $paymentMethod = $this->stripeWrapper->retrievePaymentMethod($paymentMethodId);
                 if ($paymentMethod->type === 'card' && isset($paymentMethod->card)) {
@@ -1212,10 +1220,10 @@ class PaymentService
             }
 
             DB::beginTransaction();
-            
+
             try {
                 $this->paymentRepository->updateUserDefaultPaymentMethod($user, $paymentMethodId);
-                
+
                 $user->refresh();
                 if ($user->stripe_payment_method_id !== $paymentMethodId) {
                     $user->stripe_payment_method_id = $paymentMethodId;
@@ -1226,8 +1234,8 @@ class PaymentService
                 $stripeCardMethod = null;
                 if ($isCreatorOrStudent) {
                     $stripeCardMethod = \App\Models\WithdrawalMethod::where('code', 'stripe_card')->first();
-                    
-                    if (!$stripeCardMethod) {
+
+                    if (! $stripeCardMethod) {
                         $stripeCardMethod = \App\Models\WithdrawalMethod::create([
                             'code' => 'stripe_card',
                             'name' => 'Cartão de Crédito/Débito (Stripe)',
@@ -1241,13 +1249,13 @@ class PaymentService
                             'field_config' => [],
                             'sort_order' => 100,
                         ]);
-                        
+
                         Log::info('Created stripe_card withdrawal method in withdrawal_methods table', [
                             'withdrawal_method_id' => $stripeCardMethod->id,
                             'user_id' => $user->id,
                         ]);
                     } else {
-                        if (!$stripeCardMethod->is_active) {
+                        if (! $stripeCardMethod->is_active) {
                             $stripeCardMethod->update(['is_active' => true]);
                             Log::info('Activated stripe_card withdrawal method', [
                                 'withdrawal_method_id' => $stripeCardMethod->id,

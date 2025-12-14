@@ -4,14 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\WithdrawalMethod;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class WithdrawalMethodController extends Controller
 {
-    
     public function index(): JsonResponse
     {
         try {
@@ -33,7 +32,6 @@ class WithdrawalMethodController extends Controller
         }
     }
 
-    
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -78,12 +76,11 @@ class WithdrawalMethodController extends Controller
         }
     }
 
-    
     public function update(Request $request, int $id): JsonResponse
     {
         $method = WithdrawalMethod::find($id);
 
-        if (!$method) {
+        if (! $method) {
             return response()->json([
                 'success' => false,
                 'message' => 'Withdrawal method not found',
@@ -91,7 +88,7 @@ class WithdrawalMethodController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'code' => 'string|unique:withdrawal_methods,code,' . $id . '|max:50',
+            'code' => 'string|unique:withdrawal_methods,code,'.$id.'|max:50',
             'name' => 'string|max:100',
             'description' => 'string',
             'min_amount' => 'numeric|min:0',
@@ -133,12 +130,11 @@ class WithdrawalMethodController extends Controller
         }
     }
 
-    
     public function destroy(int $id): JsonResponse
     {
         $method = WithdrawalMethod::find($id);
 
-        if (!$method) {
+        if (! $method) {
             return response()->json([
                 'success' => false,
                 'message' => 'Withdrawal method not found',
@@ -165,12 +161,11 @@ class WithdrawalMethodController extends Controller
         }
     }
 
-    
     public function toggleActive(int $id): JsonResponse
     {
         $method = WithdrawalMethod::find($id);
 
-        if (!$method) {
+        if (! $method) {
             return response()->json([
                 'success' => false,
                 'message' => 'Withdrawal method not found',
@@ -178,7 +173,7 @@ class WithdrawalMethodController extends Controller
         }
 
         try {
-            $method->update(['is_active' => !$method->is_active]);
+            $method->update(['is_active' => ! $method->is_active]);
 
             return response()->json([
                 'success' => true,

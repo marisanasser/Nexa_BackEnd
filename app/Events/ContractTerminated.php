@@ -2,11 +2,9 @@
 
 namespace App\Events;
 
-use App\Models\Contract;
 use App\Models\ChatRoom;
-use Illuminate\Broadcasting\Channel;
+use App\Models\Contract;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
@@ -17,8 +15,11 @@ class ContractTerminated implements ShouldBroadcast
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public $contract;
+
     public $chatRoom;
+
     public $senderId;
+
     public $reason;
 
     /**
@@ -39,11 +40,12 @@ class ContractTerminated implements ShouldBroadcast
      */
     public function broadcastOn(): array
     {
-        if (!$this->chatRoom) {
+        if (! $this->chatRoom) {
             return [];
         }
+
         return [
-            new PrivateChannel('chat.' . $this->chatRoom->room_id),
+            new PrivateChannel('chat.'.$this->chatRoom->room_id),
         ];
     }
 

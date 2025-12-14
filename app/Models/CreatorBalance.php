@@ -26,7 +26,6 @@ class CreatorBalance extends Model
         'total_withdrawn' => 'decimal:2',
     ];
 
-    
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'creator_id');
@@ -42,7 +41,6 @@ class CreatorBalance extends Model
         return $this->hasMany(JobPayment::class, 'creator_id', 'creator_id');
     }
 
-    
     public function getTotalBalanceAttribute(): float
     {
         return $this->available_balance + $this->pending_balance;
@@ -50,27 +48,27 @@ class CreatorBalance extends Model
 
     public function getFormattedAvailableBalanceAttribute(): string
     {
-        return 'R$ ' . number_format($this->available_balance, 2, ',', '.');
+        return 'R$ '.number_format($this->available_balance, 2, ',', '.');
     }
 
     public function getFormattedPendingBalanceAttribute(): string
     {
-        return 'R$ ' . number_format($this->pending_balance, 2, ',', '.');
+        return 'R$ '.number_format($this->pending_balance, 2, ',', '.');
     }
 
     public function getFormattedTotalEarnedAttribute(): string
     {
-        return 'R$ ' . number_format($this->total_earned, 2, ',', '.');
+        return 'R$ '.number_format($this->total_earned, 2, ',', '.');
     }
 
     public function getFormattedTotalWithdrawnAttribute(): string
     {
-        return 'R$ ' . number_format($this->total_withdrawn, 2, ',', '.');
+        return 'R$ '.number_format($this->total_withdrawn, 2, ',', '.');
     }
 
     public function getFormattedTotalBalanceAttribute(): string
     {
-        return 'R$ ' . number_format($this->total_balance, 2, ',', '.');
+        return 'R$ '.number_format($this->total_balance, 2, ',', '.');
     }
 
     public function canWithdraw(float $amount): bool
@@ -95,23 +93,22 @@ class CreatorBalance extends Model
 
     public function movePendingToAvailable(float $amount): bool
     {
-        
+
         $this->refresh();
-        
+
         if ($this->pending_balance >= $amount) {
             $this->decrement('pending_balance', $amount);
             $this->increment('available_balance', $amount);
-            
-            
+
             $this->refresh();
-            
+
             \Illuminate\Support\Facades\Log::info('Moved pending to available balance', [
                 'creator_id' => $this->creator_id,
                 'amount' => $amount,
                 'pending_balance_after' => $this->pending_balance,
                 'available_balance_after' => $this->available_balance,
             ]);
-            
+
             return true;
         } else {
             \Illuminate\Support\Facades\Log::warning('Failed to move pending to available balance - insufficient pending balance', [
@@ -120,14 +117,14 @@ class CreatorBalance extends Model
                 'pending_balance' => $this->pending_balance,
                 'available_balance' => $this->available_balance,
             ]);
-            
+
             return false;
         }
     }
 
     public function withdraw(float $amount): bool
     {
-        if (!$this->canWithdraw($amount)) {
+        if (! $this->canWithdraw($amount)) {
             return false;
         }
 
@@ -156,12 +153,12 @@ class CreatorBalance extends Model
 
     public function getFormattedEarningsThisMonthAttribute(): string
     {
-        return 'R$ ' . number_format($this->earnings_this_month, 2, ',', '.');
+        return 'R$ '.number_format($this->earnings_this_month, 2, ',', '.');
     }
 
     public function getFormattedEarningsThisYearAttribute(): string
     {
-        return 'R$ ' . number_format($this->earnings_this_year, 2, ',', '.');
+        return 'R$ '.number_format($this->earnings_this_year, 2, ',', '.');
     }
 
     public function getPendingWithdrawalsCountAttribute(): int
@@ -180,7 +177,7 @@ class CreatorBalance extends Model
 
     public function getFormattedPendingWithdrawalsAmountAttribute(): string
     {
-        return 'R$ ' . number_format($this->pending_withdrawals_amount, 2, ',', '.');
+        return 'R$ '.number_format($this->pending_withdrawals_amount, 2, ',', '.');
     }
 
     public function getRecentTransactions(int $limit = 10)
@@ -192,58 +189,47 @@ class CreatorBalance extends Model
             ->get();
     }
 
-    
     public function recalculateFromPayments(): void
     {
-        
+
         $allPayments = $this->payments()
             ->with('contract')
             ->get();
 
-        
         $completedPayments = $allPayments->where('status', 'completed');
         $pendingPayments = $allPayments->where('status', 'pending');
 
-        
         $totalEarned = $completedPayments->sum('creator_amount');
 
-        
         $withdrawals = $this->withdrawals()
             ->whereIn('status', ['completed', 'processing'])
             ->get();
 
         $totalWithdrawn = $withdrawals->sum('amount');
 
-        
         $pendingBalance = $pendingPayments->sum('creator_amount');
 
-        
-        
         $availableFromCompleted = $completedPayments
             ->filter(function ($payment) {
-                return $payment->contract && 
+                return $payment->contract &&
                        $payment->contract->workflow_status === 'payment_available';
             })
             ->sum('creator_amount');
 
-        
-        
         $contractsWithAvailablePayment = \App\Models\Contract::where('creator_id', $this->creator_id)
             ->where('workflow_status', 'payment_available')
             ->where('status', 'completed')
             ->get();
 
-        
         foreach ($contractsWithAvailablePayment as $contract) {
             $hasPaymentRecord = $allPayments->contains(function ($payment) use ($contract) {
                 return $payment->contract_id === $contract->id;
             });
-            
-            
-            if (!$hasPaymentRecord && $contract->creator_amount > 0) {
+
+            if (! $hasPaymentRecord && $contract->creator_amount > 0) {
                 $availableFromCompleted += $contract->creator_amount;
                 $totalEarned += $contract->creator_amount;
-                
+
                 \Illuminate\Support\Facades\Log::info('Found contract with payment_available but no payment record', [
                     'contract_id' => $contract->id,
                     'creator_id' => $this->creator_id,
@@ -252,10 +238,8 @@ class CreatorBalance extends Model
             }
         }
 
-        
         $availableBalance = max(0, $availableFromCompleted - $totalWithdrawn);
 
-        
         $this->update([
             'total_earned' => $totalEarned,
             'total_withdrawn' => $totalWithdrawn,
@@ -263,7 +247,6 @@ class CreatorBalance extends Model
             'available_balance' => $availableBalance,
         ]);
 
-        
         $this->refresh();
 
         \Illuminate\Support\Facades\Log::info('Recalculated creator balance from payments', [
@@ -288,8 +271,7 @@ class CreatorBalance extends Model
 
     public function getBalanceHistory(int $days = 30)
     {
-        
-        
+
         return [
             'current_balance' => $this->total_balance,
             'available_balance' => $this->available_balance,
@@ -300,4 +282,4 @@ class CreatorBalance extends Model
             'earnings_this_year' => $this->earnings_this_year,
         ];
     }
-} 
+}

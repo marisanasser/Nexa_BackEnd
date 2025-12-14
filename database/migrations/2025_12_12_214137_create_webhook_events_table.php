@@ -19,7 +19,7 @@ return new class extends Migration
             $table->enum('status', ['received', 'processing', 'processed', 'failed'])->default('received');
             $table->text('error_message')->nullable();
             $table->timestamps();
-            
+
             $table->index(['status', 'created_at']);
         });
     }

@@ -4,7 +4,6 @@ namespace App\Mail;
 
 use App\Models\Campaign;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -15,16 +14,15 @@ class CampaignCreated extends Mailable
     use Queueable, SerializesModels;
 
     public $campaign;
+
     public $brand;
 
-    
     public function __construct(Campaign $campaign)
     {
         $this->campaign = $campaign;
         $this->brand = $campaign->brand;
     }
 
-    
     public function envelope(): Envelope
     {
         return new Envelope(
@@ -32,7 +30,6 @@ class CampaignCreated extends Mailable
         );
     }
 
-    
     public function content(): Content
     {
         return new Content(
@@ -44,10 +41,8 @@ class CampaignCreated extends Mailable
         );
     }
 
-    
     public function attachments(): array
     {
         return [];
     }
 }
-

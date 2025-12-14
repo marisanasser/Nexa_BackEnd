@@ -2,11 +2,7 @@
 
 return [
 
-    
-
     'default' => env('QUEUE_CONNECTION', 'sync'),
-
-    
 
     'connections' => [
 
@@ -53,14 +49,10 @@ return [
 
     ],
 
-    
-
     'batching' => [
         'database' => env('DB_CONNECTION', 'mysql'),
         'table' => 'job_batches',
     ],
-
-    
 
     'failed' => [
         'driver' => env('QUEUE_FAILED_DRIVER', 'database-uuids'),

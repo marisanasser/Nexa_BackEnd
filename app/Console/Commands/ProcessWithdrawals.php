@@ -8,13 +8,10 @@ use Illuminate\Support\Facades\Log;
 
 class ProcessWithdrawals extends Command
 {
-    
     protected $signature = 'withdrawals:process';
 
-    
     protected $description = 'Process pending withdrawal requests';
 
-    
     public function handle()
     {
         $this->info('Starting withdrawal processing...');
@@ -35,8 +32,8 @@ class ProcessWithdrawals extends Command
                 }
             } catch (\Exception $e) {
                 $failed++;
-                $this->error("Withdrawal {$withdrawal->id} failed with error: " . $e->getMessage());
-                
+                $this->error("Withdrawal {$withdrawal->id} failed with error: ".$e->getMessage());
+
                 Log::error('Withdrawal processing error', [
                     'withdrawal_id' => $withdrawal->id,
                     'error' => $e->getMessage(),
@@ -48,4 +45,4 @@ class ProcessWithdrawals extends Command
 
         return 0;
     }
-} 
+}

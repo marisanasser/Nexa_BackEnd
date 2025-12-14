@@ -2,11 +2,7 @@
 
 return [
 
-    
-
     'default' => env('MAIL_MAILER', 'failover'),
-
-    
 
     'mailers' => [
         'smtp' => [
@@ -30,17 +26,12 @@ return [
 
         'postmark' => [
             'transport' => 'postmark',
-            
-            
-            
-            
+
         ],
 
         'mailgun' => [
             'transport' => 'mailgun',
-            
-            
-            
+
         ],
 
         'sendmail' => [
@@ -75,14 +66,10 @@ return [
         ],
     ],
 
-    
-
     'from' => [
         'address' => 'dove.engineer86@gmail.com',
         'name' => 'Nexa',
     ],
-
-    
 
     'markdown' => [
         'theme' => 'default',

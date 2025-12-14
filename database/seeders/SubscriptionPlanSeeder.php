@@ -2,16 +2,14 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 class SubscriptionPlanSeeder extends Seeder
 {
-    
     public function run(): void
     {
-        
+
         DB::table('subscription_plans')->truncate();
         $plans = [
             [
@@ -27,7 +25,7 @@ class SubscriptionPlanSeeder extends Seeder
                     'Acesso a todas as campanhas exclusivas',
                     'Prioridade na aprovação de campanhas',
                     'Suporte premium via chat',
-                    'Ferramentas avançadas de criação de conteúdo'
+                    'Ferramentas avançadas de criação de conteúdo',
                 ]),
                 'sort_order' => 1,
                 'created_at' => now(),
@@ -47,7 +45,7 @@ class SubscriptionPlanSeeder extends Seeder
                     'Prioridade na aprovação de campanhas',
                     'Suporte premium via chat',
                     'Ferramentas avançadas de criação de conteúdo',
-                    'Economia significativa comparado ao plano mensal'
+                    'Economia significativa comparado ao plano mensal',
                 ]),
                 'sort_order' => 2,
                 'created_at' => now(),
@@ -67,17 +65,16 @@ class SubscriptionPlanSeeder extends Seeder
                     'Prioridade na aprovação de campanhas',
                     'Suporte premium via chat',
                     'Ferramentas avançadas de criação de conteúdo',
-                    'Melhor valor - economia máxima comparado ao plano mensal'
+                    'Melhor valor - economia máxima comparado ao plano mensal',
                 ]),
                 'sort_order' => 3,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
         ];
-        
 
         foreach ($plans as $plan) {
             DB::table('subscription_plans')->insert($plan);
         }
     }
-} 
+}

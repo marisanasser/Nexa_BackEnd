@@ -2,89 +2,87 @@
 
 namespace App\Http\Controllers;
 
-use App\Events\NewMessage;
 use App\Events\MessagesRead;
+use App\Events\NewMessage;
+use App\Models\CampaignApplication;
 use App\Models\ChatRoom;
 use App\Models\Message;
 use App\Models\UserOnlineStatus;
-use App\Models\CampaignApplication;
 use App\Traits\OfferChatMessageTrait;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
 class ChatController extends Controller
 {
     use OfferChatMessageTrait;
-    
+
     public function getChatRooms(): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
         Log::info('Getting chat rooms', [
             'user_id' => $user->id,
-            'role' => $user->role
+            'role' => $user->role,
         ]);
-        
+
         $chatRooms = collect();
 
         if ($user->isBrand()) {
             $chatRooms = ChatRoom::where('brand_id', $user->id)
                 ->with(['creator', 'campaign', 'lastMessage.sender'])
-                ->orderBy('created_at', 'desc') 
-                ->orderBy('last_message_at', 'desc') 
+                ->orderBy('created_at', 'desc')
+                ->orderBy('last_message_at', 'desc')
                 ->get();
-                
+
             // Log::info('Found chat rooms for brand', [ ... ]);
         } elseif ($user->isCreator() || $user->isStudent()) {
             $chatRooms = ChatRoom::where('creator_id', $user->id)
                 ->with(['brand', 'campaign', 'lastMessage.sender'])
-                ->orderBy('created_at', 'desc') 
-                ->orderBy('last_message_at', 'desc') 
+                ->orderBy('created_at', 'desc')
+                ->orderBy('last_message_at', 'desc')
                 ->get();
-                
+
             // Log::info('Found chat rooms for creator/student', [ ... ]);
         } elseif ($user->isAdmin()) {
-            
+
             $chatRooms = ChatRoom::with(['creator', 'brand', 'campaign', 'lastMessage.sender'])
-                ->orderBy('created_at', 'desc') 
-                ->orderBy('last_message_at', 'desc') 
+                ->orderBy('created_at', 'desc')
+                ->orderBy('last_message_at', 'desc')
                 ->get();
-                
+
             // Log::info('Found chat rooms for admin', [ ... ]);
         }
 
         $formattedRooms = $chatRooms->map(function ($room) use ($user) {
             $otherUser = $user->isBrand() ? $room->creator : $room->brand;
             $lastMessage = $room->lastMessage->first();
-            
-            
+
             if ($user->isAdmin()) {
                 if ($lastMessage && $lastMessage->sender_id === $room->brand_id) {
                     $otherUser = $room->brand;
                 } elseif ($lastMessage && $lastMessage->sender_id === $room->creator_id) {
                     $otherUser = $room->creator;
                 } else {
-                    
+
                     $otherUser = $room->creator ?? $room->brand;
                 }
             }
-            
-            
-            if (!$otherUser) {
+
+            if (! $otherUser) {
                 Log::warning('Skipping chat room with null other user', [
                     'room_id' => $room->room_id,
                     'brand_id' => $room->brand_id,
                     'creator_id' => $room->creator_id,
                     'user_id' => $user->id,
                 ]);
+
                 return null;
             }
-            
+
             return [
                 'id' => $room->id,
                 'room_id' => $room->room_id,
@@ -111,15 +109,14 @@ class ChatController extends Controller
                     ->count(),
                 'last_message_at' => $room->last_message_at?->toISOString(),
             ];
-        })->filter(); 
+        })->filter();
 
         return response()->json([
             'success' => true,
-            'data' => $formattedRooms->values(), 
+            'data' => $formattedRooms->values(),
         ]);
     }
 
-    
     public function getMessages(Request $request, string $roomId): JsonResponse
     {
         /** @var \App\Models\User $user */
@@ -127,21 +124,20 @@ class ChatController extends Controller
 
         // Log::info('Getting messages for room', [ ... ]);
 
-        
         if ($user->isAdmin()) {
-            
+
             $room = ChatRoom::where('room_id', $roomId)->first();
         } else {
-            
+
             $room = ChatRoom::where('room_id', $roomId)
                 ->where(function ($query) use ($user) {
                     $query->where('brand_id', $user->id)
-                          ->orWhere('creator_id', $user->id);
+                        ->orWhere('creator_id', $user->id);
                 })
                 ->first();
         }
 
-        if (!$room) {
+        if (! $room) {
             // Log::error('Chat room not found for messages', [ ... ]);
             return response()->json([
                 'success' => false,
@@ -151,22 +147,18 @@ class ChatController extends Controller
 
         // Log::info('Found chat room for messages', [ ... ]);
 
-        
-        if ($user->isBrand() && $room->campaign_id && !$room->messages()->exists()) {
+        if ($user->isBrand() && $room->campaign_id && ! $room->messages()->exists()) {
             $this->sendInitialOfferIfNeeded($room);
         }
 
-        
         if ($user->isBrand() && $room->campaign_id && $room->messages()->count() === 0) {
             $this->sendInitialOfferIfNeeded($room);
         }
 
-        
         if (($user->isCreator() || $user->isStudent()) && $room->campaign_id && $room->messages()->count() === 0) {
             $this->sendInitialOfferIfNeeded($room);
         }
 
-        
         $unreadMessages = $room->messages()
             ->where('sender_id', '!=', $user->id)
             ->where('is_read', false)
@@ -174,11 +166,10 @@ class ChatController extends Controller
 
         if ($unreadMessages->count() > 0) {
             $messageIds = $unreadMessages->pluck('id')->toArray();
-            
-            
+
             Message::whereIn('id', $messageIds)->update([
                 'is_read' => true,
-                'read_at' => now()
+                'read_at' => now(),
             ]);
 
             Log::info('Marked messages as read', [
@@ -192,11 +183,10 @@ class ChatController extends Controller
             ->orderBy('created_at', 'asc')
             ->get();
 
-        
         $nullSenderMessages = $messages->filter(function ($message) {
             return $message->sender === null;
         });
-        
+
         if ($nullSenderMessages->count() > 0) {
             Log::warning('Found messages with null senders', [
                 'room_id' => $roomId,
@@ -233,32 +223,30 @@ class ChatController extends Controller
                 'created_at' => $message->created_at->toISOString(),
             ];
 
-            
             if (($message->message_type === 'offer' || $message->message_type === 'contract_completion') && $message->offer_data) {
-                
+
                 $offerData = is_string($message->offer_data) ? json_decode($message->offer_data, true) : $message->offer_data;
-                
+
                 if ($offerData && is_array($offerData)) {
-                    
+
                     if (isset($offerData['offer_id'])) {
                         $currentOffer = \App\Models\Offer::find($offerData['offer_id']);
                         if ($currentOffer) {
-                            
+
                             $offerData['status'] = $currentOffer->status;
                             $offerData['accepted_at'] = $currentOffer->accepted_at?->format('Y-m-d H:i:s');
                             $offerData['rejected_at'] = $currentOffer->rejected_at?->format('Y-m-d H:i:s');
                             $offerData['rejection_reason'] = $currentOffer->rejection_reason;
-                            
-                            
+
                             if ($currentOffer->status === 'accepted') {
-                                
+
                                 $contract = \App\Models\Contract::where('offer_id', $currentOffer->id)->first();
-                                
+
                                 if ($contract) {
                                     $offerData['contract_id'] = $contract->id;
                                     $offerData['contract_status'] = $contract->status;
                                     $offerData['can_be_completed'] = $contract->canBeCompleted();
-                                    
+
                                     Log::info('Contract data included in offer message', [
                                         'offer_id' => $currentOffer->id,
                                         'contract_id' => $contract->id,
@@ -272,7 +260,7 @@ class ChatController extends Controller
                                     ]);
                                 }
                             } else {
-                                
+
                                 Log::info('No contract data for offer', [
                                     'offer_id' => $currentOffer->id,
                                     'offer_status' => $currentOffer->status,
@@ -280,10 +268,9 @@ class ChatController extends Controller
                             }
                         }
                     }
-                    
+
                     $messageData['offer_data'] = $offerData;
-                    
-                    
+
                     if ($message->message_type === 'contract_completion') {
                         Log::info('Contract completion message offer_data included', [
                             'message_id' => $message->id,
@@ -292,7 +279,7 @@ class ChatController extends Controller
                         ]);
                     }
                 } else {
-                    
+
                     $messageData['offer_data'] = null;
                 }
             }
@@ -320,13 +307,12 @@ class ChatController extends Controller
         ]);
     }
 
-    
     public function sendMessage(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'room_id' => 'required|string',
             'message' => 'required_without:file|string|max:1000',
-            'file' => 'nullable|file|max:10240', 
+            'file' => 'nullable|file|max:10240',
         ]);
 
         if ($validator->fails()) {
@@ -339,32 +325,33 @@ class ChatController extends Controller
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
         Log::info('Sending message', [
             'room_id' => $request->room_id,
             'user_id' => $user->id,
             'message_length' => strlen($request->message ?? ''),
             'has_file' => $request->hasFile('file'),
         ]);
-        
+
         if ($user->isAdmin()) {
-            
+
             $room = ChatRoom::where('room_id', $request->room_id)->first();
         } else {
-            
+
             $room = ChatRoom::where('room_id', $request->room_id)
                 ->where(function ($query) use ($user) {
                     $query->where('brand_id', $user->id)
-                          ->orWhere('creator_id', $user->id);
+                        ->orWhere('creator_id', $user->id);
                 })
                 ->first();
         }
 
-        if (!$room) {
+        if (! $room) {
             Log::error('Chat room not found', [
                 'room_id' => $request->room_id,
                 'user_id' => $user->id,
             ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Chat room not found',
@@ -385,17 +372,15 @@ class ChatController extends Controller
             'message_type' => 'text',
         ];
 
-        
         if ($request->hasFile('file')) {
             $file = $request->file('file');
-            $fileName = time() . '_' . $file->getClientOriginalName();
+            $fileName = time().'_'.$file->getClientOriginalName();
             $filePath = $file->storeAs('chat-files', $fileName, 'public');
-            
-            
+
             if (empty($messageData['message'])) {
                 $messageData['message'] = $file->getClientOriginalName();
             }
-            
+
             $messageData['message_type'] = $this->getFileType($file->getMimeType());
             $messageData['file_path'] = $filePath;
             $messageData['file_name'] = $file->getClientOriginalName();
@@ -407,7 +392,7 @@ class ChatController extends Controller
 
         try {
             $message = Message::create($messageData);
-            
+
             Log::info('Message created successfully', [
                 'message_id' => $message->id,
                 'chat_room_id' => $message->chat_room_id,
@@ -415,10 +400,8 @@ class ChatController extends Controller
                 'created_at' => $message->created_at,
             ]);
 
-            
             $room->update(['last_message_at' => now()]);
 
-            
             $message->load('sender');
 
             $responseData = [
@@ -439,15 +422,13 @@ class ChatController extends Controller
                 'created_at' => $message->created_at->toISOString(),
             ];
 
-            
             if (($message->message_type === 'offer' || $message->message_type === 'contract_completion') && $message->offer_data) {
-                
+
                 $offerData = is_string($message->offer_data) ? json_decode($message->offer_data, true) : $message->offer_data;
-                
+
                 if ($offerData && is_array($offerData)) {
                     $responseData['offer_data'] = $offerData;
-                    
-                    
+
                     if (isset($offerData['status']) && $offerData['status'] === 'accepted' && isset($offerData['contract_id'])) {
                         $contract = \App\Models\Contract::find($offerData['contract_id']);
                         if ($contract) {
@@ -456,12 +437,11 @@ class ChatController extends Controller
                         }
                     }
                 } else {
-                    
+
                     $responseData['offer_data'] = null;
                 }
             }
 
-            
             $socketData = [
                 'roomId' => $room->room_id,
                 'messageId' => $message->id,
@@ -480,9 +460,9 @@ class ChatController extends Controller
                 'offerData' => $message->offer_data ? json_decode($message->offer_data, true) : null,
                 'timestamp' => $message->created_at->toISOString(),
             ];
-            
+
             Log::info('Emitting socket event for message', $socketData);
-            
+
             // Dispatch event for Reverb/Broadcasting
             $offerData = $message->offer_data ? json_decode($message->offer_data, true) : null;
             event(new NewMessage($message, $room, $offerData));
@@ -511,7 +491,6 @@ class ChatController extends Controller
         }
     }
 
-    
     public function markMessagesAsRead(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -530,36 +509,35 @@ class ChatController extends Controller
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
         if ($user->isAdmin()) {
-            
+
             $room = ChatRoom::where('room_id', $request->room_id)->first();
         } else {
-            
+
             $room = ChatRoom::where('room_id', $request->room_id)
                 ->where(function ($query) use ($user) {
                     $query->where('brand_id', $user->id)
-                          ->orWhere('creator_id', $user->id);
+                        ->orWhere('creator_id', $user->id);
                 })
                 ->first();
         }
 
-        if (!$room) {
+        if (! $room) {
             return response()->json([
                 'success' => false,
                 'message' => 'Chat room not found',
             ], 404);
         }
 
-        
         Message::whereIn('id', $request->message_ids)
             ->where('chat_room_id', $room->id)
-            ->where('sender_id', '!=', $user->id) 
+            ->where('sender_id', '!=', $user->id)
             ->update([
                 'is_read' => true,
-                'read_at' => now()
+                'read_at' => now(),
             ]);
-            
+
         // Dispatch event for Reverb/Broadcasting
         event(new MessagesRead($room, $request->message_ids, $user->id));
 
@@ -569,7 +547,6 @@ class ChatController extends Controller
         ]);
     }
 
-    
     public function createChatRoom(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -587,46 +564,42 @@ class ChatController extends Controller
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
-        if (!$user->isBrand() && !$user->isAdmin()) {
+
+        if (! $user->isBrand() && ! $user->isAdmin()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only brands and admins can create chat rooms',
             ], 403);
         }
 
-        
         $application = CampaignApplication::where('campaign_id', $request->campaign_id)
             ->where('creator_id', $request->creator_id)
             ->where('status', 'approved')
             ->first();
 
-        if (!$application) {
+        if (! $application) {
             return response()->json([
                 'success' => false,
                 'message' => 'No approved application found for this campaign and creator',
             ], 404);
         }
 
-        
         $room = ChatRoom::findOrCreateRoom(
             $request->campaign_id,
             $user->id,
             $request->creator_id
         );
 
-        
         if ($room->wasRecentlyCreated) {
             $application->initiateFirstContact();
-            
+
             Log::info('Application workflow status updated to agreement_in_progress', [
                 'application_id' => $application->id,
                 'campaign_id' => $request->campaign_id,
                 'creator_id' => $request->creator_id,
                 'workflow_status' => $application->workflow_status,
             ]);
-            
-            
+
             $this->sendInitialOfferIfNeeded($room);
         }
 
@@ -640,31 +613,30 @@ class ChatController extends Controller
         ]);
     }
 
-    
     public function sendGuideMessages(Request $request, string $roomId): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
         Log::info('sendGuideMessages called', [
             'user_id' => $user->id,
             'user_role' => $user->role,
             'room_id' => $roomId,
         ]);
-        
-        
+
         $room = ChatRoom::where('room_id', $roomId)
             ->where(function ($query) use ($user) {
                 $query->where('brand_id', $user->id)
-                      ->orWhere('creator_id', $user->id);
+                    ->orWhere('creator_id', $user->id);
             })
             ->first();
 
-        if (!$room) {
+        if (! $room) {
             Log::error('Chat room not found', [
                 'user_id' => $user->id,
                 'room_id' => $roomId,
             ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Chat room not found or access denied',
@@ -672,7 +644,7 @@ class ChatController extends Controller
         }
 
         try {
-            
+
             $existingGuideMessages = Message::where('chat_room_id', $room->id)
                 ->where('sender_id', $user->id)
                 ->where('message_type', 'system')
@@ -686,24 +658,23 @@ class ChatController extends Controller
                 ]);
             }
 
-            
             $otherUser = $user->isBrand() ? $room->creator : $room->brand;
 
             if ($user->isBrand()) {
-                
-                $brandMessage = "🎉 **Parabéns pela parceria iniciada!**\n\n" .
-                    "Você acaba de conectar com uma criadora talentosa da nossa plataforma. Para garantir o melhor resultado possível, é essencial orientar com detalhamento e clareza.\n\n" .
-                    "**📋 Próximos Passos Importantes:**\n\n" .
-                    "• **Saldo:** Insira o valor da campanha na aba \"Saldo\" da plataforma\n" .
-                    "• **Pagamento:** Libere o pagamento após aprovar o conteúdo final\n" .
-                    "• **Briefing:** Reforce os pontos principais com a criadora\n" .
-                    "• **Ajustes:** Até 2 pedidos de ajustes por vídeo são permitidos\n\n" .
-                    "**🔒 Regras de Segurança:**\n\n" .
-                    "✅ **Comunicação:** Exclusivamente pelo chat da NEXA\n" .
-                    "❌ **Dados:** Não compartilhe informações bancárias ou pessoais\n" .
-                    "⚠️ **Prazos:** Descumprimento pode resultar em advertência\n" .
-                    "🚫 **Cancelamento:** Produtos devem ser devolvidos se necessário\n\n" .
-                    "A NEXA está aqui para facilitar conexões seguras e profissionais! 💼✨";
+
+                $brandMessage = "🎉 **Parabéns pela parceria iniciada!**\n\n".
+                    "Você acaba de conectar com uma criadora talentosa da nossa plataforma. Para garantir o melhor resultado possível, é essencial orientar com detalhamento e clareza.\n\n".
+                    "**📋 Próximos Passos Importantes:**\n\n".
+                    "• **Saldo:** Insira o valor da campanha na aba \"Saldo\" da plataforma\n".
+                    "• **Pagamento:** Libere o pagamento após aprovar o conteúdo final\n".
+                    "• **Briefing:** Reforce os pontos principais com a criadora\n".
+                    "• **Ajustes:** Até 2 pedidos de ajustes por vídeo são permitidos\n\n".
+                    "**🔒 Regras de Segurança:**\n\n".
+                    "✅ **Comunicação:** Exclusivamente pelo chat da NEXA\n".
+                    "❌ **Dados:** Não compartilhe informações bancárias ou pessoais\n".
+                    "⚠️ **Prazos:** Descumprimento pode resultar em advertência\n".
+                    "🚫 **Cancelamento:** Produtos devem ser devolvidos se necessário\n\n".
+                    'A NEXA está aqui para facilitar conexões seguras e profissionais! 💼✨';
 
                 Message::create([
                     'chat_room_id' => $room->id,
@@ -713,23 +684,23 @@ class ChatController extends Controller
                     'is_system_message' => true,
                 ]);
             } else {
-                
-                $creatorMessage = "🎉 **Parabéns! Você foi aprovada!**\n\n" .
-                    "Estamos muito felizes em contar com você! Mostre toda sua criatividade, comprometimento e qualidade para representar bem a marca e nossa plataforma.\n\n" .
-                    "**📋 Checklist de Sucesso:**\n\n" .
-                    "• **Endereço:** Confirme seu endereço de envio o quanto antes\n" .
-                    "• **Roteiro:** Entregue em até 5 dias úteis\n" .
-                    "• **Briefing:** Siga todas as orientações da marca\n" .
-                    "• **Aprovação:** Aguarde aprovação do roteiro antes de gravar\n" .
-                    "• **Conteúdo:** Entregue o vídeo final em até 5 dias úteis após aprovação\n" .
-                    "• **Qualidade:** Vídeo profissional, até 2 ajustes permitidos\n" .
-                    "• **Comunicação:** Mantenha retorno rápido no chat\n\n" .
-                    "**🔒 Regras Importantes:**\n\n" .
-                    "✅ **Chat:** Comunicação exclusivamente pela NEXA\n" .
-                    "❌ **Dados:** Não compartilhe informações bancárias ou pessoais\n" .
-                    "⚠️ **Prazos:** Descumprimento pode resultar em penalizações\n" .
-                    "🚫 **Cancelamento:** Produtos devem ser devolvidos se necessário\n\n" .
-                    "Estamos aqui para garantir a melhor experiência! Boa campanha! 💼💡";
+
+                $creatorMessage = "🎉 **Parabéns! Você foi aprovada!**\n\n".
+                    "Estamos muito felizes em contar com você! Mostre toda sua criatividade, comprometimento e qualidade para representar bem a marca e nossa plataforma.\n\n".
+                    "**📋 Checklist de Sucesso:**\n\n".
+                    "• **Endereço:** Confirme seu endereço de envio o quanto antes\n".
+                    "• **Roteiro:** Entregue em até 5 dias úteis\n".
+                    "• **Briefing:** Siga todas as orientações da marca\n".
+                    "• **Aprovação:** Aguarde aprovação do roteiro antes de gravar\n".
+                    "• **Conteúdo:** Entregue o vídeo final em até 5 dias úteis após aprovação\n".
+                    "• **Qualidade:** Vídeo profissional, até 2 ajustes permitidos\n".
+                    "• **Comunicação:** Mantenha retorno rápido no chat\n\n".
+                    "**🔒 Regras Importantes:**\n\n".
+                    "✅ **Chat:** Comunicação exclusivamente pela NEXA\n".
+                    "❌ **Dados:** Não compartilhe informações bancárias ou pessoais\n".
+                    "⚠️ **Prazos:** Descumprimento pode resultar em penalizações\n".
+                    "🚫 **Cancelamento:** Produtos devem ser devolvidos se necessário\n\n".
+                    'Estamos aqui para garantir a melhor experiência! Boa campanha! 💼💡';
 
                 Message::create([
                     'chat_room_id' => $room->id,
@@ -740,11 +711,10 @@ class ChatController extends Controller
                 ]);
             }
 
-            
-            $statusMessage = "💼 **Detalhes da Campanha**\n\n" .
-                "**Status:** 🟢 Conectado\n\n" .
-                "Você está agora conectado e pode começar a conversar!\n" .
-                "Use o chat para todas as comunicações e siga as diretrizes da plataforma.";
+            $statusMessage = "💼 **Detalhes da Campanha**\n\n".
+                "**Status:** 🟢 Conectado\n\n".
+                "Você está agora conectado e pode começar a conversar!\n".
+                'Use o chat para todas as comunicações e siga as diretrizes da plataforma.';
 
             Message::create([
                 'chat_room_id' => $room->id,
@@ -758,7 +728,7 @@ class ChatController extends Controller
                 'chat_room_id' => $room->id,
                 'user_id' => $user->id,
                 'user_role' => $user->role,
-                'messages_created' => 3, 
+                'messages_created' => 3,
             ]);
 
             return response()->json([
@@ -780,7 +750,6 @@ class ChatController extends Controller
         }
     }
 
-    
     public function updateTypingStatus(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -798,7 +767,7 @@ class ChatController extends Controller
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
         $onlineStatus = UserOnlineStatus::firstOrCreate(['user_id' => $user->id]);
         $onlineStatus->setTypingInRoom($request->room_id, $request->is_typing);
 
@@ -808,48 +777,44 @@ class ChatController extends Controller
         ]);
     }
 
-    
     private function getFileType(string $mimeType): string
     {
         if (str_starts_with($mimeType, 'image/')) {
             return 'image';
         }
+
         return 'file';
     }
 
-    
     public function sendInitialOfferIfNeeded(ChatRoom $chatRoom): void
     {
         try {
             $campaign = $chatRoom->campaign;
-            if (!$campaign) {
+            if (! $campaign) {
                 return;
             }
 
-            
             $existingOffer = \App\Models\Offer::where('campaign_id', $campaign->id)
                 ->where('chat_room_id', $chatRoom->id)
                 ->first();
 
             if ($existingOffer) {
-                return; 
+                return;
             }
 
             $isBarter = $campaign->remuneration_type === 'permuta';
             $budget = $isBarter ? 0 : $campaign->budget;
-            
-            
+
             $estimatedDays = now()->diffInDays($campaign->deadline, false);
             if ($estimatedDays <= 0) {
-                $estimatedDays = 30; 
+                $estimatedDays = 30;
             }
-            
-            
+
             $expiresAt = $campaign->deadline;
             if ($expiresAt->isPast()) {
-                $expiresAt = now()->addDays(7); 
+                $expiresAt = now()->addDays(7);
             }
-            
+
             $offer = \App\Models\Offer::create([
                 'brand_id' => $chatRoom->brand_id,
                 'creator_id' => $chatRoom->creator_id,
@@ -861,15 +826,14 @@ class ChatController extends Controller
                 'estimated_days' => $estimatedDays,
                 'requirements' => $campaign->requirements ?? [],
                 'is_barter' => $isBarter,
-                'barter_description' => $isBarter ? 'Permuta baseada na campanha: ' . $campaign->title : null,
+                'barter_description' => $isBarter ? 'Permuta baseada na campanha: '.$campaign->title : null,
                 'expires_at' => $expiresAt,
             ]);
 
-            
             $this->createOfferChatMessage($chatRoom, 'offer_created', [
                 'sender_id' => $chatRoom->brand_id,
-                'message' => $isBarter 
-                    ? "Oferta de permuta enviada automaticamente (Prazo: {$offer->estimated_days} dias)" 
+                'message' => $isBarter
+                    ? "Oferta de permuta enviada automaticamente (Prazo: {$offer->estimated_days} dias)"
                     : "Oferta enviada automaticamente: {$offer->formatted_budget} (Prazo: {$offer->estimated_days} dias)",
                 'offer_data' => [
                     'offer_id' => $offer->id,
@@ -912,18 +876,16 @@ class ChatController extends Controller
         }
     }
 
-    
-    
     // emitSocketEvent is no longer used
     // private function emitSocketEvent(string $event, array $data): void
     // {
     //     try {
-    //         
+    //
     //         \Illuminate\Support\Facades\Http::post('http://localhost:3000/emit', [
     //             'event' => $event,
     //             'data' => $data,
     //         ]);
-    //         
+    //
     //         Log::info("Socket event emitted via HTTP: {$event}", $data);
     //     } catch (\Exception $e) {
     //         Log::error('Failed to emit socket event via HTTP', [

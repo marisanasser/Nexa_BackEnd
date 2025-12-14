@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Services\NotificationService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Services\NotificationService;
 
 class Message extends Model
 {
@@ -47,25 +47,26 @@ class Message extends Model
     public function getFileUrlAttribute(): ?string
     {
         if ($this->file_path) {
-            return asset('storage/' . $this->file_path);
+            return asset('storage/'.$this->file_path);
         }
+
         return null;
     }
 
     public function getFormattedFileSizeAttribute(): ?string
     {
-        if (!$this->file_size) {
+        if (! $this->file_size) {
             return null;
         }
 
         $bytes = (int) $this->file_size;
         $units = ['B', 'KB', 'MB', 'GB'];
-        
+
         for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
             $bytes /= 1024;
         }
-        
-        return round($bytes, 2) . ' ' . $units[$i];
+
+        return round($bytes, 2).' '.$units[$i];
     }
 
     public function isFile(): bool
@@ -86,12 +87,11 @@ class Message extends Model
     protected static function booted()
     {
         static::created(function ($message) {
-            
+
             if ($message->chatRoom) {
                 $message->chatRoom->updateLastMessageTimestamp();
             }
 
-            
             NotificationService::notifyUserOfNewMessage($message);
         });
     }

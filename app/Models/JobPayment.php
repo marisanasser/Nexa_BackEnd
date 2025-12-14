@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Services\NotificationService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Services\NotificationService;
 
 class JobPayment extends Model
 {
@@ -35,7 +35,6 @@ class JobPayment extends Model
         'payment_data' => 'array',
     ];
 
-    
     public function contract(): BelongsTo
     {
         return $this->belongsTo(Contract::class);
@@ -51,7 +50,6 @@ class JobPayment extends Model
         return $this->belongsTo(User::class, 'creator_id');
     }
 
-    
     public function scopePending($query)
     {
         return $query->where('status', 'pending');
@@ -77,7 +75,6 @@ class JobPayment extends Model
         return $query->where('status', 'refunded');
     }
 
-    
     public function isPending(): bool
     {
         return $this->status === 'pending';
@@ -110,7 +107,7 @@ class JobPayment extends Model
 
     public function process(): bool
     {
-        if (!$this->canBeProcessed()) {
+        if (! $this->canBeProcessed()) {
             return false;
         }
 
@@ -118,20 +115,17 @@ class JobPayment extends Model
             'status' => 'processing',
         ]);
 
-        
         try {
-            
+
             $this->processPayment();
-            
+
             $this->update([
                 'status' => 'completed',
                 'processed_at' => now(),
             ]);
 
-            
             $this->updateCreatorBalance();
 
-            
             NotificationService::notifyUserOfPaymentCompleted($this);
 
             return true;
@@ -140,7 +134,6 @@ class JobPayment extends Model
                 'status' => 'failed',
             ]);
 
-            
             NotificationService::notifyUserOfPaymentFailed($this, $e->getMessage());
 
             return false;
@@ -149,15 +142,11 @@ class JobPayment extends Model
 
     private function processPayment(): void
     {
-        
-        
-        
-        
+
         sleep(1);
-        
-        
+
         $this->update([
-            'transaction_id' => 'TXN_' . time() . '_' . $this->id,
+            'transaction_id' => 'TXN_'.time().'_'.$this->id,
         ]);
     }
 
@@ -173,14 +162,13 @@ class JobPayment extends Model
             ]
         );
 
-        
         $balance->decrement('pending_balance', $this->creator_amount);
         $balance->increment('available_balance', $this->creator_amount);
     }
 
     public function refund(?string $reason = null): bool
     {
-        if (!$this->isCompleted()) {
+        if (! $this->isCompleted()) {
             return false;
         }
 
@@ -188,14 +176,12 @@ class JobPayment extends Model
             'status' => 'refunded',
         ]);
 
-        
         $balance = CreatorBalance::where('creator_id', $this->creator_id)->first();
         if ($balance) {
             $balance->decrement('available_balance', $this->creator_amount);
             $balance->decrement('total_earned', $this->creator_amount);
         }
 
-        
         NotificationService::notifyUserOfPaymentRefunded($this, $reason);
 
         return true;
@@ -203,17 +189,17 @@ class JobPayment extends Model
 
     public function getFormattedTotalAmountAttribute(): string
     {
-        return 'R$ ' . number_format($this->total_amount, 2, ',', '.');
+        return 'R$ '.number_format($this->total_amount, 2, ',', '.');
     }
 
     public function getFormattedCreatorAmountAttribute(): string
     {
-        return 'R$ ' . number_format($this->creator_amount, 2, ',', '.');
+        return 'R$ '.number_format($this->creator_amount, 2, ',', '.');
     }
 
     public function getFormattedPlatformFeeAttribute(): string
     {
-        return 'R$ ' . number_format($this->platform_fee, 2, ',', '.');
+        return 'R$ '.number_format($this->platform_fee, 2, ',', '.');
     }
 
     public function getStatusColorAttribute(): string
@@ -251,4 +237,4 @@ class JobPayment extends Model
                 return 'bg-gray-100 text-gray-800';
         }
     }
-} 
+}

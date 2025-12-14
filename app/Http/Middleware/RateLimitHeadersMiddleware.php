@@ -9,12 +9,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RateLimitHeadersMiddleware
 {
-    
     public function handle(Request $request, Closure $next): Response
     {
         $response = $next($request);
 
-        
         if (config('rate_limiting.include_headers', true)) {
             $this->addRateLimitHeaders($request, $response);
         }
@@ -22,12 +20,11 @@ class RateLimitHeadersMiddleware
         return $response;
     }
 
-    
     private function addRateLimitHeaders(Request $request, Response $response): void
     {
-        
+
         $route = $request->route();
-        if (!$route) {
+        if (! $route) {
             return;
         }
 
@@ -36,23 +33,21 @@ class RateLimitHeadersMiddleware
             return str_starts_with($middleware, 'throttle:');
         });
 
-        if (!$throttleMiddleware) {
+        if (! $throttleMiddleware) {
             return;
         }
 
-        
         $throttleName = str_replace('throttle:', '', $throttleMiddleware);
-        
-        
+
         $key = $this->getThrottleKey($request, $throttleName);
         if ($key) {
             $remaining = RateLimiter::remaining($key, $this->getMaxAttempts($throttleName));
             $retryAfter = RateLimiter::availableIn($key);
-            
+
             if ($remaining !== null) {
                 $response->headers->set('X-RateLimit-Limit', $this->getMaxAttempts($throttleName));
                 $response->headers->set('X-RateLimit-Remaining', max(0, $remaining));
-                
+
                 if ($retryAfter > 0) {
                     $response->headers->set('X-RateLimit-Reset', time() + $retryAfter);
                     $response->headers->set('Retry-After', $retryAfter);
@@ -61,28 +56,26 @@ class RateLimitHeadersMiddleware
         }
     }
 
-    
     private function getThrottleKey(Request $request, string $throttleName): ?string
     {
         switch ($throttleName) {
             case 'auth':
             case 'registration':
             case 'password-reset':
-                return 'throttle:' . $throttleName . ':' . $request->ip();
+                return 'throttle:'.$throttleName.':'.$request->ip();
             case 'api':
-                return 'throttle:api:' . ($request->user()?->id ?: $request->ip());
+                return 'throttle:api:'.($request->user()?->id ?: $request->ip());
             case 'notifications':
-                return 'throttle:notifications:' . ($request->user()?->id ?: $request->ip());
+                return 'throttle:notifications:'.($request->user()?->id ?: $request->ip());
             case 'user-status':
-                return 'throttle:user-status:' . ($request->user()?->id ?: $request->ip());
+                return 'throttle:user-status:'.($request->user()?->id ?: $request->ip());
             case 'payment':
-                return 'throttle:payment:' . ($request->user()?->id ?: $request->ip());
+                return 'throttle:payment:'.($request->user()?->id ?: $request->ip());
             default:
                 return null;
         }
     }
 
-    
     private function getMaxAttempts(string $throttleName): int
     {
         switch ($throttleName) {
@@ -104,4 +97,4 @@ class RateLimitHeadersMiddleware
                 return 60;
         }
     }
-} 
+}

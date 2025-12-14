@@ -11,13 +11,11 @@ use Illuminate\Validation\ValidationException;
 
 class LoginRequest extends FormRequest
 {
-    
     public function authorize(): bool
     {
         return true;
     }
 
-    
     public function rules(): array
     {
         return [
@@ -26,26 +24,22 @@ class LoginRequest extends FormRequest
         ];
     }
 
-    
     public function authenticate(): void
     {
         $this->ensureIsNotRateLimited();
 
-        
         $user = \App\Models\User::withTrashed()->where('email', $this->input('email'))->first();
-        
-        if (!$user) {
+
+        if (! $user) {
             RateLimiter::hit($this->throttleKey());
             throw ValidationException::withMessages([
                 'email' => 'E-mail não registrado. Por favor, registre-se novamente.',
             ]);
         }
 
-        
         if ($user->trashed()) {
             RateLimiter::hit($this->throttleKey());
-            
-            
+
             $daysSinceDeletion = now()->diffInDays($user->deleted_at);
             if ($daysSinceDeletion <= 30) {
                 throw ValidationException::withMessages([
@@ -60,30 +54,26 @@ class LoginRequest extends FormRequest
             }
         }
 
-        
-        if (!$user->email_verified_at) {
+        if (! $user->email_verified_at) {
             RateLimiter::hit($this->throttleKey());
             throw ValidationException::withMessages([
                 'email' => 'Sua conta foi bloqueada. Entre em contato com o suporte para mais informações.',
             ]);
         }
 
-        
-        if (!Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
             throw ValidationException::withMessages([
                 'password' => 'Senha incorreta. Por favor, verifique sua senha.',
             ]);
         }
 
-        
         RateLimiter::clear($this->throttleKey());
     }
 
-    
     public function ensureIsNotRateLimited(): void
     {
-        
+
         if (! RateLimiter::tooManyAttempts($this->throttleKey(), 10)) {
             return;
         }
@@ -92,12 +82,11 @@ class LoginRequest extends FormRequest
 
         $seconds = RateLimiter::availableIn($this->throttleKey());
 
-        
         \Log::info('Login rate limited', [
             'email' => $this->input('email'),
             'ip' => $this->ip(),
             'seconds_remaining' => $seconds,
-            'throttle_key' => $this->throttleKey()
+            'throttle_key' => $this->throttleKey(),
         ]);
 
         throw ValidationException::withMessages([
@@ -108,7 +97,6 @@ class LoginRequest extends FormRequest
         ]);
     }
 
-    
     public function throttleKey(): string
     {
         return Str::transliterate(Str::lower($this->input('email')).'|'.$this->ip());

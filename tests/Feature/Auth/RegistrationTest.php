@@ -29,30 +29,30 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(201)
-                ->assertJsonStructure([
-                    'success',
-                    'token',
-                    'token_type',
-                    'user' => [
-                        'id',
-                        'name',
-                        'email',
-                        'email_verified_at',
-                        'role',
-                        'whatsapp',
-                        'avatar_url',
-                        'bio',
-                        'company_name',
-                        'student_verified',
-                        'student_expires_at',
-                        'gender',
-                        'state',
-                        'language',
-                        'has_premium',
-                        'premium_expires_at',
-                        'free_trial_expires_at',
-                    ]
-                ]);
+            ->assertJsonStructure([
+                'success',
+                'token',
+                'token_type',
+                'user' => [
+                    'id',
+                    'name',
+                    'email',
+                    'email_verified_at',
+                    'role',
+                    'whatsapp',
+                    'avatar_url',
+                    'bio',
+                    'company_name',
+                    'student_verified',
+                    'student_expires_at',
+                    'gender',
+                    'state',
+                    'language',
+                    'has_premium',
+                    'premium_expires_at',
+                    'free_trial_expires_at',
+                ],
+            ]);
 
         $this->assertDatabaseHas('users', [
             'name' => 'Test User',
@@ -97,7 +97,6 @@ class RegistrationTest extends TestCase
             'has_premium' => false,
         ]);
 
-        
         $user = User::where('email', 'john@example.com')->first();
         $this->assertNotNull($user->avatar_url);
         Storage::disk('public')->assertExists(str_replace('/storage/', '', $user->avatar_url));
@@ -113,7 +112,7 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-                ->assertJsonValidationErrors(['email']);
+            ->assertJsonValidationErrors(['email']);
     }
 
     public function test_registration_requires_strong_password(): void
@@ -126,7 +125,7 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-                ->assertJsonValidationErrors(['password']);
+            ->assertJsonValidationErrors(['password']);
     }
 
     public function test_registration_validates_role(): void
@@ -140,7 +139,7 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-                ->assertJsonValidationErrors(['role']);
+            ->assertJsonValidationErrors(['role']);
     }
 
     public function test_registration_validates_gender(): void
@@ -154,7 +153,7 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-                ->assertJsonValidationErrors(['gender']);
+            ->assertJsonValidationErrors(['gender']);
     }
 
     public function test_registration_validates_language(): void
@@ -168,7 +167,7 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-                ->assertJsonValidationErrors(['language']);
+            ->assertJsonValidationErrors(['language']);
     }
 
     public function test_registration_validates_has_premium(): void
@@ -182,7 +181,7 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-                ->assertJsonValidationErrors(['has_premium']);
+            ->assertJsonValidationErrors(['has_premium']);
     }
 
     public function test_registration_validates_phone_number(): void
@@ -196,7 +195,7 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-                ->assertJsonValidationErrors(['whatsapp']);
+            ->assertJsonValidationErrors(['whatsapp']);
     }
 
     public function test_registration_validates_avatar_file_type(): void
@@ -212,7 +211,7 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-                ->assertJsonValidationErrors(['avatar_url']);
+            ->assertJsonValidationErrors(['avatar_url']);
     }
 
     public function test_email_must_be_unique(): void
@@ -227,7 +226,7 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-                ->assertJsonValidationErrors(['email']);
+            ->assertJsonValidationErrors(['email']);
     }
 
     public function test_registration_sets_default_values(): void

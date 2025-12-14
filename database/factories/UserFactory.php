@@ -8,10 +8,8 @@ use Illuminate\Support\Str;
 
 class UserFactory extends Factory
 {
-    
     protected static ?string $password;
 
-    
     public function definition(): array
     {
         return [
@@ -36,7 +34,6 @@ class UserFactory extends Factory
         ];
     }
 
-    
     public function unverified(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -44,7 +41,6 @@ class UserFactory extends Factory
         ]);
     }
 
-    
     public function premium(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -53,7 +49,6 @@ class UserFactory extends Factory
         ]);
     }
 
-    
     public function trial(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -62,7 +57,6 @@ class UserFactory extends Factory
         ]);
     }
 
-    
     public function admin(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -70,7 +64,6 @@ class UserFactory extends Factory
         ]);
     }
 
-    
     public function studentVerified(): static
     {
         return $this->state(fn (array $attributes) => [

@@ -4,21 +4,15 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Models\Campaign;
-use App\Models\Contract;
-use App\Models\JobPayment;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class BrandRankingController extends Controller
 {
-   
     public function getBrandRankings(): JsonResponse
     {
         try {
             \Log::info('Starting brand rankings calculation');
-            
+
             $rankings = [
                 'mostPosted' => $this->getMostPostedBrands(),
                 'mostHired' => $this->getMostHiredBrands(),
@@ -42,10 +36,10 @@ class BrandRankingController extends Controller
                 'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch brand rankings: ' . $e->getMessage(),
+                'message' => 'Failed to fetch brand rankings: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -77,14 +71,15 @@ class BrandRankingController extends Controller
                 ->toArray();
 
             \Log::info('Most posted brands calculated', ['count' => count($brands)]);
+
             return $brands;
         } catch (\Exception $e) {
             \Log::error('Error calculating most posted brands', ['error' => $e->getMessage()]);
+
             return [];
         }
     }
 
- 
     private function getMostHiredBrands(): array
     {
         try {
@@ -92,7 +87,7 @@ class BrandRankingController extends Controller
                 ->withCount([
                     'brandContracts as total_contracts' => function ($query) {
                         $query->where('status', 'completed');
-                    }
+                    },
                 ])
                 ->get()
                 ->filter(function ($brand) {
@@ -116,14 +111,15 @@ class BrandRankingController extends Controller
                 ->toArray();
 
             \Log::info('Most hired brands calculated', ['count' => count($brands)]);
+
             return $brands;
         } catch (\Exception $e) {
             \Log::error('Error calculating most hired brands', ['error' => $e->getMessage()]);
+
             return [];
         }
     }
 
-    
     private function getMostPaidBrands(): array
     {
         try {
@@ -145,7 +141,7 @@ class BrandRankingController extends Controller
                         'company_name' => $brand->company_name,
                         'display_name' => $brand->company_name ?: $brand->name,
                         'total_paid' => (float) $brand->total_paid,
-                        'total_paid_formatted' => 'R$ ' . number_format($brand->total_paid, 2, ',', '.'),
+                        'total_paid_formatted' => 'R$ '.number_format($brand->total_paid, 2, ',', '.'),
                         'avatar_url' => $brand->avatar_url,
                         'has_premium' => $brand->has_premium,
                         'created_at' => $brand->created_at,
@@ -154,32 +150,33 @@ class BrandRankingController extends Controller
                 ->toArray();
 
             \Log::info('Most paid brands calculated', ['count' => count($brands)]);
+
             return $brands;
         } catch (\Exception $e) {
             \Log::error('Error calculating most paid brands', ['error' => $e->getMessage()]);
+
             return [];
         }
     }
 
-    
     public function getComprehensiveRankings(): JsonResponse
     {
         try {
             \Log::info('Starting comprehensive brand rankings calculation');
-            
+
             $brands = User::where('role', 'brand')
                 ->withCount([
                     'campaigns as total_campaigns',
                     'brandContracts as total_contracts' => function ($query) {
                         $query->where('status', 'completed');
-                    }
+                    },
                 ])
                 ->withSum(['brandPayments as total_paid' => function ($query) {
                     $query->where('status', 'completed');
                 }], 'total_amount')
                 ->get()
                 ->filter(function ($brand) {
-                    
+
                     return $brand->total_campaigns > 0 || $brand->total_contracts > 0 || ($brand->total_paid ?? 0) > 0;
                 })
                 ->map(function ($brand, $index) {
@@ -192,7 +189,7 @@ class BrandRankingController extends Controller
                         'total_campaigns' => $brand->total_campaigns,
                         'total_contracts' => $brand->total_contracts,
                         'total_paid' => (float) ($brand->total_paid ?? 0),
-                        'total_paid_formatted' => 'R$ ' . number_format($brand->total_paid ?? 0, 2, ',', '.'),
+                        'total_paid_formatted' => 'R$ '.number_format($brand->total_paid ?? 0, 2, ',', '.'),
                         'avatar_url' => $brand->avatar_url,
                         'has_premium' => $brand->has_premium,
                         'created_at' => $brand->created_at,
@@ -203,6 +200,7 @@ class BrandRankingController extends Controller
                 ->values()
                 ->map(function ($brand, $index) {
                     $brand['rank'] = $index + 1;
+
                     return $brand;
                 })
                 ->take(20)
@@ -223,22 +221,21 @@ class BrandRankingController extends Controller
                 'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch comprehensive brand rankings: ' . $e->getMessage(),
+                'message' => 'Failed to fetch comprehensive brand rankings: '.$e->getMessage(),
             ], 500);
         }
     }
 
-    
     private function calculateRankingScore(int $campaigns, int $contracts, float $payments): float
     {
-        
-        $campaignScore = min($campaigns / 10, 1) * 30; 
-        $contractScore = min($contracts / 20, 1) * 30; 
-        $paymentScore = min($payments / 10000, 1) * 40; 
+
+        $campaignScore = min($campaigns / 10, 1) * 30;
+        $contractScore = min($contracts / 20, 1) * 30;
+        $paymentScore = min($payments / 10000, 1) * 40;
 
         return $campaignScore + $contractScore + $paymentScore;
     }
-} 
+}

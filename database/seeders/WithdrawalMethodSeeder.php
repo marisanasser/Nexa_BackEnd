@@ -2,13 +2,11 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 class WithdrawalMethodSeeder extends Seeder
 {
-    
     public function run(): void
     {
         $methods = [
@@ -21,8 +19,8 @@ class WithdrawalMethodSeeder extends Seeder
                 'processing_time' => '1-2 dias úteis',
                 'fee' => 0.00,
                 'is_active' => true,
-                'required_fields' => json_encode([]), 
-                'field_config' => json_encode([]), 
+                'required_fields' => json_encode([]),
+                'field_config' => json_encode([]),
                 'sort_order' => 1,
             ],
             [
@@ -36,7 +34,7 @@ class WithdrawalMethodSeeder extends Seeder
                 'is_active' => true,
                 'required_fields' => json_encode(['pix_key', 'pix_key_type']),
                 'field_config' => json_encode([
-                    'pix_key_types' => ['cpf', 'cnpj', 'email', 'phone', 'random']
+                    'pix_key_types' => ['cpf', 'cnpj', 'email', 'phone', 'random'],
                 ]),
                 'sort_order' => 2,
             ],
@@ -56,9 +54,9 @@ class WithdrawalMethodSeeder extends Seeder
         ];
 
         foreach ($methods as $method) {
-            if (!DB::table('withdrawal_methods')->where('code', 'pagame_bank_transfer')->exists()) {
-    DB::table('withdrawal_methods')->insert($method);
-}
+            if (! DB::table('withdrawal_methods')->where('code', 'pagame_bank_transfer')->exists()) {
+                DB::table('withdrawal_methods')->insert($method);
+            }
         }
     }
 }

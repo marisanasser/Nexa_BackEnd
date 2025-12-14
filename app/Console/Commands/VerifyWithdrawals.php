@@ -2,14 +2,12 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Withdrawal;
 use App\Models\BankAccount;
+use App\Models\Withdrawal;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
 
 class VerifyWithdrawals extends Command
 {
-    
     protected $signature = 'withdrawals:verify 
                             {--id= : Verify specific withdrawal by ID}
                             {--status= : Filter by status (pending, processing, completed, failed, cancelled)}
@@ -18,17 +16,14 @@ class VerifyWithdrawals extends Command
                             {--end-date= : End date for verification (Y-m-d)}
                             {--detailed : Show detailed verification information}';
 
-    
     protected $description = 'Verify withdrawal accuracy and bank account details';
 
-    
     public function handle()
     {
         $this->info('Starting withdrawal verification...');
 
         $query = Withdrawal::with(['creator']);
 
-        
         if ($this->option('id')) {
             $query->where('id', $this->option('id'));
         }
@@ -46,13 +41,14 @@ class VerifyWithdrawals extends Command
         }
 
         if ($this->option('end-date')) {
-            $query->where('created_at', '<=', $this->option('end-date') . ' 23:59:59');
+            $query->where('created_at', '<=', $this->option('end-date').' 23:59:59');
         }
 
         $withdrawals = $query->orderBy('created_at', 'desc')->get();
 
         if ($withdrawals->isEmpty()) {
             $this->warn('No withdrawals found matching the criteria.');
+
             return 0;
         }
 
@@ -80,7 +76,6 @@ class VerifyWithdrawals extends Command
         $currentBankAccount = BankAccount::where('user_id', $withdrawal->creator_id)->first();
         $verificationStatus = $this->getOverallVerificationStatus($withdrawal, $currentBankAccount);
 
-        
         switch ($verificationStatus) {
             case 'passed':
                 $summary['passed']++;
@@ -115,7 +110,6 @@ class VerifyWithdrawals extends Command
             $this->line("   Transaction ID: {$withdrawal->transaction_id}");
         }
 
-        
         $bankDetailsMatch = $this->compareBankDetails($withdrawal, $currentBankAccount);
         $bankIcon = $bankDetailsMatch ? '✓' : '✗';
         $bankColor = $bankDetailsMatch ? 'green' : 'red';
@@ -131,12 +125,11 @@ class VerifyWithdrawals extends Command
 
     private function displayDetailedBankInfo(Withdrawal $withdrawal, $currentBankAccount): void
     {
-        $this->line("   <fg=yellow>Detailed Bank Information:</>");
+        $this->line('   <fg=yellow>Detailed Bank Information:</>');
 
-        
         $withdrawalDetails = $this->extractBankDetailsFromWithdrawal($withdrawal);
         if ($withdrawalDetails) {
-            $this->line("   <fg=blue>Withdrawal Bank Details:</>");
+            $this->line('   <fg=blue>Withdrawal Bank Details:</>');
             $this->line("     Bank Code: {$withdrawalDetails['bank_code']}");
             $this->line("     Agency: {$withdrawalDetails['agencia']}-{$withdrawalDetails['agencia_dv']}");
             $this->line("     Account: {$withdrawalDetails['conta']}-{$withdrawalDetails['conta_dv']}");
@@ -144,16 +137,15 @@ class VerifyWithdrawals extends Command
             $this->line("     Name: {$withdrawalDetails['name']}");
         }
 
-        
         if ($currentBankAccount) {
-            $this->line("   <fg=blue>Current Bank Account:</>");
+            $this->line('   <fg=blue>Current Bank Account:</>');
             $this->line("     Bank Code: {$currentBankAccount->bank_code}");
             $this->line("     Agency: {$currentBankAccount->agencia}-{$currentBankAccount->agencia_dv}");
             $this->line("     Account: {$currentBankAccount->conta}-{$currentBankAccount->conta_dv}");
             $this->line("     CPF: {$currentBankAccount->cpf}");
             $this->line("     Name: {$currentBankAccount->name}");
         } else {
-            $this->line("   <fg=red>No current bank account found</>");
+            $this->line('   <fg=red>No current bank account found</>');
         }
     }
 
@@ -202,7 +194,7 @@ class VerifyWithdrawals extends Command
 
     private function extractBankDetailsFromWithdrawal(Withdrawal $withdrawal): ?array
     {
-        if (!$withdrawal->withdrawal_details) {
+        if (! $withdrawal->withdrawal_details) {
             return null;
         }
 
@@ -219,19 +211,18 @@ class VerifyWithdrawals extends Command
 
     private function compareBankDetails(Withdrawal $withdrawal, $currentBankAccount): bool
     {
-        if (!$currentBankAccount || !$withdrawal->withdrawal_details) {
+        if (! $currentBankAccount || ! $withdrawal->withdrawal_details) {
             return false;
         }
 
         $withdrawalDetails = $this->extractBankDetailsFromWithdrawal($withdrawal);
-        
-        if (!$withdrawalDetails) {
+
+        if (! $withdrawalDetails) {
             return false;
         }
 
-        
         $fieldsToCompare = ['bank_code', 'agencia', 'agencia_dv', 'conta', 'conta_dv', 'cpf'];
-        
+
         foreach ($fieldsToCompare as $field) {
             if (($withdrawalDetails[$field] ?? '') !== ($currentBankAccount->$field ?? '')) {
                 return false;
@@ -256,11 +247,12 @@ class VerifyWithdrawals extends Command
 
     private function verifyProcessingTime(Withdrawal $withdrawal): bool
     {
-        if (!$withdrawal->processed_at) {
+        if (! $withdrawal->processed_at) {
             return true;
         }
 
         $processingTime = $withdrawal->created_at->diffInHours($withdrawal->processed_at);
+
         return $processingTime <= 72;
     }
 
@@ -276,7 +268,7 @@ class VerifyWithdrawals extends Command
 
         $amountCorrect = $this->verifyWithdrawalAmount($withdrawal);
         $bankDetailsMatch = $this->compareBankDetails($withdrawal, $currentBankAccount);
-        $transactionIdValid = !empty($withdrawal->transaction_id);
+        $transactionIdValid = ! empty($withdrawal->transaction_id);
         $processingTimeReasonable = $this->verifyProcessingTime($withdrawal);
 
         if ($amountCorrect && $bankDetailsMatch && $transactionIdValid && $processingTimeReasonable) {
@@ -285,4 +277,4 @@ class VerifyWithdrawals extends Command
 
         return 'failed';
     }
-} 
+}

@@ -2,26 +2,25 @@
 
 namespace App\Services;
 
+use App\Events\NotificationSent;
+use App\Models\Bid;
+use App\Models\Campaign;
+use App\Models\CampaignApplication;
+use App\Models\DirectMessage;
+use App\Models\Message;
 use App\Models\Notification;
 use App\Models\User;
-use App\Models\Campaign;
-use App\Models\Bid;
-use App\Models\Message;
-use App\Models\DirectMessage;
-use App\Models\CampaignApplication;
-use App\Events\NotificationSent;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class NotificationService
 {
-    
     public static function notifyAdminOfNewLogin(User $user, array $loginData = []): void
     {
         try {
-            
+
             $adminUsers = User::where('role', 'admin')->get();
-            
+
             foreach ($adminUsers as $admin) {
                 $notification = Notification::createLoginDetected($admin->id, array_merge($loginData, [
                     'user_id' => $user->id,
@@ -29,25 +28,23 @@ class NotificationService
                     'user_email' => $user->email,
                     'user_role' => $user->role,
                 ]));
-                
-                
+
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify admin of new login', [
                 'user_id' => $user->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyAdminOfNewRegistration(User $user): void
     {
         try {
-            
+
             $adminUsers = User::where('role', 'admin')->get();
-            
+
             foreach ($adminUsers as $admin) {
                 $notification = Notification::createNewUserRegistration($admin->id, [
                     'user_id' => $user->id,
@@ -56,25 +53,23 @@ class NotificationService
                     'user_role' => $user->role,
                     'registration_time' => now()->toISOString(),
                 ]);
-                
-                
+
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify admin of new registration', [
                 'user_id' => $user->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyAdminOfNewCampaign(Campaign $campaign): void
     {
         try {
-            
+
             $adminUsers = User::where('role', 'admin')->get();
-            
+
             foreach ($adminUsers as $admin) {
                 $notification = Notification::createNewCampaign($admin->id, [
                     'campaign_id' => $campaign->id,
@@ -87,47 +82,43 @@ class NotificationService
                     'campaign_type' => $campaign->campaign_type,
                     'created_at' => $campaign->created_at->toISOString(),
                 ]);
-                
-                
+
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify admin of new campaign', [
                 'campaign_id' => $campaign->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyBrandOfCampaignCreated(Campaign $campaign): void
     {
         try {
             $campaign->load(['brand']);
-            
-            
+
             Mail::to($campaign->brand->email)->send(new \App\Mail\CampaignCreated($campaign));
-            
+
             Log::info('Campaign creation email sent successfully', [
                 'campaign_id' => $campaign->id,
-                'brand_email' => $campaign->brand->email
+                'brand_email' => $campaign->brand->email,
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to send campaign creation email', [
                 'campaign_id' => $campaign->id,
                 'brand_email' => $campaign->brand->email,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyAdminOfNewApplication(CampaignApplication $application): void
     {
         try {
-            
+
             $adminUsers = User::where('role', 'admin')->get();
-            
+
             foreach ($adminUsers as $admin) {
                 $notification = Notification::createNewApplication($admin->id, [
                     'application_id' => $application->id,
@@ -141,51 +132,47 @@ class NotificationService
                     'proposal_amount' => $application->proposal_amount,
                     'created_at' => $application->created_at->toISOString(),
                 ]);
-                
-                
+
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify admin of new application', [
                 'application_id' => $application->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyBrandOfNewApplication(CampaignApplication $application): void
     {
         try {
             $application->load(['campaign', 'campaign.brand', 'creator']);
-            
-            
+
             Mail::to($application->campaign->brand->email)->send(new \App\Mail\ApplicationReceived($application));
-            
+
             Log::info('Application received email sent successfully to brand', [
                 'application_id' => $application->id,
                 'campaign_id' => $application->campaign_id,
                 'creator_id' => $application->creator_id,
                 'creator_name' => $application->creator->name,
-                'brand_email' => $application->campaign->brand->email
+                'brand_email' => $application->campaign->brand->email,
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to send application received email to brand', [
                 'application_id' => $application->id,
                 'campaign_id' => $application->campaign_id,
                 'brand_email' => $application->campaign->brand->email ?? 'unknown',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyAdminOfNewBid(Bid $bid): void
     {
         try {
-            
+
             $adminUsers = User::where('role', 'admin')->get();
-            
+
             foreach ($adminUsers as $admin) {
                 $notification = Notification::createNewBid($admin->id, [
                     'bid_id' => $bid->id,
@@ -199,25 +186,23 @@ class NotificationService
                     'bid_amount' => $bid->amount,
                     'created_at' => $bid->created_at->toISOString(),
                 ]);
-                
-                
+
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify admin of new bid', [
                 'bid_id' => $bid->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyAdminOfPaymentActivity(User $user, string $paymentType, array $paymentData = []): void
     {
         try {
-            
+
             $adminUsers = User::where('role', 'admin')->get();
-            
+
             foreach ($adminUsers as $admin) {
                 $notification = Notification::createPaymentActivity($admin->id, array_merge($paymentData, [
                     'user_id' => $user->id,
@@ -227,26 +212,24 @@ class NotificationService
                     'payment_type' => $paymentType,
                     'activity_time' => now()->toISOString(),
                 ]));
-                
-                
+
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify admin of payment activity', [
                 'user_id' => $user->id,
                 'payment_type' => $paymentType,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyAdminOfPortfolioUpdate(User $user, string $updateType, array $updateData = []): void
     {
         try {
-            
+
             $adminUsers = User::where('role', 'admin')->get();
-            
+
             foreach ($adminUsers as $admin) {
                 $notification = Notification::createPortfolioUpdate($admin->id, array_merge($updateData, [
                     'user_id' => $user->id,
@@ -255,50 +238,46 @@ class NotificationService
                     'update_type' => $updateType,
                     'update_time' => now()->toISOString(),
                 ]));
-                
-                
+
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify admin of portfolio update', [
                 'user_id' => $user->id,
                 'update_type' => $updateType,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyAdminOfSystemActivity(string $activityType, array $activityData = []): void
     {
         try {
-            
+
             $adminUsers = User::where('role', 'admin')->get();
-            
+
             foreach ($adminUsers as $admin) {
                 $notification = Notification::createSystemActivity($admin->id, array_merge($activityData, [
                     'activity_type' => $activityType,
                     'activity_time' => now()->toISOString(),
                 ]));
-                
-                
+
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify admin of system activity', [
                 'activity_type' => $activityType,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyAdminOfNewStudentVerification(User $user, array $studentData = []): void
     {
         try {
-            
+
             $adminUsers = User::where('role', 'admin')->get();
-            
+
             foreach ($adminUsers as $admin) {
                 $notification = Notification::createSystemActivity($admin->id, array_merge($studentData, [
                     'activity_type' => 'student_verification',
@@ -307,19 +286,17 @@ class NotificationService
                     'user_email' => $user->email,
                     'student_verification_time' => now()->toISOString(),
                 ]));
-                
-                
+
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify admin of new student verification', [
                 'user_id' => $user->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyUserOfStudentVerificationApproval(User $user, array $approvalData = []): void
     {
         try {
@@ -329,18 +306,16 @@ class NotificationService
                 'duration_months' => $approvalData['duration_months'] ?? 12,
                 'expires_at' => $approvalData['expires_at'] ?? null,
             ]));
-            
-            
+
             self::sendSocketNotification($user->id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of student verification approval', [
                 'user_id' => $user->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyUserOfStudentVerificationRejection(User $user, array $rejectionData = []): void
     {
         try {
@@ -349,13 +324,12 @@ class NotificationService
                 'rejected_at' => $rejectionData['rejected_at'] ?? now()->toISOString(),
                 'rejection_reason' => $rejectionData['rejection_reason'] ?? null,
             ]));
-            
-            
+
             self::sendSocketNotification($user->id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of student verification rejection', [
                 'user_id' => $user->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -368,12 +342,12 @@ class NotificationService
                 'contract_title' => $contract->title,
                 'brand_name' => $contract->brand->name ?? 'Marca',
             ]);
-            
+
             self::sendSocketNotification($contract->creator_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify creator of contract started', [
                 'contract_id' => $contract->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -386,42 +360,39 @@ class NotificationService
                 'contract_title' => $contract->title,
                 'creator_name' => $contract->creator->name ?? 'Criador',
             ]);
-            
+
             self::sendSocketNotification($contract->brand_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify brand of contract started', [
                 'contract_id' => $contract->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyCreatorsOfNewProject(Campaign $campaign): void
     {
         try {
-            
+
             $creators = User::where('role', 'creator')->get();
-            
+
             foreach ($creators as $creator) {
                 $notification = Notification::createNewProject(
                     $creator->id,
                     $campaign->id,
                     $campaign->title
                 );
-                
-                
+
                 self::sendSocketNotification($creator->id, $notification);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify creators of new project', [
                 'campaign_id' => $campaign->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyBrandOfProjectStatus(Campaign $campaign, string $status, ?string $reason = null): void
     {
         try {
@@ -439,11 +410,9 @@ class NotificationService
                     $reason
                 );
             }
-            
-            
+
             self::sendSocketNotification($campaign->brand_id, $notification);
 
-            
             try {
                 $campaign->load(['brand']);
                 if ($status === 'approved') {
@@ -456,25 +425,24 @@ class NotificationService
                     'campaign_id' => $campaign->id,
                     'brand_email' => $campaign->brand->email,
                     'status' => $status,
-                    'error' => $emailError->getMessage()
+                    'error' => $emailError->getMessage(),
                 ]);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify brand of project status', [
                 'campaign_id' => $campaign->id,
                 'status' => $status,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyCreatorOfProposalStatus(Bid $bid, string $status, ?string $reason = null): void
     {
         try {
             $campaign = $bid->campaign;
             $brand = $campaign->brand;
-            
+
             if ($status === 'accepted') {
                 $notification = Notification::createProposalApproved(
                     $bid->user_id,
@@ -491,33 +459,29 @@ class NotificationService
                     $reason
                 );
             }
-            
-            
+
             self::sendSocketNotification($bid->user_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify creator of proposal status', [
                 'bid_id' => $bid->id,
                 'status' => $status,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyUserOfNewMessage(Message $message): void
     {
         try {
             $chatRoom = $message->chatRoom;
             $sender = $message->sender;
-            
-            
+
             $recipientId = $chatRoom->brand_id === $sender->id ? $chatRoom->creator_id : $chatRoom->brand_id;
-            
-            
-            $messagePreview = strlen($message->message) > 50 
-                ? substr($message->message, 0, 50) . '...' 
+
+            $messagePreview = strlen($message->message) > 50
+                ? substr($message->message, 0, 50).'...'
                 : $message->message;
-            
+
             $notification = Notification::createNewMessage(
                 $recipientId,
                 $sender->id,
@@ -526,32 +490,28 @@ class NotificationService
                 'campaign',
                 $chatRoom->room_id
             );
-            
-            
+
             self::sendSocketNotification($recipientId, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of new message', [
                 'message_id' => $message->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyUserOfNewDirectMessage(DirectMessage $message): void
     {
         try {
             $chatRoom = $message->directChatRoom;
             $sender = $message->sender;
-            
-            
+
             $recipientId = $chatRoom->brand_id === $sender->id ? $chatRoom->creator_id : $chatRoom->brand_id;
-            
-            
-            $messagePreview = strlen($message->message) > 50 
-                ? substr($message->message, 0, 50) . '...' 
+
+            $messagePreview = strlen($message->message) > 50
+                ? substr($message->message, 0, 50).'...'
                 : $message->message;
-            
+
             $notification = Notification::createNewMessage(
                 $recipientId,
                 $sender->id,
@@ -560,39 +520,36 @@ class NotificationService
                 'direct',
                 $chatRoom->room_id
             );
-            
-            
+
             self::sendSocketNotification($recipientId, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of new direct message', [
                 'message_id' => $message->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function sendSocketNotification(int $userId, Notification $notification): void
     {
         try {
             // Dispatch the event for Reverb/Broadcasting
             event(new NotificationSent($notification));
-            
+
             Log::info('Notification broadcast event dispatched', [
                 'user_id' => $userId,
-                'notification_id' => $notification->id
+                'notification_id' => $notification->id,
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to dispatch notification broadcast event', [
                 'user_id' => $userId,
                 'notification_id' => $notification->id,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
         }
     }
 
-    
     public static function getUnreadCount(int $userId): int
     {
         return Notification::where('user_id', $userId)
@@ -600,21 +557,19 @@ class NotificationService
             ->count();
     }
 
-    
     public static function markAsRead(int $notificationId, int $userId): bool
     {
         $notification = Notification::where('id', $notificationId)
             ->where('user_id', $userId)
             ->first();
-            
+
         if ($notification) {
             return $notification->markAsRead();
         }
-        
+
         return false;
     }
 
-    
     public static function markAllAsRead(int $userId): int
     {
         return Notification::where('user_id', $userId)
@@ -625,7 +580,6 @@ class NotificationService
             ]);
     }
 
-    
     public static function notifyUserOfNewOffer($offer): void
     {
         try {
@@ -643,18 +597,16 @@ class NotificationService
                 ],
                 'is_read' => false,
             ]);
-            
-            
+
             self::sendSocketNotification($offer->creator_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of new offer', [
                 'offer_id' => $offer->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyUserOfOfferAccepted($offer): void
     {
         try {
@@ -662,7 +614,7 @@ class NotificationService
                 'user_id' => $offer->brand_id,
                 'type' => 'offer_accepted',
                 'title' => 'Oferta Aceita',
-                'message' => "Sua oferta foi aceita pelo criador",
+                'message' => 'Sua oferta foi aceita pelo criador',
                 'data' => [
                     'offer_id' => $offer->id,
                     'creator_id' => $offer->creator_id,
@@ -672,18 +624,16 @@ class NotificationService
                 ],
                 'is_read' => false,
             ]);
-            
-            
+
             self::sendSocketNotification($offer->brand_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of offer acceptance', [
                 'offer_id' => $offer->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyUserOfOfferRejected($offer, ?string $reason = null): void
     {
         try {
@@ -691,7 +641,7 @@ class NotificationService
                 'user_id' => $offer->brand_id,
                 'type' => 'offer_rejected',
                 'title' => 'Oferta Rejeitada',
-                'message' => "Sua oferta foi rejeitada pelo criador" . ($reason ? ": {$reason}" : ""),
+                'message' => 'Sua oferta foi rejeitada pelo criador'.($reason ? ": {$reason}" : ''),
                 'data' => [
                     'offer_id' => $offer->id,
                     'creator_id' => $offer->creator_id,
@@ -700,22 +650,20 @@ class NotificationService
                 ],
                 'is_read' => false,
             ]);
-            
-            
+
             self::sendSocketNotification($offer->brand_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of offer rejection', [
                 'offer_id' => $offer->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyUserOfOfferCancelled($offer): void
     {
         try {
-            
+
             $notification = Notification::createOfferCancelled($offer->creator_id, [
                 'offer_id' => $offer->id,
                 'offer_title' => $offer->title,
@@ -723,19 +671,17 @@ class NotificationService
                 'brand_name' => $offer->brand->name,
                 'cancelled_at' => now()->toISOString(),
             ]);
-            
-            
+
             self::sendSocketNotification($offer->creator_id, $notification);
-            
+
         } catch (\Exception $e) {
             Log::error('Failed to notify user of offer cancellation', [
                 'offer_id' => $offer->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyBrandOfReviewRequired($contract): void
     {
         try {
@@ -746,19 +692,17 @@ class NotificationService
                 'creator_name' => $contract->creator->name,
                 'completed_at' => $contract->completed_at->toISOString(),
             ]);
-            
-            
+
             self::sendSocketNotification($contract->brand_id, $notification);
-            
+
         } catch (\Exception $e) {
             Log::error('Failed to notify brand of review requirement', [
                 'contract_id' => $contract->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyCreatorOfContractCompleted($contract): void
     {
         try {
@@ -769,19 +713,17 @@ class NotificationService
                 'brand_name' => $contract->brand->name,
                 'completed_at' => $contract->completed_at->toISOString(),
             ]);
-            
-            
+
             self::sendSocketNotification($contract->creator_id, $notification);
-            
+
         } catch (\Exception $e) {
             Log::error('Failed to notify creator of contract completion', [
                 'contract_id' => $contract->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyUserOfNewReview($review): void
     {
         try {
@@ -795,25 +737,23 @@ class NotificationService
                 'comment' => $review->comment,
                 'created_at' => $review->created_at->toISOString(),
             ]);
-            
-            
+
             self::sendSocketNotification($review->reviewed_id, $notification);
-            
+
         } catch (\Exception $e) {
             Log::error('Failed to notify user of new review', [
                 'review_id' => $review->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyUserOfContractTerminated($contract, ?string $reason = null): void
     {
         try {
-            
+
             $users = [$contract->brand_id, $contract->creator_id];
-            
+
             foreach ($users as $userId) {
                 $notification = Notification::createContractTerminated($userId, [
                     'contract_id' => $contract->id,
@@ -821,20 +761,18 @@ class NotificationService
                     'terminated_at' => $contract->cancelled_at->toISOString(),
                     'reason' => $reason,
                 ]);
-                
-                
+
                 self::sendSocketNotification($userId, $notification);
             }
-            
+
         } catch (\Exception $e) {
             Log::error('Failed to notify users of contract termination', [
                 'contract_id' => $contract->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyCreatorOfPaymentAvailable($contract): void
     {
         try {
@@ -842,12 +780,12 @@ class NotificationService
                 'user_id' => $contract->creator_id,
                 'type' => 'payment_available',
                 'title' => 'Pagamento Disponível',
-                'message' => "O pagamento do contrato '{$contract->title}' está disponível para saque. Valor: R$ " . number_format($contract->creator_amount, 2, ',', '.'),
+                'message' => "O pagamento do contrato '{$contract->title}' está disponível para saque. Valor: R$ ".number_format($contract->creator_amount, 2, ',', '.'),
                 'data' => [
                     'contract_id' => $contract->id,
                     'contract_title' => $contract->title,
                     'amount' => $contract->creator_amount,
-                    'formatted_amount' => 'R$ ' . number_format($contract->creator_amount, 2, ',', '.'),
+                    'formatted_amount' => 'R$ '.number_format($contract->creator_amount, 2, ',', '.'),
                 ],
                 'read_at' => null,
             ]);
@@ -857,12 +795,11 @@ class NotificationService
             Log::error('Failed to notify creator of payment available', [
                 'contract_id' => $contract->id,
                 'creator_id' => $contract->creator_id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyBrandOfPaymentSuccessful($contract): void
     {
         try {
@@ -870,12 +807,12 @@ class NotificationService
                 'user_id' => $contract->brand_id,
                 'type' => 'payment_successful',
                 'title' => 'Pagamento Processado',
-                'message' => "O pagamento do contrato '{$contract->title}' foi processado com sucesso. Valor: R$ " . number_format($contract->budget, 2, ',', '.'),
+                'message' => "O pagamento do contrato '{$contract->title}' foi processado com sucesso. Valor: R$ ".number_format($contract->budget, 2, ',', '.'),
                 'data' => [
                     'contract_id' => $contract->id,
                     'contract_title' => $contract->title,
                     'amount' => $contract->budget,
-                    'formatted_amount' => 'R$ ' . number_format($contract->budget, 2, ',', '.'),
+                    'formatted_amount' => 'R$ '.number_format($contract->budget, 2, ',', '.'),
                 ],
                 'read_at' => null,
             ]);
@@ -885,12 +822,11 @@ class NotificationService
             Log::error('Failed to notify brand of payment successful', [
                 'contract_id' => $contract->id,
                 'brand_id' => $contract->brand_id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyCreatorOfPaymentReceived($contract): void
     {
         try {
@@ -898,12 +834,12 @@ class NotificationService
                 'user_id' => $contract->creator_id,
                 'type' => 'payment_received',
                 'title' => 'Pagamento Recebido',
-                'message' => "O pagamento do contrato '{$contract->title}' foi recebido. Valor: R$ " . number_format($contract->creator_amount, 2, ',', '.'),
+                'message' => "O pagamento do contrato '{$contract->title}' foi recebido. Valor: R$ ".number_format($contract->creator_amount, 2, ',', '.'),
                 'data' => [
                     'contract_id' => $contract->id,
                     'contract_title' => $contract->title,
                     'amount' => $contract->creator_amount,
-                    'formatted_amount' => 'R$ ' . number_format($contract->creator_amount, 2, ',', '.'),
+                    'formatted_amount' => 'R$ '.number_format($contract->creator_amount, 2, ',', '.'),
                 ],
                 'read_at' => null,
             ]);
@@ -913,12 +849,11 @@ class NotificationService
             Log::error('Failed to notify creator of payment received', [
                 'contract_id' => $contract->id,
                 'creator_id' => $contract->creator_id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyBrandOfPaymentFailed($contract): void
     {
         try {
@@ -931,7 +866,7 @@ class NotificationService
                     'contract_id' => $contract->id,
                     'contract_title' => $contract->title,
                     'amount' => $contract->budget,
-                    'formatted_amount' => 'R$ ' . number_format($contract->budget, 2, ',', '.'),
+                    'formatted_amount' => 'R$ '.number_format($contract->budget, 2, ',', '.'),
                 ],
                 'read_at' => null,
             ]);
@@ -941,12 +876,11 @@ class NotificationService
             Log::error('Failed to notify brand of payment failed', [
                 'contract_id' => $contract->id,
                 'brand_id' => $contract->brand_id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyCreatorOfPaymentPending($contract): void
     {
         try {
@@ -959,7 +893,7 @@ class NotificationService
                     'contract_id' => $contract->id,
                     'contract_title' => $contract->title,
                     'amount' => $contract->creator_amount,
-                    'formatted_amount' => 'R$ ' . number_format($contract->creator_amount, 2, ',', '.'),
+                    'formatted_amount' => 'R$ '.number_format($contract->creator_amount, 2, ',', '.'),
                 ],
                 'read_at' => null,
             ]);
@@ -969,12 +903,11 @@ class NotificationService
             Log::error('Failed to notify creator of payment pending', [
                 'contract_id' => $contract->id,
                 'creator_id' => $contract->creator_id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyBrandOfNewDeliveryMaterial($material): void
     {
         try {
@@ -1000,12 +933,11 @@ class NotificationService
             Log::error('Failed to notify brand of new delivery material', [
                 'material_id' => $material->id,
                 'brand_id' => $material->brand_id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyCreatorOfDeliveryMaterialApproval($material): void
     {
         try {
@@ -1028,7 +960,6 @@ class NotificationService
 
             self::sendSocketNotification($material->creator_id, $notification);
 
-            
             try {
                 $material->load(['contract', 'creator', 'brand']);
                 Mail::to($material->creator->email)->send(new \App\Mail\DeliveryMaterialApproved($material));
@@ -1036,19 +967,18 @@ class NotificationService
                 Log::error('Failed to send delivery material approval email', [
                     'material_id' => $material->id,
                     'creator_email' => $material->creator->email,
-                    'error' => $emailError->getMessage()
+                    'error' => $emailError->getMessage(),
                 ]);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify creator of delivery material approval', [
                 'material_id' => $material->id,
                 'creator_id' => $material->creator_id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyCreatorOfDeliveryMaterialRejection($material): void
     {
         try {
@@ -1072,7 +1002,6 @@ class NotificationService
 
             self::sendSocketNotification($material->creator_id, $notification);
 
-            
             try {
                 $material->load(['contract', 'creator', 'brand']);
                 Mail::to($material->creator->email)->send(new \App\Mail\DeliveryMaterialRejected($material));
@@ -1080,25 +1009,24 @@ class NotificationService
                 Log::error('Failed to send delivery material rejection email', [
                     'material_id' => $material->id,
                     'creator_email' => $material->creator->email,
-                    'error' => $emailError->getMessage()
+                    'error' => $emailError->getMessage(),
                 ]);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify creator of delivery material rejection', [
                 'material_id' => $material->id,
                 'creator_id' => $material->creator_id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyBrandOfDeliveryMaterialAction($material, $action): void
     {
         try {
             $actionText = $action === 'approved' ? 'aprovou' : 'rejeitou';
             $actionTitle = $action === 'approved' ? 'Material Aprovado' : 'Material Rejeitado';
-            
+
             $notification = Notification::create([
                 'user_id' => $material->brand_id,
                 'type' => 'delivery_material_action',
@@ -1121,7 +1049,6 @@ class NotificationService
 
             self::sendSocketNotification($material->brand_id, $notification);
 
-            
             try {
                 $material->load(['contract', 'creator', 'brand']);
                 if ($action === 'approved') {
@@ -1134,7 +1061,7 @@ class NotificationService
                     'material_id' => $material->id,
                     'brand_email' => $material->brand->email,
                     'action' => $action,
-                    'error' => $emailError->getMessage()
+                    'error' => $emailError->getMessage(),
                 ]);
             }
         } catch (\Exception $e) {
@@ -1142,17 +1069,16 @@ class NotificationService
                 'material_id' => $material->id,
                 'brand_id' => $material->brand_id,
                 'action' => $action,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyCreatorOfMilestoneApproval($milestone): void
     {
         try {
             $milestone->load(['contract.creator', 'contract.brand']);
-            
+
             $notification = Notification::create([
                 'user_id' => $milestone->contract->creator_id,
                 'type' => 'milestone_approved',
@@ -1172,31 +1098,29 @@ class NotificationService
 
             self::sendSocketNotification($milestone->contract->creator_id, $notification);
 
-            
             try {
                 Mail::to($milestone->contract->creator->email)->send(new \App\Mail\MilestoneApproved($milestone));
             } catch (\Exception $emailError) {
                 Log::error('Failed to send milestone approval email', [
                     'milestone_id' => $milestone->id,
                     'creator_email' => $milestone->contract->creator->email,
-                    'error' => $emailError->getMessage()
+                    'error' => $emailError->getMessage(),
                 ]);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify creator of milestone approval', [
                 'milestone_id' => $milestone->id,
                 'creator_id' => $milestone->contract->creator_id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyCreatorOfMilestoneRejection($milestone): void
     {
         try {
             $milestone->load(['contract.creator', 'contract.brand']);
-            
+
             $notification = Notification::create([
                 'user_id' => $milestone->contract->creator_id,
                 'type' => 'milestone_rejected',
@@ -1216,31 +1140,29 @@ class NotificationService
 
             self::sendSocketNotification($milestone->contract->creator_id, $notification);
 
-            
             try {
                 Mail::to($milestone->contract->creator->email)->send(new \App\Mail\MilestoneRejected($milestone));
             } catch (\Exception $emailError) {
                 Log::error('Failed to send milestone rejection email', [
                     'milestone_id' => $milestone->id,
                     'creator_email' => $milestone->contract->creator->email,
-                    'error' => $emailError->getMessage()
+                    'error' => $emailError->getMessage(),
                 ]);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify creator of milestone rejection', [
                 'milestone_id' => $milestone->id,
                 'creator_id' => $milestone->contract->creator_id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyCreatorOfMilestoneDelay($milestone): void
     {
         try {
             $milestone->load(['contract.creator', 'contract.brand']);
-            
+
             $notification = Notification::create([
                 'user_id' => $milestone->contract->creator_id,
                 'type' => 'milestone_delay_warning',
@@ -1261,26 +1183,24 @@ class NotificationService
 
             self::sendSocketNotification($milestone->contract->creator_id, $notification);
 
-            
             try {
                 Mail::to($milestone->contract->creator->email)->send(new \App\Mail\MilestoneDelayWarning($milestone));
             } catch (\Exception $emailError) {
                 Log::error('Failed to send milestone delay warning email', [
                     'milestone_id' => $milestone->id,
                     'creator_email' => $milestone->contract->creator->email,
-                    'error' => $emailError->getMessage()
+                    'error' => $emailError->getMessage(),
                 ]);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify creator of milestone delay warning', [
                 'milestone_id' => $milestone->id,
                 'creator_id' => $milestone->contract->creator_id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyUserOfPaymentCompleted($jobPayment): void
     {
         try {
@@ -1288,29 +1208,27 @@ class NotificationService
                 'user_id' => $jobPayment->creator_id,
                 'type' => 'payment_completed',
                 'title' => 'Pagamento Concluído',
-                'message' => "Seu pagamento de R$ " . number_format($jobPayment->creator_amount, 2, ',', '.') . " foi processado com sucesso.",
+                'message' => 'Seu pagamento de R$ '.number_format($jobPayment->creator_amount, 2, ',', '.').' foi processado com sucesso.',
                 'data' => [
                     'job_payment_id' => $jobPayment->id,
                     'contract_id' => $jobPayment->contract_id,
                     'amount' => $jobPayment->creator_amount,
-                    'formatted_amount' => 'R$ ' . number_format($jobPayment->creator_amount, 2, ',', '.'),
+                    'formatted_amount' => 'R$ '.number_format($jobPayment->creator_amount, 2, ',', '.'),
                     'transaction_id' => $jobPayment->transaction_id,
                     'processed_at' => $jobPayment->processed_at ? $jobPayment->processed_at->toISOString() : null,
                 ],
                 'is_read' => false,
             ]);
-            
-            
+
             self::sendSocketNotification($jobPayment->creator_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of payment completed', [
                 'job_payment_id' => $jobPayment->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyUserOfPaymentFailed($jobPayment, ?string $reason = null): void
     {
         try {
@@ -1318,38 +1236,36 @@ class NotificationService
                 'user_id' => $jobPayment->creator_id,
                 'type' => 'payment_failed',
                 'title' => 'Falha no Pagamento',
-                'message' => "Falha no processamento do pagamento. " . ($reason ? "Motivo: {$reason}" : "Tente novamente mais tarde."),
+                'message' => 'Falha no processamento do pagamento. '.($reason ? "Motivo: {$reason}" : 'Tente novamente mais tarde.'),
                 'data' => [
                     'job_payment_id' => $jobPayment->id,
                     'contract_id' => $jobPayment->contract_id,
                     'amount' => $jobPayment->creator_amount,
-                    'formatted_amount' => 'R$ ' . number_format($jobPayment->creator_amount, 2, ',', '.'),
+                    'formatted_amount' => 'R$ '.number_format($jobPayment->creator_amount, 2, ',', '.'),
                     'failure_reason' => $reason,
                 ],
                 'is_read' => false,
             ]);
-            
-            
+
             self::sendSocketNotification($jobPayment->creator_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of payment failed', [
                 'job_payment_id' => $jobPayment->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     public static function notifyCreatorOfProposalApproval(CampaignApplication $application): void
     {
         try {
             $application->load(['campaign.brand', 'creator']);
-            
+
             $notification = Notification::create([
                 'user_id' => $application->creator_id,
                 'type' => 'proposal_approved',
                 'title' => '💖 Parabéns! Seu perfil foi selecionado!',
-                'message' => "Parabéns! Você tem a cara da marca e foi selecionada para uma parceria de sucesso! Prepare-se para mostrar todo o seu talento e representar a NEXA com criatividade e profissionalismo.",
+                'message' => 'Parabéns! Você tem a cara da marca e foi selecionada para uma parceria de sucesso! Prepare-se para mostrar todo o seu talento e representar a NEXA com criatividade e profissionalismo.',
                 'data' => [
                     'application_id' => $application->id,
                     'campaign_id' => $application->campaign_id,
@@ -1363,24 +1279,22 @@ class NotificationService
                 'read_at' => null,
             ]);
 
-            
             self::sendSocketNotification($application->creator_id, $notification);
 
-            
             try {
                 Mail::to($application->creator->email)->send(new \App\Mail\ProposalApproved($application));
             } catch (\Exception $emailError) {
                 Log::error('Failed to send proposal approval email', [
                     'application_id' => $application->id,
                     'creator_email' => $application->creator->email,
-                    'error' => $emailError->getMessage()
+                    'error' => $emailError->getMessage(),
                 ]);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify creator of proposal approval', [
                 'application_id' => $application->id,
                 'creator_id' => $application->creator_id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -1389,13 +1303,13 @@ class NotificationService
     {
         try {
             $users = [$contract->brand_id, $contract->creator_id];
-            
+
             foreach ($users as $userId) {
                 $notification = Notification::create([
                     'user_id' => $userId,
                     'type' => 'contract_cancelled',
                     'title' => 'Contrato Cancelado',
-                    'message' => "O contrato '{$contract->title}' foi cancelado." . ($reason ? " Motivo: {$reason}" : ""),
+                    'message' => "O contrato '{$contract->title}' foi cancelado.".($reason ? " Motivo: {$reason}" : ''),
                     'data' => [
                         'contract_id' => $contract->id,
                         'contract_title' => $contract->title,
@@ -1404,13 +1318,13 @@ class NotificationService
                     ],
                     'is_read' => false,
                 ]);
-                
+
                 self::sendSocketNotification($userId, $notification);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify users of contract cancellation', [
                 'contract_id' => $contract->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -1419,13 +1333,13 @@ class NotificationService
     {
         try {
             $adminUsers = User::where('role', 'admin')->get();
-            
+
             foreach ($adminUsers as $admin) {
                 $notification = Notification::create([
                     'user_id' => $admin->id,
                     'type' => 'contract_dispute',
                     'title' => 'Disputa de Contrato',
-                    'message' => "O contrato '{$contract->title}' entrou em disputa." . ($reason ? " Motivo: {$reason}" : ""),
+                    'message' => "O contrato '{$contract->title}' entrou em disputa.".($reason ? " Motivo: {$reason}" : ''),
                     'data' => [
                         'contract_id' => $contract->id,
                         'contract_title' => $contract->title,
@@ -1436,13 +1350,13 @@ class NotificationService
                     ],
                     'is_read' => false,
                 ]);
-                
+
                 self::sendSocketNotification($admin->id, $notification);
             }
         } catch (\Exception $e) {
             Log::error('Failed to notify admin of contract dispute', [
                 'contract_id' => $contract->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -1454,25 +1368,24 @@ class NotificationService
                 'user_id' => $jobPayment->creator_id,
                 'type' => 'payment_refunded',
                 'title' => 'Pagamento Estornado',
-                'message' => "O pagamento de R$ " . number_format($jobPayment->creator_amount, 2, ',', '.') . " foi estornado." . ($reason ? " Motivo: {$reason}" : ""),
+                'message' => 'O pagamento de R$ '.number_format($jobPayment->creator_amount, 2, ',', '.').' foi estornado.'.($reason ? " Motivo: {$reason}" : ''),
                 'data' => [
                     'job_payment_id' => $jobPayment->id,
                     'contract_id' => $jobPayment->contract_id,
                     'amount' => $jobPayment->creator_amount,
-                    'formatted_amount' => 'R$ ' . number_format($jobPayment->creator_amount, 2, ',', '.'),
+                    'formatted_amount' => 'R$ '.number_format($jobPayment->creator_amount, 2, ',', '.'),
                     'refund_reason' => $reason,
                     'refunded_at' => now()->toISOString(),
                 ],
                 'is_read' => false,
             ]);
-            
+
             self::sendSocketNotification($jobPayment->creator_id, $notification);
         } catch (\Exception $e) {
             Log::error('Failed to notify user of payment refunded', [
                 'job_payment_id' => $jobPayment->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
-
-} 
+}

@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Services\NotificationService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Services\NotificationService;
 
 class DirectMessage extends Model
 {
@@ -29,7 +29,6 @@ class DirectMessage extends Model
         'read_at' => 'datetime',
     ];
 
-    
     public function directChatRoom(): BelongsTo
     {
         return $this->belongsTo(DirectChatRoom::class);
@@ -40,32 +39,31 @@ class DirectMessage extends Model
         return $this->belongsTo(User::class, 'sender_id');
     }
 
-    
     public function getFileUrlAttribute(): ?string
     {
         if ($this->file_path) {
-            return asset('storage/' . $this->file_path);
+            return asset('storage/'.$this->file_path);
         }
+
         return null;
     }
 
     public function getFormattedFileSizeAttribute(): ?string
     {
-        if (!$this->file_size) {
+        if (! $this->file_size) {
             return null;
         }
 
         $bytes = (int) $this->file_size;
         $units = ['B', 'KB', 'MB', 'GB'];
-        
+
         for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
             $bytes /= 1024;
         }
-        
-        return round($bytes, 2) . ' ' . $units[$i];
+
+        return round($bytes, 2).' '.$units[$i];
     }
 
-    
     public function isFile(): bool
     {
         return in_array($this->message_type, ['file', 'image']);
@@ -89,8 +87,8 @@ class DirectMessage extends Model
     protected static function booted()
     {
         static::created(function ($message) {
-            
+
             NotificationService::notifyUserOfNewDirectMessage($message);
         });
     }
-} 
+}

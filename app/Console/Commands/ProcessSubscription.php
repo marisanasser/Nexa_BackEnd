@@ -2,11 +2,11 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use App\Models\User;
 use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
 use App\Models\Transaction;
+use App\Models\User;
+use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Stripe\Stripe;
 use Stripe\Subscription as StripeSubscription;
@@ -14,80 +14,80 @@ use Stripe\Subscription as StripeSubscription;
 class ProcessSubscription extends Command
 {
     protected $signature = 'subscription:process {subscription_id : Stripe subscription ID}';
+
     protected $description = 'Process a subscription that was created in Stripe but not in local database';
 
     public function handle()
     {
         $stripeSubscriptionId = $this->argument('subscription_id');
-        
+
         Stripe::setApiKey(config('services.stripe.secret'));
-        
+
         try {
-            
+
             $stripeSub = StripeSubscription::retrieve($stripeSubscriptionId, [
-                'expand' => ['latest_invoice.payment_intent']
+                'expand' => ['latest_invoice.payment_intent'],
             ]);
-            
-            $this->info("Subscription found in Stripe:");
+
+            $this->info('Subscription found in Stripe:');
             $this->info("  Status: {$stripeSub->status}");
             $this->info("  Customer: {$stripeSub->customer}");
-            
-            
+
             $user = User::where('stripe_customer_id', $stripeSub->customer)->first();
-            
-            if (!$user) {
+
+            if (! $user) {
                 $this->error("User not found for customer ID: {$stripeSub->customer}");
+
                 return 1;
             }
-            
+
             $this->info("User found: {$user->email} (ID: {$user->id})");
-            
-            
+
             $existingSub = Subscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
             if ($existingSub) {
                 $this->warn("Subscription already exists in database (ID: {$existingSub->id})");
-                $this->info("Updating user premium status...");
-                
-                
-                $currentPeriodEnd = isset($stripeSub->current_period_end) 
-                    ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_end) 
+                $this->info('Updating user premium status...');
+
+                $currentPeriodEnd = isset($stripeSub->current_period_end)
+                    ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_end)
                     : null;
-                
-                if (!$currentPeriodEnd) {
+
+                if (! $currentPeriodEnd) {
                     $plan = SubscriptionPlan::find($existingSub->subscription_plan_id);
                     if ($plan) {
                         $currentPeriodEnd = \Carbon\Carbon::now()->addMonths($plan->duration_months);
                     }
                 }
-                
+
                 $user->update([
                     'has_premium' => true,
                     'premium_expires_at' => $currentPeriodEnd?->format('Y-m-d H:i:s'),
                 ]);
-                
-                $this->info("✅ User premium status updated!");
+
+                $this->info('✅ User premium status updated!');
+
                 return 0;
             }
-            
-            
+
             $priceId = $stripeSub->items->data[0]->price->id ?? null;
-            if (!$priceId) {
-                $this->error("Could not get price ID from subscription");
+            if (! $priceId) {
+                $this->error('Could not get price ID from subscription');
+
                 return 1;
             }
-            
+
             $plan = SubscriptionPlan::where('stripe_price_id', $priceId)->first();
-            if (!$plan) {
+            if (! $plan) {
                 $this->error("Plan not found for price ID: {$priceId}");
+
                 return 1;
             }
-            
+
             $this->info("Plan found: {$plan->name} (ID: {$plan->id})");
-            
-            
+
             $invoiceStatus = null;
             $paymentIntentStatus = null;
-            
+
             if (isset($stripeSub->latest_invoice) && is_object($stripeSub->latest_invoice)) {
                 $invoiceStatus = $stripeSub->latest_invoice->status ?? null;
                 if (isset($stripeSub->latest_invoice->payment_intent)) {
@@ -96,30 +96,30 @@ class ProcessSubscription extends Command
                     }
                 }
             }
-            
+
             $paymentSuccessful = (
                 $stripeSub->status === 'active' ||
                 $invoiceStatus === 'paid' ||
                 $paymentIntentStatus === 'succeeded'
             );
-            
-            if (!$paymentSuccessful) {
+
+            if (! $paymentSuccessful) {
                 $this->warn("Payment not yet confirmed. Status: {$stripeSub->status}, Invoice: {$invoiceStatus}, PaymentIntent: {$paymentIntentStatus}");
-                if (!$this->confirm("Continue anyway?")) {
+                if (! $this->confirm('Continue anyway?')) {
                     return 1;
                 }
             }
-            
+
             DB::beginTransaction();
-            
+
             try {
-                $currentPeriodEnd = isset($stripeSub->current_period_end) 
-                    ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_end) 
+                $currentPeriodEnd = isset($stripeSub->current_period_end)
+                    ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_end)
                     : null;
-                $currentPeriodStart = isset($stripeSub->current_period_start) 
-                    ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_start) 
+                $currentPeriodStart = isset($stripeSub->current_period_start)
+                    ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_start)
                     : null;
-                
+
                 $invoiceId = $stripeSub->latest_invoice->id ?? null;
                 $paymentIntentId = null;
                 if (isset($stripeSub->latest_invoice) && is_object($stripeSub->latest_invoice)) {
@@ -129,10 +129,9 @@ class ProcessSubscription extends Command
                         }
                     }
                 }
-                
-                $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_' . $stripeSubscriptionId;
-                
-                
+
+                $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_'.$stripeSubscriptionId;
+
                 $transaction = Transaction::create([
                     'user_id' => $user->id,
                     'stripe_payment_intent_id' => $transactionId,
@@ -145,21 +144,19 @@ class ProcessSubscription extends Command
                     ],
                     'paid_at' => now(),
                 ]);
-                
-                
+
                 if ($plan->duration_months > 1) {
                     $cancelAt = \Carbon\Carbon::now()->addMonths($plan->duration_months)->timestamp;
                     try {
                         $stripeSub = StripeSubscription::update($stripeSubscriptionId, [
                             'cancel_at' => $cancelAt,
                         ]);
-                        $this->info("✅ Set cancel_at for subscription");
+                        $this->info('✅ Set cancel_at for subscription');
                     } catch (\Exception $e) {
-                        $this->warn("Could not set cancel_at: " . $e->getMessage());
+                        $this->warn('Could not set cancel_at: '.$e->getMessage());
                     }
                 }
-                
-                
+
                 $subscription = Subscription::create([
                     'user_id' => $user->id,
                     'subscription_plan_id' => $plan->id,
@@ -174,39 +171,38 @@ class ProcessSubscription extends Command
                     'starts_at' => $currentPeriodStart,
                     'expires_at' => $currentPeriodEnd,
                 ]);
-                
-                
+
                 $premiumExpiresAt = $currentPeriodEnd;
-                if (!$premiumExpiresAt) {
+                if (! $premiumExpiresAt) {
                     $premiumExpiresAt = \Carbon\Carbon::now()->addMonths($plan->duration_months);
                 }
-                
-                
+
                 $user->update([
                     'has_premium' => true,
                     'premium_expires_at' => $premiumExpiresAt->format('Y-m-d H:i:s'),
                 ]);
-                
+
                 DB::commit();
-                
-                $this->info("✅ Subscription created successfully!");
+
+                $this->info('✅ Subscription created successfully!');
                 $this->info("  Subscription ID: {$subscription->id}");
                 $this->info("  User premium: {$user->has_premium}");
                 $this->info("  Premium expires at: {$user->premium_expires_at}");
-                
+
                 return 0;
-                
+
             } catch (\Exception $e) {
                 DB::rollBack();
-                $this->error("Error: " . $e->getMessage());
+                $this->error('Error: '.$e->getMessage());
                 $this->error($e->getTraceAsString());
+
                 return 1;
             }
-            
+
         } catch (\Exception $e) {
-            $this->error("Error retrieving subscription from Stripe: " . $e->getMessage());
+            $this->error('Error retrieving subscription from Stripe: '.$e->getMessage());
+
             return 1;
         }
     }
 }
-

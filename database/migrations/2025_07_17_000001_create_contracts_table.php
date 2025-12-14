@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    
     public function up(): void
     {
         Schema::create('contracts', function (Blueprint $table) {
@@ -16,7 +15,7 @@ return new class extends Migration
             $table->unsignedBigInteger('creator_id');
             $table->string('title');
             $table->text('description');
-            $table->decimal('budget', 10, 2); 
+            $table->decimal('budget', 10, 2);
             $table->integer('estimated_days');
             $table->json('requirements')->nullable();
             $table->enum('status', ['pending', 'active', 'completed', 'cancelled', 'disputed', 'payment_failed'])->default('active');
@@ -25,22 +24,21 @@ return new class extends Migration
             $table->timestamp('completed_at')->nullable();
             $table->timestamp('cancelled_at')->nullable();
             $table->text('cancellation_reason')->nullable();
-            $table->decimal('platform_fee', 10, 2); 
-            $table->decimal('creator_amount', 10, 2); 
+            $table->decimal('platform_fee', 10, 2);
+            $table->decimal('creator_amount', 10, 2);
             $table->timestamps();
 
             $table->foreign('offer_id')->references('id')->on('offers')->onDelete('cascade');
             $table->foreign('brand_id')->references('id')->on('users')->onDelete('cascade');
             $table->foreign('creator_id')->references('id')->on('users')->onDelete('cascade');
-            
+
             $table->index(['brand_id', 'creator_id']);
             $table->index(['status', 'expected_completion_at']);
         });
     }
 
-    
     public function down(): void
     {
         Schema::dropIfExists('contracts');
     }
-}; 
+};

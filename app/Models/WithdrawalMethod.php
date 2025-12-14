@@ -33,7 +33,6 @@ class WithdrawalMethod extends Model
         'sort_order' => 'integer',
     ];
 
-    
     public static function getActiveMethods()
     {
         return static::where('is_active', true)
@@ -41,7 +40,6 @@ class WithdrawalMethod extends Model
             ->get();
     }
 
-    
     public static function findByCode(string $code)
     {
         return static::where('code', $code)
@@ -49,50 +47,43 @@ class WithdrawalMethod extends Model
             ->first();
     }
 
-    
     public function getFormattedFeeAttribute(): string
     {
-        return 'R$ ' . number_format($this->fee, 2, ',', '.');
+        return 'R$ '.number_format($this->fee, 2, ',', '.');
     }
 
-    
     public function getFormattedMinAmountAttribute(): string
     {
-        return 'R$ ' . number_format($this->min_amount, 2, ',', '.');
+        return 'R$ '.number_format($this->min_amount, 2, ',', '.');
     }
 
-    
     public function getFormattedMaxAmountAttribute(): string
     {
-        return 'R$ ' . number_format($this->max_amount, 2, ',', '.');
+        return 'R$ '.number_format($this->max_amount, 2, ',', '.');
     }
 
-    
     public function isAmountValid(float $amount): bool
     {
         return $amount >= $this->min_amount && $amount <= $this->max_amount;
     }
 
-    
     public function getRequiredFields(): array
     {
         return $this->required_fields ?? [];
     }
 
-    
     public function getFieldConfig(): array
     {
         return $this->field_config ?? [];
     }
 
-    
     public function validateWithdrawalDetails(array $details): array
     {
         $errors = [];
         $requiredFields = $this->getRequiredFields();
 
         foreach ($requiredFields as $field) {
-            if (!isset($details[$field]) || empty($details[$field])) {
+            if (! isset($details[$field]) || empty($details[$field])) {
                 $errors[] = "O campo '{$field}' é obrigatório para {$this->name}";
             }
         }

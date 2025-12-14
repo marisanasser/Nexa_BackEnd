@@ -21,4 +21,4 @@ class StepResource extends JsonResource
             'updated_at' => $this->updated_at,
         ];
     }
-} 
+}

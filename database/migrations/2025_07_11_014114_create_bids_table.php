@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    
     public function up(): void
     {
         Schema::create('bids', function (Blueprint $table) {
@@ -21,13 +20,11 @@ return new class extends Migration
             $table->timestamp('accepted_at')->nullable();
             $table->text('rejection_reason')->nullable();
             $table->timestamps();
-            
-            
+
             $table->unique(['campaign_id', 'user_id']);
         });
     }
 
-    
     public function down(): void
     {
         Schema::dropIfExists('bids');

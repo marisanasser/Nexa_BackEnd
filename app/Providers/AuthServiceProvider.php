@@ -7,12 +7,10 @@ use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvid
 
 class AuthServiceProvider extends ServiceProvider
 {
-    
     protected $policies = [
-        
+
     ];
 
-    
     public function boot(): void
     {
         $this->registerPolicies();
@@ -21,6 +19,5 @@ class AuthServiceProvider extends ServiceProvider
             return config('app.frontend_url')."/password-reset/$token?email={$notifiable->getEmailForPasswordReset()}";
         });
 
-        
     }
 }

@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use Exception;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -14,24 +13,23 @@ use Illuminate\Validation\Rule;
 
 class BrandProfileController extends Controller
 {
-    
     public function show(): JsonResponse
     {
         try {
             /** @var \App\Models\User $user */
-        $user = Auth::user();
-            
-            if (!$user) {
+            $user = Auth::user();
+
+            if (! $user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not authenticated'
+                    'message' => 'User not authenticated',
                 ], 401);
             }
 
-            if (!$user->isBrand()) {
+            if (! $user->isBrand()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Access denied. Brand role required.'
+                    'message' => 'Access denied. Brand role required.',
                 ], 403);
             }
 
@@ -51,47 +49,46 @@ class BrandProfileController extends Controller
                     'role' => $user->role,
                     'created_at' => $user->created_at,
                     'updated_at' => $user->updated_at,
-                ]
+                ],
             ]);
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to retrieve profile: ' . $e->getMessage()
+                'message' => 'Failed to retrieve profile: '.$e->getMessage(),
             ], 500);
         }
     }
 
-    
     public function update(Request $request): JsonResponse
     {
         try {
             /** @var \App\Models\User $user */
-        $user = Auth::user();
+            $user = Auth::user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not authenticated'
+                    'message' => 'User not authenticated',
                 ], 401);
             }
 
-            if (!$user->isBrand()) {
+            if (! $user->isBrand()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Access denied. Brand role required.'
+                    'message' => 'Access denied. Brand role required.',
                 ], 403);
             }
 
             $contentType = $request->header('Content-Type');
             $isMultipart = strpos($contentType, 'multipart/form-data') !== false;
-            
-            error_log("Brand Profile - Is multipart: " . ($isMultipart ? 'true' : 'false'));
 
-            if ($isMultipart && empty($request->all()) && !empty($request->getContent())) {
-                error_log("Brand Profile - Attempting manual multipart parsing");
+            error_log('Brand Profile - Is multipart: '.($isMultipart ? 'true' : 'false'));
+
+            if ($isMultipart && empty($request->all()) && ! empty($request->getContent())) {
+                error_log('Brand Profile - Attempting manual multipart parsing');
                 $parsedData = $this->parseMultipartData($request);
-                error_log("Brand Profile - Manually parsed data: " . json_encode($parsedData));
-                
+                error_log('Brand Profile - Manually parsed data: '.json_encode($parsedData));
+
                 foreach ($parsedData as $key => $value) {
                     if ($key !== 'avatar') {
                         $request->merge([$key => $value]);
@@ -116,28 +113,29 @@ class BrandProfileController extends Controller
 
             $hasAvatarFile = false;
             $avatarFile = null;
-            
+
             if ($request->hasFile('avatar')) {
                 $hasAvatarFile = true;
                 $avatarFile = $request->file('avatar');
-                error_log("Brand Profile - Avatar file found via hasFile()");
+                error_log('Brand Profile - Avatar file found via hasFile()');
             } else {
-                if ($isMultipart && !empty($request->getContent())) {
+                if ($isMultipart && ! empty($request->getContent())) {
                     $parsedData = $this->parseMultipartData($request);
                     if (isset($parsedData['avatar']) && $parsedData['avatar'] instanceof \Illuminate\Http\UploadedFile) {
                         $hasAvatarFile = true;
                         $avatarFile = $parsedData['avatar'];
-                        error_log("Brand Profile - Avatar file found via manual parsing");
+                        error_log('Brand Profile - Avatar file found via manual parsing');
                     }
                 }
             }
 
             if ($validator->fails()) {
-                error_log("Brand Profile - Validation failed: " . json_encode($validator->errors()));
+                error_log('Brand Profile - Validation failed: '.json_encode($validator->errors()));
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
@@ -154,8 +152,8 @@ class BrandProfileController extends Controller
                 }
 
                 $avatarPath = $avatarFile->store('avatars', 'public');
-                $data['avatar_url'] = '/storage/' . $avatarPath;
-                error_log("Brand Profile - Avatar stored at: " . $data['avatar_url']);
+                $data['avatar_url'] = '/storage/'.$avatarPath;
+                error_log('Brand Profile - Avatar stored at: '.$data['avatar_url']);
             }
 
             unset($data['avatar']);
@@ -181,35 +179,35 @@ class BrandProfileController extends Controller
                     'role' => $user->role,
                     'created_at' => $user->created_at,
                     'updated_at' => $user->updated_at,
-                ]
+                ],
             ]);
         } catch (Exception $e) {
-            error_log("Brand Profile - Error: " . $e->getMessage());
+            error_log('Brand Profile - Error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update profile: ' . $e->getMessage()
+                'message' => 'Failed to update profile: '.$e->getMessage(),
             ], 500);
         }
     }
 
-    
     public function changePassword(Request $request): JsonResponse
     {
         try {
             /** @var \App\Models\User $user */
-        $user = Auth::user();
+            $user = Auth::user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not authenticated'
+                    'message' => 'User not authenticated',
                 ], 401);
             }
 
-            if (!$user->isBrand()) {
+            if (! $user->isBrand()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Access denied. Brand role required.'
+                    'message' => 'Access denied. Brand role required.',
                 ], 403);
             }
 
@@ -223,68 +221,64 @@ class BrandProfileController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
-            
-            if (!Hash::check($request->old_password, $user->password)) {
+            if (! Hash::check($request->old_password, $user->password)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Current password is incorrect'
+                    'message' => 'Current password is incorrect',
                 ], 400);
             }
 
-            
             $user->update([
-                'password' => Hash::make($request->new_password)
+                'password' => Hash::make($request->new_password),
             ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Password changed successfully'
+                'message' => 'Password changed successfully',
             ]);
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to change password: ' . $e->getMessage()
+                'message' => 'Failed to change password: '.$e->getMessage(),
             ], 500);
         }
     }
 
-    
     public function uploadAvatar(Request $request): JsonResponse
     {
         try {
             /** @var \App\Models\User $user */
-        $user = Auth::user();
+            $user = Auth::user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not authenticated'
+                    'message' => 'User not authenticated',
                 ], 401);
             }
 
-            if (!$user->isBrand()) {
+            if (! $user->isBrand()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Access denied. Brand role required.'
+                    'message' => 'Access denied. Brand role required.',
                 ], 403);
             }
 
             $validator = Validator::make($request->all(), [
-                'avatar' => 'required', 
+                'avatar' => 'required',
             ]);
 
-            
             $hasAvatarFile = false;
             $avatarFile = null;
             $hasAvatarBase64 = false;
             $avatarBase64 = null;
-            
-            if (!$request->hasFile('avatar')) {
-                
+
+            if (! $request->hasFile('avatar')) {
+
                 if ($request->has('avatar') && is_string($request->input('avatar'))) {
                     $avatarInput = $request->input('avatar');
                     if (strpos($avatarInput, 'data:image/') === 0) {
@@ -292,38 +286,33 @@ class BrandProfileController extends Controller
                         $avatarBase64 = $avatarInput;
                     }
                 }
-                
-                
+
                 $rawContent = $request->getContent();
                 $boundary = null;
-                
-                
+
                 $contentType = $request->header('Content-Type');
                 if (preg_match('/boundary=(.+)$/', $contentType, $matches)) {
-                    $boundary = '--' . trim($matches[1]);
+                    $boundary = '--'.trim($matches[1]);
                 }
-                
+
                 if ($boundary && strpos($rawContent, 'Content-Disposition: form-data; name="avatar"') !== false) {
-                    
+
                     $parts = explode($boundary, $rawContent);
                     foreach ($parts as $part) {
                         if (strpos($part, 'Content-Disposition: form-data; name="avatar"') !== false) {
-                            
+
                             if (preg_match('/filename="([^"]+)"/', $part, $matches)) {
                                 $filename = $matches[1];
-                                
-                                
+
                                 $fileContent = substr($part, strpos($part, "\r\n\r\n") + 4);
                                 $fileContent = rtrim($fileContent, "\r\n-");
-                                
-                                if (!empty($fileContent)) {
+
+                                if (! empty($fileContent)) {
                                     $hasAvatarFile = true;
-                                    
-                                    
+
                                     $tempPath = tempnam(sys_get_temp_dir(), 'avatar_');
                                     file_put_contents($tempPath, $fileContent);
-                                    
-                                    
+
                                     $avatarFile = new \Illuminate\Http\UploadedFile(
                                         $tempPath,
                                         $filename,
@@ -346,36 +335,33 @@ class BrandProfileController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
-            if (!$hasAvatarFile && !$hasAvatarBase64) {
+            if (! $hasAvatarFile && ! $hasAvatarBase64) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No avatar file or base64 data provided'
+                    'message' => 'No avatar file or base64 data provided',
                 ], 400);
             }
 
             $avatarUrl = null;
 
-            
             if ($hasAvatarFile && $avatarFile) {
-                
+
                 if ($user->avatar_url && Storage::disk('public')->exists(str_replace('/storage/', '', $user->avatar_url))) {
                     Storage::disk('public')->delete(str_replace('/storage/', '', $user->avatar_url));
                 }
 
-                
                 $avatarPath = $avatarFile->store('avatars', 'public');
-                $avatarUrl = '/storage/' . $avatarPath;
-                
-                
+                $avatarUrl = '/storage/'.$avatarPath;
+
                 $user->update(['avatar_url' => $avatarUrl]);
             } elseif ($hasAvatarBase64 && $avatarBase64) {
-                
+
                 $avatarResult = $this->handleAvatarUpload($avatarBase64, $user);
-                if (!$avatarResult['success']) {
+                if (! $avatarResult['success']) {
                     return response()->json($avatarResult, 400);
                 }
                 $avatarUrl = $avatarResult['avatar_url'];
@@ -386,102 +372,93 @@ class BrandProfileController extends Controller
                 'message' => 'Avatar uploaded successfully',
                 'data' => [
                     'avatar' => $avatarUrl,
-                    'updated_at' => $user->updated_at
-                ]
+                    'updated_at' => $user->updated_at,
+                ],
             ]);
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to upload avatar: ' . $e->getMessage()
+                'message' => 'Failed to upload avatar: '.$e->getMessage(),
             ], 500);
         }
     }
 
-    
     public function deleteAvatar(): JsonResponse
     {
         try {
             /** @var \App\Models\User $user */
-        $user = Auth::user();
+            $user = Auth::user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not authenticated'
+                    'message' => 'User not authenticated',
                 ], 401);
             }
 
-            if (!$user->isBrand()) {
+            if (! $user->isBrand()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Access denied. Brand role required.'
+                    'message' => 'Access denied. Brand role required.',
                 ], 403);
             }
 
-            
             if ($user->avatar_url && Storage::disk('public')->exists(str_replace('/storage/', '', $user->avatar_url))) {
                 Storage::disk('public')->delete(str_replace('/storage/', '', $user->avatar_url));
             }
 
-            
             $user->update(['avatar_url' => null]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Avatar deleted successfully'
+                'message' => 'Avatar deleted successfully',
             ]);
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete avatar: ' . $e->getMessage()
+                'message' => 'Failed to delete avatar: '.$e->getMessage(),
             ], 500);
         }
     }
 
-    
     private function parseMultipartData(Request $request): array
     {
         $rawContent = $request->getContent();
         $contentType = $request->header('Content-Type');
-        
-        
-        if (!preg_match('/boundary=(.+)$/', $contentType, $matches)) {
+
+        if (! preg_match('/boundary=(.+)$/', $contentType, $matches)) {
             return [];
         }
-        
-        $boundary = '--' . trim($matches[1]);
+
+        $boundary = '--'.trim($matches[1]);
         $parts = explode($boundary, $rawContent);
         $parsedData = [];
-        
+
         foreach ($parts as $part) {
             if (empty(trim($part)) || $part === '--') {
                 continue;
             }
-            
-            
+
             $headerEnd = strpos($part, "\r\n\r\n");
             if ($headerEnd === false) {
                 continue;
             }
-            
+
             $headers = substr($part, 0, $headerEnd);
             $content = substr($part, $headerEnd + 4);
             $content = rtrim($content, "\r\n-");
-            
-            
+
             if (preg_match('/name="([^"]+)"/', $headers, $matches)) {
                 $fieldName = $matches[1];
-                
-                
+
                 if (preg_match('/filename="([^"]+)"/', $headers, $matches)) {
                     $filename = $matches[1];
-                    
-                    if (!empty($content)) {
-                        
+
+                    if (! empty($content)) {
+
                         $tempPath = tempnam(sys_get_temp_dir(), 'upload_');
                         file_put_contents($tempPath, $content);
-                        
-                        
+
                         $parsedData[$fieldName] = new \Illuminate\Http\UploadedFile(
                             $tempPath,
                             $filename,
@@ -491,28 +468,27 @@ class BrandProfileController extends Controller
                         );
                     }
                 } else {
-                    
+
                     $parsedData[$fieldName] = $content;
                 }
             }
         }
-        
+
         return $parsedData;
     }
 
-    
     private function handleAvatarUpload(string $base64Data, $user): array
     {
-        
-        if (!preg_match('/^data:image\/(jpeg|png|jpg|gif|webp|svg\+xml);base64,/', $base64Data)) {
+
+        if (! preg_match('/^data:image\/(jpeg|png|jpg|gif|webp|svg\+xml);base64,/', $base64Data)) {
             return [
                 'success' => false,
-                'message' => 'Invalid image format. Please provide a valid base64 encoded image.'
+                'message' => 'Invalid image format. Please provide a valid base64 encoded image.',
             ];
         }
 
         try {
-            
+
             $base64Image = str_replace('data:image/jpeg;base64,', '', $base64Data);
             $base64Image = str_replace('data:image/png;base64,', '', $base64Image);
             $base64Image = str_replace('data:image/jpg;base64,', '', $base64Image);
@@ -520,23 +496,20 @@ class BrandProfileController extends Controller
             $base64Image = str_replace('data:image/webp;base64,', '', $base64Image);
             $base64Image = str_replace('data:image/svg+xml;base64,', '', $base64Image);
 
-            
             $imageData = base64_decode($base64Image);
-            
+
             if ($imageData === false) {
                 return [
                     'success' => false,
-                    'message' => 'Invalid base64 data'
+                    'message' => 'Invalid base64 data',
                 ];
             }
 
-            
             if ($user->avatar_url && Storage::disk('public')->exists(str_replace('/storage/', '', $user->avatar_url))) {
                 Storage::disk('public')->delete(str_replace('/storage/', '', $user->avatar_url));
             }
 
-            
-            $extension = 'jpg'; 
+            $extension = 'jpg';
             if (strpos($base64Data, 'data:image/svg+xml;') === 0) {
                 $extension = 'svg';
             } elseif (strpos($base64Data, 'data:image/png;') === 0) {
@@ -546,26 +519,24 @@ class BrandProfileController extends Controller
             } elseif (strpos($base64Data, 'data:image/webp;') === 0) {
                 $extension = 'webp';
             }
-            
-            $filename = 'avatar_' . $user->id . '_' . time() . '.' . $extension;
-            $path = 'avatars/' . $filename;
 
-            
+            $filename = 'avatar_'.$user->id.'_'.time().'.'.$extension;
+            $path = 'avatars/'.$filename;
+
             Storage::disk('public')->put($path, $imageData);
 
-            
-            $avatarUrl = '/storage/' . $path;
+            $avatarUrl = '/storage/'.$path;
             $user->update(['avatar_url' => $avatarUrl]);
 
             return [
                 'success' => true,
-                'avatar_url' => $avatarUrl
+                'avatar_url' => $avatarUrl,
             ];
         } catch (Exception $e) {
             return [
                 'success' => false,
-                'message' => 'Failed to process image: ' . $e->getMessage()
+                'message' => 'Failed to process image: '.$e->getMessage(),
             ];
         }
     }
-} 
+}

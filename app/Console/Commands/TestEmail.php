@@ -2,21 +2,17 @@
 
 namespace App\Console\Commands;
 
+use App\Models\User;
+use App\Services\EmailVerificationService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Log;
-use App\Services\EmailVerificationService;
-use App\Models\User;
 
 class TestEmail extends Command
 {
-    
     protected $signature = 'email:test {email} {--provider=all}';
 
-    
     protected $description = 'Test email configuration with different providers';
 
-    
     public function handle()
     {
         $email = $this->argument('email');
@@ -26,12 +22,10 @@ class TestEmail extends Command
         $this->info("Provider: {$provider}");
         $this->newLine();
 
-        
-        $user = new User();
+        $user = new User;
         $user->email = $email;
         $user->name = 'Test User';
 
-        
         if ($provider === 'all' || $provider === 'ses') {
             $this->testSES($user);
         }
@@ -47,33 +41,31 @@ class TestEmail extends Command
         $this->info('Email testing completed. Check logs for details.');
     }
 
-    
     private function testSES(User $user)
     {
         $this->info('Testing AWS SES...');
-        
+
         try {
             $result = EmailVerificationService::sendVerificationEmail($user);
-            
+
             if ($result) {
                 $this->info('✅ SES test successful');
             } else {
                 $this->error('❌ SES test failed');
             }
         } catch (\Exception $e) {
-            $this->error('❌ SES test error: ' . $e->getMessage());
+            $this->error('❌ SES test error: '.$e->getMessage());
         }
-        
+
         $this->newLine();
     }
 
-    
     private function testSMTP(User $user)
     {
         $this->info('Testing SMTP...');
-        
+
         try {
-            
+
             config([
                 'mail.default' => 'smtp',
                 'mail.mailers.smtp.transport' => 'smtp',
@@ -85,43 +77,42 @@ class TestEmail extends Command
                 'mail.from.address' => env('MAIL_FROM_ADDRESS', 'noreply@nexacreators.com.br'),
                 'mail.from.name' => env('MAIL_FROM_NAME', 'Nexa'),
             ]);
-            
-            Mail::raw('This is a test email from Nexa Platform', function($message) use ($user) {
+
+            Mail::raw('This is a test email from Nexa Platform', function ($message) use ($user) {
                 $message->to($user->email)
-                        ->subject('Test Email - Nexa Platform');
+                    ->subject('Test Email - Nexa Platform');
             });
-            
+
             $this->info('✅ SMTP test successful');
         } catch (\Exception $e) {
-            $this->error('❌ SMTP test error: ' . $e->getMessage());
+            $this->error('❌ SMTP test error: '.$e->getMessage());
         }
-        
+
         $this->newLine();
     }
 
-    
     private function testLog(User $user)
     {
         $this->info('Testing Log...');
-        
+
         try {
-            
+
             $result = EmailVerificationService::sendVerificationEmail($user);
-            
+
             if ($result['success']) {
                 $this->info('✅ Log test successful - New template used');
-                $this->info('Method: ' . $result['method']);
-                $this->info('Message: ' . $result['message']);
+                $this->info('Method: '.$result['method']);
+                $this->info('Message: '.$result['message']);
                 if ($result['verification_url']) {
-                    $this->info('Verification URL: ' . $result['verification_url']);
+                    $this->info('Verification URL: '.$result['verification_url']);
                 }
             } else {
-                $this->error('❌ Log test failed: ' . $result['message']);
+                $this->error('❌ Log test failed: '.$result['message']);
             }
         } catch (\Exception $e) {
-            $this->error('❌ Log test error: ' . $e->getMessage());
+            $this->error('❌ Log test error: '.$e->getMessage());
         }
-        
+
         $this->newLine();
     }
-} 
+}

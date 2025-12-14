@@ -24,7 +24,7 @@ class ContractFactory extends Factory
             'requirements' => json_encode([
                 'format' => 'video',
                 'duration' => '60 seconds',
-                'style' => 'modern'
+                'style' => 'modern',
             ]),
             'status' => 'active',
             'started_at' => now(),
@@ -58,4 +58,4 @@ class ContractFactory extends Factory
             'completed_at' => now(),
         ]);
     }
-} 
+}

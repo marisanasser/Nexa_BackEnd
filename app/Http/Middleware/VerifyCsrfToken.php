@@ -6,7 +6,6 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken as Middleware;
 
 class VerifyCsrfToken extends Middleware
 {
-    
     protected $except = [
         'api/*',
         'register',
@@ -15,20 +14,18 @@ class VerifyCsrfToken extends Middleware
         'forgot-password',
         'reset-password',
         'verify-email/*',
-        'email/verification-notification'
+        'email/verification-notification',
     ];
 
-    
     protected function inExceptArray($request)
     {
-        
+
         if ($request->is('api/*')) {
             return true;
         }
 
-        
-        if ($request->is('register') || 
-            $request->is('login') || 
+        if ($request->is('register') ||
+            $request->is('login') ||
             $request->is('logout') ||
             $request->is('forgot-password') ||
             $request->is('reset-password') ||

@@ -6,9 +6,8 @@ use Illuminate\Foundation\Http\Kernel as HttpKernel;
 
 class Kernel extends HttpKernel
 {
-    
     protected $middleware = [
-        
+
         \App\Http\Middleware\TrustProxies::class,
         \Illuminate\Http\Middleware\HandleCors::class,
         \App\Http\Middleware\CorsMiddleware::class,
@@ -19,7 +18,6 @@ class Kernel extends HttpKernel
         \App\Http\Middleware\RateLimitHeadersMiddleware::class,
     ];
 
-    
     protected $middlewareGroups = [
         'web' => [
             \App\Http\Middleware\EncryptCookies::class,
@@ -36,7 +34,6 @@ class Kernel extends HttpKernel
         ],
     ];
 
-    
     protected $middlewareAliases = [
         'auth' => \App\Http\Middleware\Authenticate::class,
         'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,

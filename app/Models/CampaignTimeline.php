@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Carbon\Carbon;
 
 class CampaignTimeline extends Model
 {
@@ -61,7 +60,6 @@ class CampaignTimeline extends Model
         'formatted_file_size',
     ];
 
-    
     public function contract(): BelongsTo
     {
         return $this->belongsTo(Contract::class);
@@ -72,7 +70,6 @@ class CampaignTimeline extends Model
         return $this->hasMany(DeliveryMaterial::class, 'milestone_id');
     }
 
-    
     const MILESTONE_TYPES = [
         'script_submission' => 'Envio do Roteiro',
         'script_approval' => 'Aprovação do Roteiro',
@@ -80,7 +77,6 @@ class CampaignTimeline extends Model
         'final_approval' => 'Aprovação Final',
     ];
 
-    
     const STATUSES = [
         'pending' => 'Pendente',
         'approved' => 'Aprovado',
@@ -88,7 +84,6 @@ class CampaignTimeline extends Model
         'completed' => 'Concluído',
     ];
 
-    
     public function isPending(): bool
     {
         return $this->status === 'pending';
@@ -111,22 +106,24 @@ class CampaignTimeline extends Model
 
     public function isOverdue(): bool
     {
-        return $this->deadline && $this->deadline->isPast() && !$this->isCompleted();
+        return $this->deadline && $this->deadline->isPast() && ! $this->isCompleted();
     }
 
     public function getDaysUntilDeadline(): int
     {
-        if (!$this->deadline) {
+        if (! $this->deadline) {
             return 0;
         }
+
         return max(0, now()->diffInDays($this->deadline, false));
     }
 
     public function getDaysOverdue(): int
     {
-        if (!$this->isOverdue()) {
+        if (! $this->isOverdue()) {
             return 0;
         }
+
         return abs(now()->diffInDays($this->deadline, false));
     }
 
@@ -141,6 +138,7 @@ class CampaignTimeline extends Model
         if ($this->isDelayed() || $this->isOverdue()) {
             return 'red';
         }
+
         return 'yellow';
     }
 
@@ -155,6 +153,7 @@ class CampaignTimeline extends Model
         if ($this->isDelayed() || $this->isOverdue()) {
             return '🔴';
         }
+
         return '🟡';
     }
 
@@ -196,12 +195,12 @@ class CampaignTimeline extends Model
 
     public function canJustifyDelay(): bool
     {
-        return $this->isDelayed() && !$this->justification;
+        return $this->isDelayed() && ! $this->justification;
     }
 
     public function markAsCompleted(): bool
     {
-        if (!$this->canBeCompleted()) {
+        if (! $this->canBeCompleted()) {
             return false;
         }
 
@@ -215,7 +214,7 @@ class CampaignTimeline extends Model
 
     public function markAsApproved(?string $comment = null): bool
     {
-        if (!$this->canBeApproved()) {
+        if (! $this->canBeApproved()) {
             return false;
         }
 
@@ -241,7 +240,7 @@ class CampaignTimeline extends Model
 
     public function uploadFile(string $filePath, string $fileName, string $fileSize, string $fileType): bool
     {
-        if (!$this->canUploadFile()) {
+        if (! $this->canUploadFile()) {
             return false;
         }
 
@@ -257,7 +256,7 @@ class CampaignTimeline extends Model
 
     public function justifyDelay(string $justification): bool
     {
-        if (!$this->canJustifyDelay()) {
+        if (! $this->canJustifyDelay()) {
             return false;
         }
 
@@ -268,7 +267,6 @@ class CampaignTimeline extends Model
         return true;
     }
 
-    
     public function extendTimeline(int $days, string $reason, int $extendedBy): bool
     {
         $this->update([
@@ -277,32 +275,28 @@ class CampaignTimeline extends Model
             'extended_at' => now(),
             'extended_by' => $extendedBy,
             'deadline' => $this->deadline->addDays($days),
-            'is_delayed' => false, 
+            'is_delayed' => false,
             'status' => $this->status === 'delayed' ? 'pending' : $this->status,
         ]);
 
         return true;
     }
 
-    
     public function isExtended(): bool
     {
         return $this->extension_days > 0;
     }
 
-    
     public function getTotalExtensionDays(): int
     {
         return $this->extension_days;
     }
 
-    
     public function getExtendedDeadline(): \Carbon\Carbon
     {
         return $this->deadline;
     }
 
-    
     public function canBeExtended(): bool
     {
         try {
@@ -314,7 +308,7 @@ class CampaignTimeline extends Model
 
     public function getFormattedFileSizeAttribute(): string
     {
-        if (!$this->file_size) {
+        if (! $this->file_size) {
             return 'Unknown size';
         }
 
@@ -325,7 +319,7 @@ class CampaignTimeline extends Model
         $pow = min($pow, count($units) - 1);
         $bytes /= pow(1024, $pow);
 
-        return round($bytes, 2) . ' ' . $units[$pow];
+        return round($bytes, 2).' '.$units[$pow];
     }
 
     public function getFormattedDeadlineAttribute(): ?string
@@ -343,7 +337,6 @@ class CampaignTimeline extends Model
         return $this->delay_notified_at ? $this->delay_notified_at->format('M d, Y H:i') : null;
     }
 
-    
     public function getCanUploadFileAttribute(): bool
     {
         return $this->isPending() && in_array($this->milestone_type, ['script_submission', 'video_submission']);
@@ -361,7 +354,7 @@ class CampaignTimeline extends Model
 
     public function getCanJustifyDelayAttribute(): bool
     {
-        return $this->isDelayed() && !$this->justification;
+        return $this->isDelayed() && ! $this->justification;
     }
 
     public function getCanBeExtendedAttribute(): bool
@@ -412,4 +405,4 @@ class CampaignTimeline extends Model
     {
         return $this->getStatusColor();
     }
-} 
+}

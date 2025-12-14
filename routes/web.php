@@ -7,15 +7,15 @@ Route::get('/', function () {
 });
 
 Route::get('/storage/{path}', function ($path) {
-    $filePath = storage_path('app/public/' . $path);
-    
-    if (!file_exists($filePath)) {
+    $filePath = storage_path('app/public/'.$path);
+
+    if (! file_exists($filePath)) {
         abort(404);
     }
-    
+
     $file = new \Illuminate\Http\File($filePath);
     $mimeType = $file->getMimeType();
-    
+
     return response()->file($filePath, [
         'Content-Type' => $mimeType,
         'Access-Control-Allow-Origin' => '*',
@@ -24,4 +24,3 @@ Route::get('/storage/{path}', function ($path) {
         'Access-Control-Allow-Credentials' => 'true',
     ]);
 })->where('path', '.*');
-

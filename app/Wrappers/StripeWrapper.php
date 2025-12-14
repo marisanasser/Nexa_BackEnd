@@ -2,13 +2,13 @@
 
 namespace App\Wrappers;
 
-use Stripe\Customer;
 use Stripe\Checkout\Session;
+use Stripe\Customer;
+use Stripe\PaymentIntent;
+use Stripe\PaymentMethod;
+use Stripe\SetupIntent;
 use Stripe\Stripe;
 use Stripe\Subscription;
-use Stripe\PaymentMethod;
-use Stripe\PaymentIntent;
-use Stripe\SetupIntent;
 
 class StripeWrapper
 {

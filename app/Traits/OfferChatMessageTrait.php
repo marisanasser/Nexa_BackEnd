@@ -2,19 +2,18 @@
 
 namespace App\Traits;
 
-use App\Models\Message;
 use App\Models\ChatRoom;
+use App\Models\Message;
 use Illuminate\Support\Facades\Log;
 
 trait OfferChatMessageTrait
 {
-    
     private function createOfferChatMessage(ChatRoom $chatRoom, string $messageType, array $data = []): ?Message
     {
         try {
             $messageData = [
                 'chat_room_id' => $chatRoom->id,
-                'sender_id' => $data['sender_id'] ?? null, 
+                'sender_id' => $data['sender_id'] ?? null,
                 'message' => $data['message'] ?? '',
                 'message_type' => 'offer',
                 'offer_data' => json_encode($data['offer_data'] ?? []),
@@ -22,13 +21,10 @@ trait OfferChatMessageTrait
 
             $message = Message::create($messageData);
 
-            
             $chatRoom->update(['last_message_at' => now()]);
 
-            
             $message->load('sender');
 
-            
             $socketData = [
                 'roomId' => $chatRoom->room_id,
                 'messageId' => $message->id,
@@ -41,7 +37,7 @@ trait OfferChatMessageTrait
                 'offerData' => $data['offer_data'] ?? null,
                 'timestamp' => $message->created_at->toISOString(),
             ];
-            
+
             Log::info('Emitting socket event for offer message', $socketData);
             $this->emitSocketEvent('new_message', $socketData);
 
@@ -53,18 +49,17 @@ trait OfferChatMessageTrait
                 'message_type' => $messageType,
                 'error' => $e->getMessage(),
             ]);
-            
+
             return null;
         }
     }
 
-    
     private function createSystemMessage(ChatRoom $chatRoom, string $message, array $data = []): ?Message
     {
         try {
             $messageData = [
                 'chat_room_id' => $chatRoom->id,
-                'sender_id' => null, 
+                'sender_id' => null,
                 'message' => $message,
                 'message_type' => 'system',
                 'offer_data' => json_encode($data),
@@ -72,10 +67,8 @@ trait OfferChatMessageTrait
 
             $systemMessage = Message::create($messageData);
 
-            
             $chatRoom->update(['last_message_at' => now()]);
 
-            
             $socketData = [
                 'roomId' => $chatRoom->room_id,
                 'messageId' => $systemMessage->id,
@@ -88,7 +81,7 @@ trait OfferChatMessageTrait
                 'offerData' => $data,
                 'timestamp' => $systemMessage->created_at->toISOString(),
             ];
-            
+
             Log::info('Emitting socket event for system message', $socketData);
             $this->emitSocketEvent('new_message', $socketData);
 
@@ -100,21 +93,20 @@ trait OfferChatMessageTrait
                 'message' => $message,
                 'error' => $e->getMessage(),
             ]);
-            
+
             return null;
         }
     }
 
-    
     private function emitSocketEvent(string $event, array $data): void
     {
         try {
-            
+
             \Illuminate\Support\Facades\Http::post('http://localhost:3000/emit', [
                 'event' => $event,
                 'data' => $data,
             ]);
-            
+
             Log::info("Socket event emitted via HTTP: {$event}", $data);
         } catch (\Exception $e) {
             Log::error('Failed to emit socket event via HTTP', [
@@ -123,4 +115,4 @@ trait OfferChatMessageTrait
             ]);
         }
     }
-} 
+}

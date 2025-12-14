@@ -2,19 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Review;
 use App\Models\Contract;
+use App\Models\Review;
 use App\Models\User;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
-use App\Services\NotificationService;
+use Illuminate\Support\Facades\Validator;
 
 class ReviewController extends Controller
 {
-    
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -40,14 +38,13 @@ class ReviewController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'success' => false,
                 'message' => 'User not authenticated',
             ], 401);
         }
 
-        
         Log::info('Review creation attempt', [
             'user_id' => $user->id,
             'user_role' => $user->role,
@@ -57,22 +54,21 @@ class ReviewController extends Controller
         ]);
 
         try {
-            
-            
+
             $contract = Contract::where('status', 'completed')
-                ->where(function($query) use ($user) {
+                ->where(function ($query) use ($user) {
                     $query->where('brand_id', $user->id)
-                          ->orWhere('creator_id', $user->id);
+                        ->orWhere('creator_id', $user->id);
                 })
-                    ->find($request->contract_id);
-            
-            
-            if (!$contract) {
+                ->find($request->contract_id);
+
+            if (! $contract) {
                 Log::warning('Review creation blocked - user is not involved in contract', [
                     'user_id' => $user->id,
                     'user_role' => $user->role,
                     'contract_id' => $request->contract_id,
                 ]);
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Contract not found or you are not authorized to review this contract',
@@ -83,20 +79,19 @@ class ReviewController extends Controller
                 'user_id' => $user->id,
                 'user_role' => $user->role,
                 'contract_id' => $request->contract_id,
-                'contract_found' => !!$contract,
+                'contract_found' => (bool) $contract,
                 'contract_status' => $contract?->status,
                 'has_creator_review' => $contract?->has_creator_review,
                 'has_brand_review' => $contract?->has_brand_review,
             ]);
 
-            if (!$contract) {
+            if (! $contract) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Contract not found or cannot be reviewed',
                 ], 404);
             }
 
-            
             $existingReview = Review::where('contract_id', $contract->id)
                 ->where('reviewer_id', $user->id)
                 ->first();
@@ -107,37 +102,34 @@ class ReviewController extends Controller
                     'contract_id' => $contract->id,
                     'existing_review_id' => $existingReview->id,
                 ]);
-                
+
                 return response()->json([
                     'success' => false,
                     'message' => 'You have already reviewed this contract',
                 ], 400);
             }
 
-            
             if ($contract->hasBothReviews()) {
                 Log::warning('Both parties already reviewed attempt blocked', [
                     'user_id' => $user->id,
                     'contract_id' => $contract->id,
                 ]);
-                
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Both parties have already reviewed this contract',
                 ], 400);
             }
 
-            
-            
             $reviewedId = ($contract->brand_id === $user->id) ? $contract->creator_id : $contract->brand_id;
-            
+
             Log::info('Creating review', [
                 'contract_id' => $contract->id,
                 'reviewer_id' => $user->id,
                 'reviewed_id' => $reviewedId,
                 'rating' => $request->rating,
             ]);
-            
+
             $review = Review::create([
                 'contract_id' => $contract->id,
                 'reviewer_id' => $user->id,
@@ -148,20 +140,16 @@ class ReviewController extends Controller
                 'is_public' => $request->get('is_public', true),
             ]);
 
-            
-
-            
             try {
                 $contract->updateReviewStatus();
             } catch (\Exception $e) {
                 Log::error('Failed to update contract review status', [
                     'review_id' => $review->id,
                     'contract_id' => $contract->id,
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ]);
             }
 
-            
             if ($contract->processPaymentAfterReview()) {
                 Log::info('Payment processed after review submission', [
                     'contract_id' => $contract->id,
@@ -211,7 +199,6 @@ class ReviewController extends Controller
         }
     }
 
-    
     public function index(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -230,8 +217,8 @@ class ReviewController extends Controller
 
         try {
             $user = User::find($request->user_id);
-            
-            if (!$user) {
+
+            if (! $user) {
                 return response()->json([
                     'success' => false,
                     'message' => 'User not found',
@@ -279,14 +266,10 @@ class ReviewController extends Controller
                 ];
             });
 
-            
             $ratingDistribution = $this->getRatingDistribution($user->id, $publicOnly === 'true' || $publicOnly === '1' || $publicOnly === true);
-            
-            
+
             $totalReviewsFromDistribution = array_sum($ratingDistribution);
-            
-            
-            
+
             $stats = [
                 'average_rating' => $user->average_rating ?? 0,
                 'total_reviews' => $totalReviewsFromDistribution > 0 ? $totalReviewsFromDistribution : ($user->total_reviews ?? 0),
@@ -314,14 +297,13 @@ class ReviewController extends Controller
         }
     }
 
-    
     public function show(int $id): JsonResponse
     {
         try {
             $review = Review::with(['reviewer:id,name,avatar_url', 'reviewed:id,name,avatar_url', 'contract:id,title'])
                 ->find($id);
 
-            if (!$review) {
+            if (! $review) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Review not found',
@@ -374,7 +356,6 @@ class ReviewController extends Controller
         }
     }
 
-    
     public function update(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -403,7 +384,7 @@ class ReviewController extends Controller
             $review = Review::where('reviewer_id', $user->id)
                 ->find($id);
 
-            if (!$review) {
+            if (! $review) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Review not found or access denied',
@@ -411,7 +392,7 @@ class ReviewController extends Controller
             }
 
             $review->update($request->only([
-                'rating', 'comment', 'rating_categories', 'is_public'
+                'rating', 'comment', 'rating_categories', 'is_public',
             ]));
 
             Log::info('Review updated successfully', [
@@ -447,7 +428,6 @@ class ReviewController extends Controller
         }
     }
 
-    
     public function destroy(int $id): JsonResponse
     {
         /** @var \App\Models\User $user */
@@ -457,7 +437,7 @@ class ReviewController extends Controller
             $review = Review::where('reviewer_id', $user->id)
                 ->find($id);
 
-            if (!$review) {
+            if (! $review) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Review not found or access denied',
@@ -490,22 +470,20 @@ class ReviewController extends Controller
         }
     }
 
-    
     public function getContractReviewStatus(int $contractId): JsonResponse
     {
         try {
             /** @var \App\Models\User $user */
-        $user = Auth::user();
+            $user = Auth::user();
             $contract = Contract::find($contractId);
 
-            if (!$contract) {
+            if (! $contract) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Contract not found',
                 ], 404);
             }
 
-            
             if ($contract->brand_id !== $user->id && $contract->creator_id !== $user->id) {
                 return response()->json([
                     'success' => false,
@@ -522,16 +500,15 @@ class ReviewController extends Controller
                 'review_message' => '',
             ];
 
-            
             if ($user->id === $contract->brand_id) {
-                $data['can_review'] = !$contract->hasBrandReview() && $contract->status === 'completed';
-                $data['review_message'] = $contract->hasBrandReview() 
-                    ? 'You have already reviewed this contract' 
+                $data['can_review'] = ! $contract->hasBrandReview() && $contract->status === 'completed';
+                $data['review_message'] = $contract->hasBrandReview()
+                    ? 'You have already reviewed this contract'
                     : 'You can review this contract';
             } elseif ($user->id === $contract->creator_id) {
-                $data['can_review'] = !$contract->hasCreatorReview() && $contract->status === 'completed';
-                $data['review_message'] = $contract->hasCreatorReview() 
-                    ? 'You have already reviewed this contract' 
+                $data['can_review'] = ! $contract->hasCreatorReview() && $contract->status === 'completed';
+                $data['review_message'] = $contract->hasCreatorReview()
+                    ? 'You have already reviewed this contract'
                     : 'You can review this contract';
             }
 
@@ -554,11 +531,10 @@ class ReviewController extends Controller
         }
     }
 
-    
     private function getRatingDistribution(int $creatorId, bool $publicOnly = true): array
     {
         $query = Review::where('reviewed_id', $creatorId);
-        
+
         if ($publicOnly) {
             $query->where('is_public', true);
         }
@@ -576,47 +552,4 @@ class ReviewController extends Controller
 
         return $result;
     }
-
-    
-    
-    
-    
-    
-    
-    
-
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-
-    
-    
-    
-    
-    
-    
-    
-
-    
-    
-    
-    
-    
-    
-
-    
-    
-    
-    
-    
-    
-    
-} 
+}

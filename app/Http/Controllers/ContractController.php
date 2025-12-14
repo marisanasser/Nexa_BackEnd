@@ -2,25 +2,23 @@
 
 namespace App\Http\Controllers;
 
-use App\Events\ContractTerminated;
-use App\Events\ContractCompleted;
 use App\Events\ContractActivated;
+use App\Events\ContractCompleted;
+use App\Events\ContractTerminated;
 use App\Events\NewMessage;
+use App\Models\ChatRoom;
 use App\Models\Contract;
 use App\Models\User;
-use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Log;
-use App\Services\NotificationService;
-use App\Models\ChatRoom;
 use App\Traits\OfferChatMessageTrait;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class ContractController extends Controller
 {
     use OfferChatMessageTrait;
-
 
     private function createSystemMessage(ChatRoom $chatRoom, string $message, array $data = []): void
     {
@@ -35,7 +33,6 @@ class ContractController extends Controller
 
             \App\Models\Message::create($messageData);
 
-
             $chatRoom->update(['last_message_at' => now()]);
         } catch (\Exception $e) {
             Log::error('Failed to create system message', [
@@ -46,20 +43,19 @@ class ContractController extends Controller
         }
     }
 
-
     private function sendContractCompletionMessage(Contract $contract, User $brand): void
     {
         try {
             $chatRoom = $contract->offer->chatRoom ?? null;
 
-            if (!$chatRoom) {
+            if (! $chatRoom) {
                 Log::warning('No chat room found for contract completion message', [
                     'contract_id' => $contract->id,
                     'offer_id' => $contract->offer_id,
                 ]);
+
                 return;
             }
-
 
             $message = \App\Models\Message::create([
                 'chat_room_id' => $chatRoom->id,
@@ -80,7 +76,6 @@ class ContractController extends Controller
                 'is_system_message' => true,
             ]);
 
-
             $chatRoom->update(['last_message_at' => now()]);
 
             // Dispatch event for system message
@@ -95,9 +90,7 @@ class ContractController extends Controller
         }
     }
 
-
-
-    // emitSocketEvent deprecado, mudado para PHP reverb 
+    // emitSocketEvent deprecado, mudado para PHP reverb
     // private function emitSocketEvent(string $event, array $data): void
     // {
     //     try {
@@ -105,8 +98,8 @@ class ContractController extends Controller
     //             $io = $GLOBALS['socket_server'];
     //             $io->emit($event, $data);
     //             Log::info("Socket event emitted: {$event}", $data);
-    //             
-    //             
+    //
+    //
     //             if (in_array($event, ['contract_completed', 'contract_terminated', 'contract_activated'])) {
     //                 $io->emit('contract_status_update', [
     //                     'roomId' => $data['roomId'],
@@ -126,28 +119,26 @@ class ContractController extends Controller
     //     }
     // }
 
-
     private function sendApprovalMessages($contract): void
     {
         try {
             $chatRoom = $contract->offer->chatRoom;
 
-            if (!$chatRoom) {
+            if (! $chatRoom) {
                 Log::warning('No chat room found for contract', [
                     'contract_id' => $contract->id,
                     'offer_id' => $contract->offer_id,
                 ]);
+
                 return;
             }
 
-
-            $this->createSystemMessage($chatRoom, "🎉 Contrato finalizado com sucesso! O projeto foi concluído e está aguardando avaliação.", [
+            $this->createSystemMessage($chatRoom, '🎉 Contrato finalizado com sucesso! O projeto foi concluído e está aguardando avaliação.', [
                 'contract_id' => $contract->id,
                 'status' => 'completed',
                 'workflow_status' => 'waiting_review',
                 'message_type' => 'contract_completed',
             ]);
-
 
             ContractCompleted::dispatch($contract, $chatRoom, 0);
         } catch (\Exception $e) {
@@ -157,7 +148,6 @@ class ContractController extends Controller
             ]);
         }
     }
-
 
     public function index(Request $request): JsonResponse
     {
@@ -176,7 +166,6 @@ class ContractController extends Controller
             if ($status) {
                 $query->where('status', $status);
             }
-
 
             if ($workflowStatus) {
                 $query->where('workflow_status', $workflowStatus);
@@ -264,7 +253,6 @@ class ContractController extends Controller
         }
     }
 
-
     public function show(int $id): JsonResponse
     {
         /** @var \App\Models\User $user */
@@ -280,7 +268,7 @@ class ContractController extends Controller
                 })
                 ->find($id);
 
-            if (!$contract) {
+            if (! $contract) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Contrato não encontrado ou acesso negado',
@@ -318,7 +306,7 @@ class ContractController extends Controller
                 'has_brand_review' => $contract->has_brand_review,
                 'has_creator_review' => $contract->has_creator_review,
                 'has_both_reviews' => $contract->has_both_reviews,
-                'can_review' => !$contract->has_creator_review,
+                'can_review' => ! $contract->has_creator_review,
                 'creator' => [
                     'id' => $contract->creator->id,
                     'name' => $contract->creator->name,
@@ -364,14 +352,12 @@ class ContractController extends Controller
         }
     }
 
-
     public function getContractsForChatRoom(Request $request, string $roomId): JsonResponse
     {
         /** @var \App\Models\User $user */
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
-
 
         $chatRoom = \App\Models\ChatRoom::where('room_id', $roomId)
             ->where(function ($query) use ($user) {
@@ -380,7 +366,7 @@ class ContractController extends Controller
             })
             ->first();
 
-        if (!$chatRoom) {
+        if (! $chatRoom) {
             return response()->json([
                 'success' => false,
                 'message' => 'Chat room not found or access denied',
@@ -470,7 +456,6 @@ class ContractController extends Controller
         }
     }
 
-
     public function activate(int $id): JsonResponse
     {
         /** @var \App\Models\User $user */
@@ -478,8 +463,7 @@ class ContractController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-
-        if (!$user->isBrand()) {
+        if (! $user->isBrand()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only brands can activate contracts',
@@ -491,14 +475,14 @@ class ContractController extends Controller
                 ->where('status', 'pending')
                 ->find($id);
 
-            if (!$contract) {
+            if (! $contract) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Contrato não encontrado ou não pode ser ativado',
                 ], 404);
             }
 
-            if (!$contract->canBeStarted()) {
+            if (! $contract->canBeStarted()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Contrato não pode ser ativado',
@@ -511,9 +495,7 @@ class ContractController extends Controller
                 'started_at' => now(),
             ]);
 
-
             $this->sendApprovalMessages($contract);
-
 
             event(new ContractActivated($contract, $contract->offer->chatRoom, $user->id));
 
@@ -547,14 +529,12 @@ class ContractController extends Controller
         }
     }
 
-
     public function complete(int $id): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-
-        if (!$user->isBrand()) {
+        if (! $user->isBrand()) {
             Log::warning('Non-brand user attempted to complete contract', [
                 'user_id' => $user->id,
                 'user_role' => $user->role,
@@ -574,14 +554,14 @@ class ContractController extends Controller
                 ->where('status', 'active')
                 ->find($id);
 
-            if (!$contract) {
+            if (! $contract) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Contrato não encontrado ou não pode ser finalizado',
                 ], 404);
             }
 
-            if (!$contract->canBeCompleted()) {
+            if (! $contract->canBeCompleted()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Contrato não pode ser finalizado',
@@ -591,7 +571,6 @@ class ContractController extends Controller
             if ($contract->complete()) {
 
                 $this->sendContractCompletionMessage($contract, $user);
-
 
                 event(new ContractCompleted($contract, $contract->offer->chatRoom, $user->id));
 
@@ -633,7 +612,6 @@ class ContractController extends Controller
         }
     }
 
-
     public function cancel(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -659,14 +637,14 @@ class ContractController extends Controller
                 ->where('status', 'active')
                 ->find($id);
 
-            if (!$contract) {
+            if (! $contract) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Contrato não encontrado ou não pode ser cancelado',
                 ], 404);
             }
 
-            if (!$contract->canBeCancelled()) {
+            if (! $contract->canBeCancelled()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Contrato não pode ser cancelado',
@@ -708,7 +686,6 @@ class ContractController extends Controller
         }
     }
 
-
     public function terminate(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -726,8 +703,7 @@ class ContractController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-
-        if (!$user->isBrand()) {
+        if (! $user->isBrand()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Apenas marcas podem terminar contratos',
@@ -739,14 +715,14 @@ class ContractController extends Controller
                 ->where('status', 'active')
                 ->find($id);
 
-            if (!$contract) {
+            if (! $contract) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Contrato não encontrado ou não pode ser terminado',
                 ], 404);
             }
 
-            if (!$contract->canBeTerminated()) {
+            if (! $contract->canBeTerminated()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Contrato não pode ser terminado',
@@ -762,8 +738,8 @@ class ContractController extends Controller
                     $this->createOfferChatMessage($chatRoom, 'contract_terminated', [
                         'sender_id' => $user->id,
                         'message' => $request->reason ?
-                            "Contrato terminado pela marca. Motivo: " . $request->reason :
-                            "Contrato terminado pela marca.",
+                            'Contrato terminado pela marca. Motivo: '.$request->reason :
+                            'Contrato terminado pela marca.',
                         'offer_data' => [
                             'contract_id' => $contract->id,
                             'title' => $contract->title,
@@ -784,7 +760,6 @@ class ContractController extends Controller
                         ],
                     ]);
                 }
-
 
                 event(new ContractTerminated($contract, $contract->offer->chatRoom, $user->id, $request->reason));
 
@@ -823,7 +798,6 @@ class ContractController extends Controller
         }
     }
 
-
     public function dispute(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -851,7 +825,7 @@ class ContractController extends Controller
                 ->where('status', 'active')
                 ->find($id);
 
-            if (!$contract) {
+            if (! $contract) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Contrato não encontrado ou não pode ser disputado',

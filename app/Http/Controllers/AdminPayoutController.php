@@ -3,19 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Models\Contract;
-use App\Models\Withdrawal;
 use App\Models\JobPayment;
-use App\Models\User;
-use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Log;
+use App\Models\Withdrawal;
 use App\Services\NotificationService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class AdminPayoutController extends Controller
 {
-    
     public function getPayoutMetrics(): JsonResponse
     {
         try {
@@ -53,7 +51,6 @@ class AdminPayoutController extends Controller
         }
     }
 
-    
     public function getPendingWithdrawals(Request $request): JsonResponse
     {
         try {
@@ -97,7 +94,6 @@ class AdminPayoutController extends Controller
         }
     }
 
-    
     public function processWithdrawal(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -116,7 +112,7 @@ class AdminPayoutController extends Controller
         try {
             $withdrawal = Withdrawal::with('creator')->find($id);
 
-            if (!$withdrawal) {
+            if (! $withdrawal) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Withdrawal not found',
@@ -145,7 +141,7 @@ class AdminPayoutController extends Controller
                     ], 500);
                 }
             } else {
-                
+
                 if ($withdrawal->cancel($request->reason)) {
                     Log::info('Admin rejected withdrawal', [
                         'withdrawal_id' => $withdrawal->id,
@@ -183,7 +179,6 @@ class AdminPayoutController extends Controller
         }
     }
 
-    
     public function getDisputedContracts(): JsonResponse
     {
         try {
@@ -233,7 +228,6 @@ class AdminPayoutController extends Controller
         }
     }
 
-    
     public function resolveDispute(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -253,7 +247,7 @@ class AdminPayoutController extends Controller
         try {
             $contract = Contract::with(['brand', 'creator'])->find($id);
 
-            if (!$contract || $contract->status !== 'disputed') {
+            if (! $contract || $contract->status !== 'disputed') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Disputed contract not found',
@@ -266,7 +260,7 @@ class AdminPayoutController extends Controller
 
             switch ($resolution) {
                 case 'complete':
-                    
+
                     $contract->update([
                         'status' => 'completed',
                         'workflow_status' => 'waiting_review',
@@ -274,7 +268,7 @@ class AdminPayoutController extends Controller
                     break;
 
                 case 'cancel':
-                    
+
                     $contract->update([
                         'status' => 'cancelled',
                         'cancellation_reason' => $reason,
@@ -282,15 +276,15 @@ class AdminPayoutController extends Controller
                     break;
 
                 case 'refund':
-                    
+
                     if ($winner === 'creator') {
-                        
+
                         $contract->update([
                             'status' => 'cancelled',
                             'cancellation_reason' => $reason,
                         ]);
                     } elseif ($winner === 'brand') {
-                        
+
                         $contract->update([
                             'status' => 'completed',
                             'workflow_status' => 'waiting_review',
@@ -307,7 +301,6 @@ class AdminPayoutController extends Controller
                 'reason' => $reason,
             ]);
 
-            
             NotificationService::notifyUsersOfDisputeResolution($contract, $resolution, $winner, $reason);
 
             return response()->json([
@@ -335,7 +328,6 @@ class AdminPayoutController extends Controller
         }
     }
 
-    
     public function getPayoutHistory(Request $request): JsonResponse
     {
         try {
@@ -376,24 +368,21 @@ class AdminPayoutController extends Controller
         }
     }
 
-    
     public function verifyWithdrawal(Request $request, int $id): JsonResponse
     {
         try {
             $withdrawal = Withdrawal::with(['creator.bankAccount'])
                 ->find($id);
 
-            if (!$withdrawal) {
+            if (! $withdrawal) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Withdrawal not found',
                 ], 404);
             }
 
-            
             $currentBankAccount = \App\Models\BankAccount::where('user_id', $withdrawal->creator_id)->first();
-            
-            
+
             $verificationData = [
                 'withdrawal' => [
                     'id' => $withdrawal->id,
@@ -426,7 +415,7 @@ class AdminPayoutController extends Controller
                 'verification_summary' => [
                     'withdrawal_amount_correct' => $this->verifyWithdrawalAmount($withdrawal),
                     'bank_details_consistent' => $this->compareBankDetails($withdrawal, $currentBankAccount),
-                    'transaction_id_valid' => !empty($withdrawal->transaction_id),
+                    'transaction_id_valid' => ! empty($withdrawal->transaction_id),
                     'processing_time_reasonable' => $this->verifyProcessingTime($withdrawal),
                     'overall_verification_status' => $this->getOverallVerificationStatus($withdrawal, $currentBankAccount),
                 ],
@@ -450,7 +439,6 @@ class AdminPayoutController extends Controller
         }
     }
 
-    
     public function getWithdrawalVerificationReport(Request $request): JsonResponse
     {
         try {
@@ -471,12 +459,11 @@ class AdminPayoutController extends Controller
 
             $query = Withdrawal::with(['creator.bankAccount']);
 
-            
             if ($request->start_date) {
                 $query->where('created_at', '>=', $request->start_date);
             }
             if ($request->end_date) {
-                $query->where('created_at', '<=', $request->end_date . ' 23:59:59');
+                $query->where('created_at', '<=', $request->end_date.' 23:59:59');
             }
             if ($request->status) {
                 $query->where('status', $request->status);
@@ -501,7 +488,7 @@ class AdminPayoutController extends Controller
             foreach ($withdrawals->items() as $withdrawal) {
                 $currentBankAccount = \App\Models\BankAccount::where('user_id', $withdrawal->creator_id)->first();
                 $verificationStatus = $this->getOverallVerificationStatus($withdrawal, $currentBankAccount);
-                
+
                 $verificationReport['withdrawals'][] = [
                     'id' => $withdrawal->id,
                     'amount' => $withdrawal->formatted_amount,
@@ -519,7 +506,6 @@ class AdminPayoutController extends Controller
                     'amount_verification' => $this->verifyWithdrawalAmount($withdrawal),
                 ];
 
-                
                 switch ($verificationStatus) {
                     case 'passed':
                         $verificationReport['summary']['verification_passed']++;
@@ -557,10 +543,9 @@ class AdminPayoutController extends Controller
         }
     }
 
-    
     private function extractBankDetailsFromWithdrawal(Withdrawal $withdrawal): ?array
     {
-        if (!$withdrawal->withdrawal_details) {
+        if (! $withdrawal->withdrawal_details) {
             return null;
         }
 
@@ -575,22 +560,20 @@ class AdminPayoutController extends Controller
         ];
     }
 
-    
     private function compareBankDetails(Withdrawal $withdrawal, $currentBankAccount): bool
     {
-        if (!$currentBankAccount || !$withdrawal->withdrawal_details) {
+        if (! $currentBankAccount || ! $withdrawal->withdrawal_details) {
             return false;
         }
 
         $withdrawalDetails = $this->extractBankDetailsFromWithdrawal($withdrawal);
-        
-        if (!$withdrawalDetails) {
+
+        if (! $withdrawalDetails) {
             return false;
         }
 
-        
         $fieldsToCompare = ['bank_code', 'agencia', 'agencia_dv', 'conta', 'conta_dv', 'cpf'];
-        
+
         foreach ($fieldsToCompare as $field) {
             if (($withdrawalDetails[$field] ?? '') !== ($currentBankAccount->$field ?? '')) {
                 return false;
@@ -600,15 +583,13 @@ class AdminPayoutController extends Controller
         return true;
     }
 
-    
     private function verifyWithdrawalAmount(Withdrawal $withdrawal): bool
     {
-        
+
         if ($withdrawal->amount <= 0) {
             return false;
         }
 
-        
         if ($withdrawal->amount > 1000000) {
             return false;
         }
@@ -616,20 +597,17 @@ class AdminPayoutController extends Controller
         return true;
     }
 
-    
     private function verifyProcessingTime(Withdrawal $withdrawal): bool
     {
-        if (!$withdrawal->processed_at) {
-            return true; 
+        if (! $withdrawal->processed_at) {
+            return true;
         }
 
         $processingTime = $withdrawal->created_at->diffInHours($withdrawal->processed_at);
-        
-        
+
         return $processingTime <= 72;
     }
 
-    
     private function getOverallVerificationStatus(Withdrawal $withdrawal, $currentBankAccount): string
     {
         if ($withdrawal->status === 'pending' || $withdrawal->status === 'processing') {
@@ -640,10 +618,9 @@ class AdminPayoutController extends Controller
             return 'failed';
         }
 
-        
         $amountCorrect = $this->verifyWithdrawalAmount($withdrawal);
         $bankDetailsMatch = $this->compareBankDetails($withdrawal, $currentBankAccount);
-        $transactionIdValid = !empty($withdrawal->transaction_id);
+        $transactionIdValid = ! empty($withdrawal->transaction_id);
         $processingTimeReasonable = $this->verifyProcessingTime($withdrawal);
 
         if ($amountCorrect && $bankDetailsMatch && $transactionIdValid && $processingTimeReasonable) {

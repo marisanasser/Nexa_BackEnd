@@ -2,19 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\BankAccount;
 use App\Http\Requests\StoreBankAccountRequest;
-use Illuminate\Http\Request;
+use App\Models\BankAccount;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class PaymentController extends Controller
 {
     /**
      * Register or update a bank account for the authenticated user.
-     *
-     * @param StoreBankAccountRequest $request
-     * @return JsonResponse
      */
     public function registerBankAccount(StoreBankAccountRequest $request): JsonResponse
     {
@@ -43,27 +40,25 @@ class PaymentController extends Controller
             'bank_code' => $data['bank_code'],
             'agencia' => $data['agencia'],
             'conta_last4' => substr($data['conta'], -4),
-            'cpf_masked' => substr($data['cpf'], 0, 3) . '.***.***-' . substr($data['cpf'], -2),
+            'cpf_masked' => substr($data['cpf'], 0, 3).'.***.***-'.substr($data['cpf'], -2),
         ]);
 
         return response()->json([
             'success' => true,
             'message' => $message,
-            'data' => $bankAccount
+            'data' => $bankAccount,
         ]);
     }
 
     /**
      * Get the bank account information for the authenticated user.
-     *
-     * @return JsonResponse
      */
     public function getBankInfo(): JsonResponse
     {
         $user = auth()->user();
         $bankAccount = BankAccount::where('user_id', $user->id)->first();
 
-        if (!$bankAccount) {
+        if (! $bankAccount) {
             return response()->json([
                 'success' => false,
                 'message' => 'No bank account found',
@@ -72,15 +67,12 @@ class PaymentController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $bankAccount
+            'data' => $bankAccount,
         ]);
     }
 
     /**
      * Update the bank account information (alias for register).
-     *
-     * @param StoreBankAccountRequest $request
-     * @return JsonResponse
      */
     public function updateBankInfo(StoreBankAccountRequest $request): JsonResponse
     {
@@ -89,15 +81,13 @@ class PaymentController extends Controller
 
     /**
      * Delete the bank account information.
-     *
-     * @return JsonResponse
      */
     public function deleteBankInfo(): JsonResponse
     {
         $user = auth()->user();
         $bankAccount = BankAccount::where('user_id', $user->id)->first();
 
-        if (!$bankAccount) {
+        if (! $bankAccount) {
             return response()->json([
                 'success' => false,
                 'message' => 'No bank account found',
@@ -119,10 +109,10 @@ class PaymentController extends Controller
      */
     public function debugPayment(Request $request)
     {
-        if (!config('app.debug')) {
+        if (! config('app.debug')) {
             abort(404);
         }
-        
+
         return response()->json([
             'success' => true,
             'message' => 'Debug payment endpoint',

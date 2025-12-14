@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Campaign;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
-use App\Models\Campaign;
 
 class AdminControllerTest extends TestCase
 {
@@ -14,15 +14,13 @@ class AdminControllerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
-        
+
         $this->admin = User::factory()->admin()->create([
             'name' => 'Admin User',
             'email' => 'admin@example.com',
             'password' => bcrypt('password'),
         ]);
 
-        
         $this->creator = User::factory()->create([
             'name' => 'Creator User',
             'email' => 'creator@example.com',
@@ -45,21 +43,21 @@ class AdminControllerTest extends TestCase
             ->getJson('/api/admin/users');
 
         $response->assertStatus(200)
-                ->assertJsonStructure([
-                    'success',
-                    'data',
-                    'pagination' => [
-                        'current_page',
-                        'last_page',
-                        'per_page',
-                        'total',
-                        'from',
-                        'to',
-                    ]
-                ]);
+            ->assertJsonStructure([
+                'success',
+                'data',
+                'pagination' => [
+                    'current_page',
+                    'last_page',
+                    'per_page',
+                    'total',
+                    'from',
+                    'to',
+                ],
+            ]);
 
         $this->assertTrue($response->json('success'));
-        $this->assertCount(3, $response->json('data')); 
+        $this->assertCount(3, $response->json('data'));
     }
 
     public function test_admin_can_get_creators(): void
@@ -68,14 +66,14 @@ class AdminControllerTest extends TestCase
             ->getJson('/api/admin/users/creators');
 
         $response->assertStatus(200)
-                ->assertJsonStructure([
-                    'success',
-                    'data',
-                    'pagination'
-                ]);
+            ->assertJsonStructure([
+                'success',
+                'data',
+                'pagination',
+            ]);
 
         $this->assertTrue($response->json('success'));
-        $this->assertCount(1, $response->json('data')); 
+        $this->assertCount(1, $response->json('data'));
     }
 
     public function test_admin_can_get_brands(): void
@@ -84,14 +82,14 @@ class AdminControllerTest extends TestCase
             ->getJson('/api/admin/users/brands');
 
         $response->assertStatus(200)
-                ->assertJsonStructure([
-                    'success',
-                    'data',
-                    'pagination'
-                ]);
+            ->assertJsonStructure([
+                'success',
+                'data',
+                'pagination',
+            ]);
 
         $this->assertTrue($response->json('success'));
-        $this->assertCount(1, $response->json('data')); 
+        $this->assertCount(1, $response->json('data'));
     }
 
     public function test_admin_can_get_user_statistics(): void
@@ -100,18 +98,18 @@ class AdminControllerTest extends TestCase
             ->getJson('/api/admin/users/statistics');
 
         $response->assertStatus(200)
-                ->assertJsonStructure([
-                    'success',
-                    'data' => [
-                        'total_users',
-                        'creators',
-                        'brands',
-                        'premium_users',
-                        'verified_students',
-                        'active_users',
-                        'pending_users',
-                    ]
-                ]);
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    'total_users',
+                    'creators',
+                    'brands',
+                    'premium_users',
+                    'verified_students',
+                    'active_users',
+                    'pending_users',
+                ],
+            ]);
 
         $this->assertTrue($response->json('success'));
         $this->assertEquals(3, $response->json('data.total_users'));
@@ -128,15 +126,15 @@ class AdminControllerTest extends TestCase
 
         $response = $this->actingAs($this->admin)
             ->patchJson("/api/admin/users/{$user->id}/status", [
-                'action' => 'activate'
+                'action' => 'activate',
             ]);
 
         $response->assertStatus(200)
-                ->assertJsonStructure([
-                    'success',
-                    'message',
-                    'user'
-                ]);
+            ->assertJsonStructure([
+                'success',
+                'message',
+                'user',
+            ]);
 
         $this->assertTrue($response->json('success'));
         $this->assertNotNull($user->fresh()->email_verified_at);
@@ -150,15 +148,15 @@ class AdminControllerTest extends TestCase
 
         $response = $this->actingAs($this->admin)
             ->patchJson("/api/admin/users/{$user->id}/status", [
-                'action' => 'block'
+                'action' => 'block',
             ]);
 
         $response->assertStatus(200)
-                ->assertJsonStructure([
-                    'success',
-                    'message',
-                    'user'
-                ]);
+            ->assertJsonStructure([
+                'success',
+                'message',
+                'user',
+            ]);
 
         $this->assertTrue($response->json('success'));
         $this->assertNull($user->fresh()->email_verified_at);
@@ -170,15 +168,15 @@ class AdminControllerTest extends TestCase
 
         $response = $this->actingAs($this->admin)
             ->patchJson("/api/admin/users/{$user->id}/status", [
-                'action' => 'remove'
+                'action' => 'remove',
             ]);
 
         $response->assertStatus(200)
-                ->assertJsonStructure([
-                    'success',
-                    'message',
-                    'user'
-                ]);
+            ->assertJsonStructure([
+                'success',
+                'message',
+                'user',
+            ]);
 
         $this->assertTrue($response->json('success'));
         $this->assertSoftDeleted($user);
@@ -205,26 +203,25 @@ class AdminControllerTest extends TestCase
             ->getJson('/api/admin/dashboard-metrics');
 
         $response->assertStatus(200)
-                ->assertJsonStructure([
-                    'success',
-                    'data' => [
-                        'pendingCampaignsCount',
-                        'allActiveCampaignCount',
-                        'allRejectCampaignCount',
-                        'allUserCount',
-                    ]
-                ]);
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    'pendingCampaignsCount',
+                    'allActiveCampaignCount',
+                    'allRejectCampaignCount',
+                    'allUserCount',
+                ],
+            ]);
 
         $this->assertTrue($response->json('success'));
-        
-        
+
         $userCount = $response->json('data.allUserCount');
-        $this->assertEquals(2, $userCount); 
+        $this->assertEquals(2, $userCount);
     }
 
     public function test_admin_can_get_pending_campaigns(): void
     {
-        
+
         Campaign::factory()->create([
             'brand_id' => $this->brand->id,
             'status' => 'pending',
@@ -234,18 +231,18 @@ class AdminControllerTest extends TestCase
             ->getJson('/api/admin/pending-campaigns');
 
         $response->assertStatus(200)
-                ->assertJsonStructure([
-                    'success',
-                    'data' => [
-                        '*' => [
-                            'id',
-                            'title',
-                            'brand',
-                            'type',
-                            'value',
-                        ]
-                    ]
-                ]);
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    '*' => [
+                        'id',
+                        'title',
+                        'brand',
+                        'type',
+                        'value',
+                    ],
+                ],
+            ]);
 
         $this->assertTrue($response->json('success'));
     }
@@ -256,25 +253,24 @@ class AdminControllerTest extends TestCase
             ->getJson('/api/admin/recent-users');
 
         $response->assertStatus(200)
-                ->assertJsonStructure([
-                    'success',
-                    'data' => [
-                        '*' => [
-                            'id',
-                            'name',
-                            'role',
-                            'registeredDaysAgo',
-                            'tag',
-                        ]
-                    ]
-                ]);
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    '*' => [
+                        'id',
+                        'name',
+                        'role',
+                        'registeredDaysAgo',
+                        'tag',
+                    ],
+                ],
+            ]);
 
         $this->assertTrue($response->json('success'));
-        
-        
+
         $data = $response->json('data');
         foreach ($data as $user) {
             $this->assertNotEquals('admin', $user['role']);
         }
     }
-} 
+}

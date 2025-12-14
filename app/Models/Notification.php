@@ -26,13 +26,11 @@ class Notification extends Model
         'read_at' => 'datetime',
     ];
 
-    
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    
     public function scopeUnread($query)
     {
         return $query->where('is_read', false);
@@ -53,7 +51,6 @@ class Notification extends Model
         return $query->where('user_id', $userId);
     }
 
-    
     public function markAsRead(): bool
     {
         return $this->update([
@@ -70,7 +67,6 @@ class Notification extends Model
         ]);
     }
 
-    
     public static function createLoginDetected($userId, $loginData = []): self
     {
         return self::create([
@@ -86,7 +82,7 @@ class Notification extends Model
     {
         $userName = $registrationData['user_name'] ?? 'Usuário Desconhecido';
         $userRole = $registrationData['user_role'] ?? 'Papel Desconhecido';
-        
+
         return self::create([
             'user_id' => $userId,
             'type' => 'new_user_registration',
@@ -100,7 +96,7 @@ class Notification extends Model
     {
         $brandName = $campaignData['brand_name'] ?? 'Marca Desconhecida';
         $campaignTitle = $campaignData['campaign_title'] ?? 'Campanha Desconhecida';
-        
+
         return self::create([
             'user_id' => $userId,
             'type' => 'new_campaign',
@@ -115,7 +111,7 @@ class Notification extends Model
         $creatorName = $applicationData['creator_name'] ?? 'Criador Desconhecido';
         $campaignTitle = $applicationData['campaign_title'] ?? 'Campanha Desconhecida';
         $brandName = $applicationData['brand_name'] ?? 'Marca Desconhecida';
-        
+
         return self::create([
             'user_id' => $userId,
             'type' => 'new_application',
@@ -130,7 +126,7 @@ class Notification extends Model
         $campaignTitle = $bidData['campaign_title'] ?? 'Campanha Desconhecida';
         $creatorName = $bidData['creator_name'] ?? 'Criador Desconhecido';
         $bidAmount = $bidData['bid_amount'] ?? 'Valor Desconhecido';
-        
+
         return self::create([
             'user_id' => $userId,
             'type' => 'new_bid',
@@ -145,7 +141,7 @@ class Notification extends Model
         $paymentType = $paymentData['payment_type'] ?? 'Tipo de Pagamento Desconhecido';
         $userName = $paymentData['user_name'] ?? 'Usuário Desconhecido';
         $amount = $paymentData['amount'] ?? 'Valor Desconhecido';
-        
+
         return self::create([
             'user_id' => $userId,
             'type' => 'payment_activity',
@@ -159,7 +155,7 @@ class Notification extends Model
     {
         $userName = $portfolioData['user_name'] ?? 'Usuário Desconhecido';
         $updateType = $portfolioData['update_type'] ?? 'Tipo de Atualização Desconhecido';
-        
+
         return self::create([
             'user_id' => $userId,
             'type' => 'portfolio_update',
@@ -172,7 +168,7 @@ class Notification extends Model
     public static function createSystemActivity($userId, $activityData = []): self
     {
         $activityType = $activityData['activity_type'] ?? 'Atividade Desconhecida';
-        
+
         return self::create([
             'user_id' => $userId,
             'type' => 'system_activity',
@@ -216,7 +212,7 @@ class Notification extends Model
             'user_id' => $userId,
             'type' => 'project_rejected',
             'title' => 'Projeto Rejeitado',
-            'message' => "Seu projeto '{$campaignTitle}' não foi aprovado." . ($reason ? " Motivo: {$reason}" : ''),
+            'message' => "Seu projeto '{$campaignTitle}' não foi aprovado.".($reason ? " Motivo: {$reason}" : ''),
             'data' => [
                 'campaign_id' => $campaignId,
                 'campaign_title' => $campaignTitle,
@@ -246,7 +242,7 @@ class Notification extends Model
             'user_id' => $userId,
             'type' => 'proposal_rejected',
             'title' => 'Proposta Rejeitada',
-            'message' => "Sua proposta para '{$campaignTitle}' não foi selecionada por {$brandName}." . ($reason ? " Motivo: {$reason}" : ''),
+            'message' => "Sua proposta para '{$campaignTitle}' não foi selecionada por {$brandName}.".($reason ? " Motivo: {$reason}" : ''),
             'data' => [
                 'campaign_id' => $campaignId,
                 'campaign_title' => $campaignTitle,
@@ -276,7 +272,7 @@ class Notification extends Model
     public static function createContractStarted($userId, $contractData = []): self
     {
         $contractTitle = $contractData['contract_title'] ?? 'Contrato';
-        
+
         return self::create([
             'user_id' => $userId,
             'type' => 'contract_started',
@@ -289,7 +285,7 @@ class Notification extends Model
     public static function createContractTerminated($userId, $contractData = []): self
     {
         $reason = $contractData['reason'] ?? 'Contrato encerrado';
-        
+
         return self::create([
             'user_id' => $userId,
             'type' => 'contract_terminated',
@@ -301,22 +297,22 @@ class Notification extends Model
 
     public static function createContractCompleted($userId, $contractData = []): self
     {
-        $contractTitle = $contractData["contract_title"] ?? "Contrato Desconhecido";
-        $brandName = $contractData["brand_name"] ?? "Marca Desconhecida";
-        
+        $contractTitle = $contractData['contract_title'] ?? 'Contrato Desconhecido';
+        $brandName = $contractData['brand_name'] ?? 'Marca Desconhecida';
+
         return self::create([
-            "user_id" => $userId,
-            "type" => "contract_completed",
-            "title" => "Contrato Finalizado",
-            "message" => "O contrato \"" . $contractTitle . "\" foi finalizado por " . $brandName . " e está aguardando sua avaliação.",
-            "data" => $contractData,
+            'user_id' => $userId,
+            'type' => 'contract_completed',
+            'title' => 'Contrato Finalizado',
+            'message' => 'O contrato "'.$contractTitle.'" foi finalizado por '.$brandName.' e está aguardando sua avaliação.',
+            'data' => $contractData,
         ]);
     }
 
     public static function createPaymentAvailable($userId, $paymentData = []): self
     {
         $creatorAmount = $paymentData['creator_amount'] ?? 0;
-        
+
         return self::create([
             'user_id' => $userId,
             'type' => 'payment_available',
@@ -331,7 +327,7 @@ class Notification extends Model
         $reviewerName = $reviewData['reviewer_name'] ?? 'Usuário Desconhecido';
         $contractTitle = $reviewData['contract_title'] ?? 'Contrato Desconhecido';
         $rating = $reviewData['rating'] ?? 0;
-        
+
         return self::create([
             'user_id' => $userId,
             'type' => 'new_review',
@@ -343,8 +339,8 @@ class Notification extends Model
 
     public static function createPlatformFundingSuccess($userId, $amount, $fundingData = []): self
     {
-        $formattedAmount = 'R$ ' . number_format($amount, 2, ',', '.');
-        
+        $formattedAmount = 'R$ '.number_format($amount, 2, ',', '.');
+
         return self::create([
             'user_id' => $userId,
             'type' => 'platform_funding_success',
@@ -359,12 +355,12 @@ class Notification extends Model
 
     public static function createWithdrawalSuccess($userId, $amount, $netAmount, $totalFees, $withdrawalData = []): self
     {
-        $formattedAmount = 'R$ ' . number_format($amount, 2, ',', '.');
-        $formattedNetAmount = 'R$ ' . number_format($netAmount, 2, ',', '.');
-        $formattedFees = 'R$ ' . number_format($totalFees, 2, ',', '.');
-        
+        $formattedAmount = 'R$ '.number_format($amount, 2, ',', '.');
+        $formattedNetAmount = 'R$ '.number_format($netAmount, 2, ',', '.');
+        $formattedFees = 'R$ '.number_format($totalFees, 2, ',', '.');
+
         $methodName = $withdrawalData['method_name'] ?? 'método selecionado';
-        
+
         return self::create([
             'user_id' => $userId,
             'type' => 'withdrawal_completed',
@@ -380,4 +376,4 @@ class Notification extends Model
             ], $withdrawalData),
         ]);
     }
-} 
+}

@@ -4,7 +4,6 @@ namespace App\Mail;
 
 use App\Models\CampaignTimeline;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -15,11 +14,13 @@ class MilestoneDelayWarning extends Mailable
     use Queueable, SerializesModels;
 
     public $milestone;
+
     public $contract;
+
     public $creator;
+
     public $brand;
 
-    
     public function __construct(CampaignTimeline $milestone)
     {
         $this->milestone = $milestone;
@@ -28,7 +29,6 @@ class MilestoneDelayWarning extends Mailable
         $this->brand = $milestone->contract->brand;
     }
 
-    
     public function envelope(): Envelope
     {
         return new Envelope(
@@ -36,7 +36,6 @@ class MilestoneDelayWarning extends Mailable
         );
     }
 
-    
     public function content(): Content
     {
         return new Content(
@@ -50,9 +49,8 @@ class MilestoneDelayWarning extends Mailable
         );
     }
 
-    
     public function attachments(): array
     {
         return [];
     }
-} 
+}

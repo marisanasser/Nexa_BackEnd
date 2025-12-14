@@ -35,45 +35,38 @@ class Transaction extends Model
         'expires_at' => 'datetime',
     ];
 
-    
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    
     public function contract(): BelongsTo
     {
         return $this->belongsTo(Contract::class);
     }
 
-    
     public function isPaid(): bool
     {
         return $this->status === 'paid';
     }
 
-    
     public function isPending(): bool
     {
         return $this->status === 'pending';
     }
 
-    
     public function isFailed(): bool
     {
         return $this->status === 'failed';
     }
 
-    
     public function isPremiumActive(): bool
     {
         return $this->isPaid() && $this->expires_at && $this->expires_at->isFuture();
     }
 
-    
     public function getAmountInRealAttribute(): string
     {
-        return 'R$ ' . number_format($this->amount, 2, ',', '.');
+        return 'R$ '.number_format($this->amount, 2, ',', '.');
     }
 }

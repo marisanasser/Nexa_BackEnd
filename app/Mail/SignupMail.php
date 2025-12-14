@@ -7,6 +7,7 @@ use Illuminate\Mail\Mailable;
 class SignupMail extends Mailable
 {
     public $user;
+
     public $link;
 
     public function __construct($user, $link)
@@ -28,6 +29,6 @@ class SignupMail extends Mailable
         ";
 
         return $this->subject('Sign in Nexa')
-                    ->html($html);
+            ->html($html);
     }
 }

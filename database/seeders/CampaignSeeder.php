@@ -2,29 +2,26 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Campaign;
 use App\Models\User;
+use Illuminate\Database\Seeder;
 
 class CampaignSeeder extends Seeder
 {
-    
     public function run(): void
     {
-        
+
         $brands = User::where('role', 'brand')->take(3)->get();
-        
+
         if ($brands->count() < 3) {
-            
+
             $neededBrands = 3 - $brands->count();
             $newBrands = User::factory($neededBrands)->create(['role' => 'brand']);
             $brands = $brands->merge($newBrands);
         }
 
-        
         $brands = $brands->take(3);
 
-        
         $campaigns = [
             [
                 'brand_id' => $brands->get(0)->id,
@@ -40,7 +37,7 @@ class CampaignSeeder extends Seeder
                 'deadline' => now()->addDays(30),
                 'max_bids' => 15,
                 'is_active' => true,
-                'is_featured' => true, 
+                'is_featured' => true,
             ],
             [
                 'brand_id' => $brands->get(0)->id,
@@ -56,7 +53,7 @@ class CampaignSeeder extends Seeder
                 'deadline' => now()->addDays(25),
                 'max_bids' => 10,
                 'is_active' => true,
-                'is_featured' => true, 
+                'is_featured' => true,
             ],
             [
                 'brand_id' => $brands->get(1)->id,
@@ -72,7 +69,7 @@ class CampaignSeeder extends Seeder
                 'deadline' => now()->addDays(40),
                 'max_bids' => 8,
                 'is_active' => true,
-                'is_featured' => false, 
+                'is_featured' => false,
             ],
             [
                 'brand_id' => $brands->get(2)->id,
@@ -88,7 +85,7 @@ class CampaignSeeder extends Seeder
                 'deadline' => now()->addDays(20),
                 'max_bids' => 12,
                 'is_active' => true,
-                'is_featured' => false, 
+                'is_featured' => false,
             ],
         ];
 

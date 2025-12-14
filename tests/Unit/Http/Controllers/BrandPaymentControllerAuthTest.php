@@ -36,11 +36,11 @@ class BrandPaymentControllerAuthTest extends TestCase
 
         // Mock Auth facade locally
         Auth::shouldReceive('user')->andReturn($nonBrandUser);
-        
+
         Log::shouldReceive('info')->andReturnNull();
         Log::shouldReceive('error')->andReturnNull();
 
-        $request = new Request();
+        $request = new Request;
         $response = $controller->createCheckoutSession($request);
 
         $this->assertEquals(403, $response->getStatusCode());

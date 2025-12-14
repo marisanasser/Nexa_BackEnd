@@ -58,4 +58,4 @@ class CampaignTimelineFactory extends Factory
             'status' => 'approved',
         ]);
     }
-} 
+}

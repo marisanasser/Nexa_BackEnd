@@ -4,12 +4,10 @@ namespace App\Services;
 
 use App\Models\Contract;
 use App\Models\JobPayment;
-use App\Services\PaymentSimulator;
 use Illuminate\Support\Facades\Log;
 
 class AutomaticPaymentService
 {
-    
     public function processContractPayment(Contract $contract): array
     {
         try {
@@ -23,30 +21,26 @@ class AutomaticPaymentService
                 'simulation_mode' => PaymentSimulator::isSimulationMode(),
             ]);
 
-            
-            if (!$contract->exists) {
+            if (! $contract->exists) {
                 throw new \Exception('Contract does not exist');
             }
 
-            
             if (PaymentSimulator::isSimulationMode()) {
                 Log::info('SIMULATION: Processing automatic payment in simulation mode', [
                     'contract_id' => $contract->id,
-                    'simulation_mode' => true
+                    'simulation_mode' => true,
                 ]);
 
-                
                 $simulationResult = PaymentSimulator::simulateContractPayment([
                     'amount' => $contract->budget,
                     'contract_id' => $contract->id,
-                    'description' => 'Automatic Contract Payment: ' . $contract->title,
+                    'description' => 'Automatic Contract Payment: '.$contract->title,
                 ], $contract->brand);
-                
-                if (!$simulationResult['success']) {
+
+                if (! $simulationResult['success']) {
                     throw new \Exception($simulationResult['message'] ?? 'Simulation failed');
                 }
 
-                
                 $payment = JobPayment::create([
                     'contract_id' => $contract->id,
                     'brand_id' => $contract->brand_id,
@@ -60,11 +54,10 @@ class AutomaticPaymentService
                     'transaction_id' => $simulationResult['transaction_id'],
                 ]);
 
-                if (!$payment) {
+                if (! $payment) {
                     throw new \Exception('Failed to create payment record');
                 }
 
-                
                 $contract->update([
                     'status' => 'active',
                     'workflow_status' => 'active',
@@ -77,7 +70,7 @@ class AutomaticPaymentService
                     'amount' => $contract->budget,
                     'new_status' => 'active',
                     'new_workflow_status' => 'active',
-                    'simulation_mode' => true
+                    'simulation_mode' => true,
                 ]);
 
                 return [
@@ -88,10 +81,7 @@ class AutomaticPaymentService
                     'simulation' => true,
                 ];
             } else {
-                
-                
-                
-                
+
                 $payment = JobPayment::create([
                     'contract_id' => $contract->id,
                     'brand_id' => $contract->brand_id,
@@ -99,16 +89,15 @@ class AutomaticPaymentService
                     'total_amount' => $contract->budget,
                     'creator_amount' => $contract->creator_amount,
                     'platform_fee' => $contract->platform_fee,
-                    'payment_method' => 'credit_card', 
-                    'status' => 'completed', 
+                    'payment_method' => 'credit_card',
+                    'status' => 'completed',
                     'processed_at' => now(),
                 ]);
 
-                if (!$payment) {
+                if (! $payment) {
                     throw new \Exception('Failed to create payment record');
                 }
 
-                
                 $contract->update([
                     'status' => 'active',
                     'workflow_status' => 'active',
@@ -141,14 +130,13 @@ class AutomaticPaymentService
 
             return [
                 'success' => false,
-                'message' => 'Payment processing failed: ' . $e->getMessage(),
+                'message' => 'Payment processing failed: '.$e->getMessage(),
             ];
         }
     }
 
-    
     public function retryPayment(Contract $contract): array
     {
         return $this->processContractPayment($contract);
     }
-} 
+}

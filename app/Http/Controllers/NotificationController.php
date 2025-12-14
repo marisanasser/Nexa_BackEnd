@@ -4,13 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Notification;
 use App\Services\NotificationService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class NotificationController extends Controller
 {
-    
     public function index(Request $request): JsonResponse
     {
         /** @var \App\Models\User $user */
@@ -21,12 +20,10 @@ class NotificationController extends Controller
 
         $query = Notification::where('user_id', $user->id);
 
-        
         if ($type) {
             $query->where('type', $type);
         }
 
-        
         if ($isRead !== null) {
             $query->where('is_read', $isRead);
         }
@@ -46,7 +43,6 @@ class NotificationController extends Controller
         ]);
     }
 
-    
     public function unreadCount(): JsonResponse
     {
         /** @var \App\Models\User $user */
@@ -59,7 +55,6 @@ class NotificationController extends Controller
         ]);
     }
 
-    
     public function markAsRead(int $id): JsonResponse
     {
         /** @var \App\Models\User $user */
@@ -79,7 +74,6 @@ class NotificationController extends Controller
         ], 404);
     }
 
-    
     public function markAllAsRead(): JsonResponse
     {
         /** @var \App\Models\User $user */
@@ -93,7 +87,6 @@ class NotificationController extends Controller
         ]);
     }
 
-    
     public function destroy(int $id): JsonResponse
     {
         /** @var \App\Models\User $user */
@@ -102,7 +95,7 @@ class NotificationController extends Controller
             ->where('user_id', $user->id)
             ->first();
 
-        if (!$notification) {
+        if (! $notification) {
             return response()->json([
                 'success' => false,
                 'message' => 'Notification not found',
@@ -117,16 +110,15 @@ class NotificationController extends Controller
         ]);
     }
 
-    
     public function statistics(): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
         $total = Notification::where('user_id', $user->id)->count();
         $unread = Notification::where('user_id', $user->id)->where('is_read', false)->count();
         $read = $total - $unread;
-        
+
         $byType = Notification::where('user_id', $user->id)
             ->selectRaw('type, count(*) as count')
             ->groupBy('type')
@@ -143,5 +135,4 @@ class NotificationController extends Controller
             ],
         ]);
     }
-
-} 
+}

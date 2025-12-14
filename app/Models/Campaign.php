@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
+use App\Services\NotificationService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Services\NotificationService;
 
 class Campaign extends Model
 {
@@ -39,7 +39,7 @@ class Campaign extends Model
         'target_genders',
         'target_creator_types',
         'is_active',
-        'is_featured'
+        'is_featured',
     ];
 
     protected $casts = [
@@ -58,7 +58,6 @@ class Campaign extends Model
 
     protected $appends = ['is_favorited'];
 
-    
     public function brand(): BelongsTo
     {
         return $this->belongsTo(User::class, 'brand_id');
@@ -89,23 +88,20 @@ class Campaign extends Model
         return $this->favorites()->where('creator_id', $creatorId)->exists();
     }
 
-    
     public function getIsFavoritedAttribute(): bool
     {
-        
+
         if (isset($this->attributes['is_favorited'])) {
             return (bool) $this->attributes['is_favorited'];
         }
-        
-        
-        if (auth()->check() && auth()->user()->isCreator()) {
+
+        if (auth()->check() && optional(auth()->user())->user_type === 'creator') {
             return $this->isFavoritedBy(auth()->user()->id);
         }
-        
+
         return false;
     }
 
-    
     public function scopeApproved($query)
     {
         return $query->where('status', 'approved');
@@ -149,26 +145,28 @@ class Campaign extends Model
         if ($maxAge !== null) {
             $query->where('max_age', '>=', $maxAge);
         }
+
         return $query;
     }
 
     public function scopeForGender($query, $genders)
     {
         if (empty($genders)) {
-            return $query; 
+            return $query;
         }
+
         return $query->whereJsonOverlaps('target_genders', $genders);
     }
 
     public function scopeForCreatorType($query, $creatorTypes)
     {
         if (empty($creatorTypes)) {
-            return $query; 
+            return $query;
         }
+
         return $query->whereJsonOverlaps('target_creator_types', $creatorTypes);
     }
 
-    
     public function isPending(): bool
     {
         return $this->status === 'pending';
@@ -196,8 +194,8 @@ class Campaign extends Model
 
     public function canReceiveBids(): bool
     {
-        return $this->isApproved() && 
-               $this->is_active && 
+        return $this->isApproved() &&
+               $this->is_active &&
                $this->deadline >= now()->toDateString() &&
                $this->bids()->count() < $this->max_bids;
     }
@@ -208,13 +206,11 @@ class Campaign extends Model
             'status' => 'approved',
             'approved_at' => now(),
             'approved_by' => $adminId,
-            'rejection_reason' => null
+            'rejection_reason' => null,
         ]);
 
-        
         NotificationService::notifyBrandOfProjectStatus($this, 'approved');
 
-        
         NotificationService::notifyCreatorsOfNewProject($this);
 
         return true;
@@ -226,10 +222,9 @@ class Campaign extends Model
             'status' => 'rejected',
             'approved_at' => null,
             'approved_by' => $adminId,
-            'rejection_reason' => $reason
+            'rejection_reason' => $reason,
         ]);
 
-        
         NotificationService::notifyBrandOfProjectStatus($this, 'rejected', $reason);
 
         return true;
@@ -239,7 +234,7 @@ class Campaign extends Model
     {
         $this->update([
             'status' => 'completed',
-            'is_active' => false
+            'is_active' => false,
         ]);
 
         return true;
@@ -249,7 +244,7 @@ class Campaign extends Model
     {
         $this->update([
             'status' => 'cancelled',
-            'is_active' => false
+            'is_active' => false,
         ]);
 
         return true;
@@ -270,116 +265,92 @@ class Campaign extends Model
         return $this->bids()->where('status', 'accepted')->exists();
     }
 
-    
     public function getRemunerationTypeAttribute()
     {
         return $this->attributes['remuneration_type'] ?? null;
     }
 
-    
     public function getRequirementsAttribute()
     {
         return $this->attributes['requirements'] ?? null;
     }
 
-    
     public function getCampaignTypeAttribute()
     {
         return $this->attributes['campaign_type'] ?? null;
     }
 
-    
-    
-
-    
-    
-
-    
-    
-
-    
     public function getMinAgeAttribute()
     {
         return $this->attributes['min_age'] ?? null;
     }
 
-    
     public function getMaxAgeAttribute()
     {
         return $this->attributes['max_age'] ?? null;
     }
 
-    
     public function getIsActiveAttribute()
     {
         return $this->attributes['is_active'] ?? null;
     }
 
-    
     public function getIsFeaturedAttribute()
     {
         return $this->attributes['is_featured'] ?? null;
     }
 
-    
     public function getImageUrlAttribute()
     {
         return $this->attributes['image_url'] ?? null;
     }
 
-    
     public function getLogoAttribute()
     {
         return $this->attributes['logo'] ?? null;
     }
 
-    
     public function getAttachFileAttribute()
     {
-        
+
         $value = $this->attributes['attach_file'] ?? null;
-        
+
         if ($value === null) {
             return null;
         }
-        
-        
+
         if (is_array($value)) {
             return $value;
         }
-        
-        
+
         if (is_string($value)) {
             $decoded = json_decode($value, true);
-            
+
             if ($decoded === null && json_last_error() === JSON_ERROR_NONE) {
-                return null; 
+                return null;
             }
+
             return is_array($decoded) ? $decoded : ($decoded !== null ? [$decoded] : null);
         }
-        
+
         return null;
     }
 
-    
     public function getRejectionReasonAttribute()
     {
         return $this->attributes['rejection_reason'] ?? null;
     }
 
-    
     public function getMaxBidsAttribute()
     {
         return $this->attributes['max_bids'] ?? null;
     }
 
-    
     public function getApprovedAtAttribute()
     {
         return $this->attributes['approved_at'] ?? null;
     }
 
-    
     public function getApprovedByAttribute()
     {
         return $this->attributes['approved_by'] ?? null;

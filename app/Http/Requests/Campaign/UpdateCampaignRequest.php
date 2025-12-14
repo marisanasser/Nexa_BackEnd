@@ -3,31 +3,25 @@
 namespace App\Http\Requests\Campaign;
 
 use Illuminate\Foundation\Http\FormRequest;
-use App\Models\Campaign;
 
 class UpdateCampaignRequest extends FormRequest
 {
-    
     public function authorize(): bool
     {
         $user = auth()->user();
         $campaign = $this->route('campaign');
-        
-        
-        if (!$user || !$campaign) {
+
+        if (! $user || ! $campaign) {
             return false;
         }
-        
-        
+
         if ($user->isAdmin()) {
             return true;
         }
-        
-        
+
         return $user->isBrand() && $campaign->brand_id === $user->id;
     }
 
-    
     public function rules(): array
     {
         return [
@@ -41,15 +35,14 @@ class UpdateCampaignRequest extends FormRequest
             'category' => ['sometimes', 'nullable', 'string', 'max:255'],
             'campaign_type' => ['sometimes', 'nullable', 'string', 'max:255'],
             'image_url' => ['sometimes', 'nullable', 'url', 'max:2048'],
-            'image' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'], 
-            'logo' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'], 
-            'attach_file' => ['sometimes', 'nullable', 'file', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar', 'max:10240'], 
+            'image' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'],
+            'logo' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'],
+            'attach_file' => ['sometimes', 'nullable', 'file', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar', 'max:10240'],
             'deadline' => ['sometimes', 'date', 'after:today'],
             'max_bids' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100'],
         ];
     }
 
-    
     public function messages(): array
     {
         return [
@@ -77,7 +70,6 @@ class UpdateCampaignRequest extends FormRequest
         ];
     }
 
-    
     public function attributes(): array
     {
         return [
@@ -85,11 +77,10 @@ class UpdateCampaignRequest extends FormRequest
         ];
     }
 
-    
     public function withValidator($validator)
     {
         $validator->after(function ($validator) {
-            
+
             if ($this->filled('image_url') && $this->hasFile('image')) {
                 $validator->errors()->add('image', 'Please provide either an image URL or upload an image file, not both.');
             }

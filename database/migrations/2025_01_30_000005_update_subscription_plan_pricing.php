@@ -1,16 +1,13 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
-    
     public function up(): void
     {
-        
+
         DB::table('subscription_plans')->where('name', 'Plano Mensal')->update([
             'name' => 'Plano Mensal',
             'description' => 'Assinatura de 1 mês do Nexa Premium',
@@ -21,7 +18,7 @@ return new class extends Migration
                 'Acesso a todas as campanhas exclusivas',
                 'Prioridade na aprovação de campanhas',
                 'Suporte premium via chat',
-                'Ferramentas avançadas de criação de conteúdo'
+                'Ferramentas avançadas de criação de conteúdo',
             ]),
             'updated_at' => now(),
         ]);
@@ -36,7 +33,7 @@ return new class extends Migration
                 'Acesso a todas as campanhas exclusivas',
                 'Prioridade na aprovação de campanhas',
                 'Suporte premium via chat',
-                'Ferramentas avançadas de criação de conteúdo'
+                'Ferramentas avançadas de criação de conteúdo',
             ]),
             'updated_at' => now(),
         ]);
@@ -52,16 +49,15 @@ return new class extends Migration
                 'Prioridade na aprovação de campanhas',
                 'Suporte premium via chat',
                 'Ferramentas avançadas de criação de conteúdo',
-                'Melhor valor - economia máxima comparado ao plano mensal'
+                'Melhor valor - economia máxima comparado ao plano mensal',
             ]),
             'updated_at' => now(),
         ]);
     }
 
-    
     public function down(): void
     {
-        
+
         DB::table('subscription_plans')->where('name', 'Plano Mensal')->update([
             'price' => 29.99,
             'updated_at' => now(),
@@ -77,7 +73,7 @@ return new class extends Migration
                 'Prioridade na aprovação de campanhas',
                 'Suporte premium via chat',
                 'Ferramentas avançadas de criação de conteúdo',
-                'Economia de 33% comparado ao plano mensal'
+                'Economia de 33% comparado ao plano mensal',
             ]),
             'updated_at' => now(),
         ]);
@@ -93,9 +89,9 @@ return new class extends Migration
                 'Suporte premium via chat',
                 'Ferramentas avançadas de criação de conteúdo',
                 'Economia de 17% comparado ao plano mensal',
-                'Acesso garantido por 6 anos'
+                'Acesso garantido por 6 anos',
             ]),
             'updated_at' => now(),
         ]);
     }
-}; 
+};

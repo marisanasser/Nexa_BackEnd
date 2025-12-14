@@ -3,28 +3,24 @@
 namespace App\Http\Controllers;
 
 use App\Models\CreatorBalance;
-use App\Models\Withdrawal;
-use App\Models\User;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
-use Stripe\Stripe as StripeClient;
-use Stripe\Customer;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use Stripe\Checkout\Session;
+use Stripe\Customer;
+use Stripe\Stripe as StripeClient;
 
 class CreatorBalanceController extends Controller
 {
-    
     public function index(): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        
-        if (!$user->isCreator() && !$user->isStudent()) {
+        if (! $user->isCreator() && ! $user->isStudent()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only creators and students can access balance information',
@@ -34,8 +30,8 @@ class CreatorBalanceController extends Controller
         try {
             $balance = CreatorBalance::where('creator_id', $user->id)->first();
 
-            if (!$balance) {
-                
+            if (! $balance) {
+
                 $balance = CreatorBalance::create([
                     'creator_id' => $user->id,
                     'available_balance' => 0,
@@ -45,22 +41,17 @@ class CreatorBalanceController extends Controller
                 ]);
             }
 
-            
-            
             $hasAnyPayments = \App\Models\JobPayment::where('creator_id', $user->id)->exists();
             $completedPaymentsTotal = \App\Models\JobPayment::where('creator_id', $user->id)
                 ->where('status', 'completed')
                 ->sum('creator_amount');
 
-            
-            
-            
             $shouldRecalculate = false;
             $recalculateReason = '';
 
-            if ($hasAnyPayments && 
-                $balance->total_earned == 0 && 
-                $balance->available_balance == 0 && 
+            if ($hasAnyPayments &&
+                $balance->total_earned == 0 &&
+                $balance->available_balance == 0 &&
                 $balance->pending_balance == 0) {
                 $shouldRecalculate = true;
                 $recalculateReason = 'balance_is_zero_but_payments_exist';
@@ -70,15 +61,14 @@ class CreatorBalanceController extends Controller
             }
 
             if ($shouldRecalculate) {
-                
+
                 $previousTotalEarned = $balance->total_earned;
                 $previousAvailableBalance = $balance->available_balance;
                 $previousPendingBalance = $balance->pending_balance;
-                
-                
+
                 $balance->recalculateFromPayments();
                 $balance->refresh();
-                
+
                 Log::info('Recalculated creator balance on API access', [
                     'creator_id' => $user->id,
                     'reason' => $recalculateReason,
@@ -92,7 +82,6 @@ class CreatorBalanceController extends Controller
                 ]);
             }
 
-            
             $recentTransactions = $balance->getRecentTransactions(5);
             $recentWithdrawals = $balance->getWithdrawalHistory(5);
 
@@ -156,7 +145,6 @@ class CreatorBalanceController extends Controller
         }
     }
 
-    
     public function history(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -175,15 +163,13 @@ class CreatorBalanceController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        
-        if (!$user->isCreator() && !$user->isStudent()) {
+        if (! $user->isCreator() && ! $user->isStudent()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only creators and students can access balance history',
             ], 403);
         }
 
-        
         if ($user->isStudent()) {
             return response()->json([
                 'success' => true,
@@ -194,15 +180,15 @@ class CreatorBalanceController extends Controller
                         'total_earnings' => 0,
                         'total_withdrawals' => 0,
                         'net_balance' => 0,
-                    ]
-                ]
+                    ],
+                ],
             ]);
         }
 
         try {
             $balance = CreatorBalance::where('creator_id', $user->id)->first();
-            
-            if (!$balance) {
+
+            if (! $balance) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Balance not found',
@@ -229,7 +215,7 @@ class CreatorBalanceController extends Controller
                             'id' => $payment->id,
                             'amount' => $payment->creator_amount,
                             'formatted_amount' => $payment->formatted_creator_amount,
-                            'description' => 'Payment for: ' . $payment->contract->title,
+                            'description' => 'Payment for: '.$payment->contract->title,
                             'date' => $payment->processed_at->format('Y-m-d H:i:s'),
                             'status' => $payment->status,
                         ];
@@ -249,9 +235,9 @@ class CreatorBalanceController extends Controller
                         return [
                             'type' => 'withdrawal',
                             'id' => $withdrawal->id,
-                            'amount' => -$withdrawal->amount, 
-                            'formatted_amount' => '-' . $withdrawal->formatted_amount,
-                            'description' => 'Withdrawal via ' . $withdrawal->withdrawal_method_label,
+                            'amount' => -$withdrawal->amount,
+                            'formatted_amount' => '-'.$withdrawal->formatted_amount,
+                            'description' => 'Withdrawal via '.$withdrawal->withdrawal_method_label,
                             'date' => $withdrawal->created_at->format('Y-m-d H:i:s'),
                             'status' => $withdrawal->status,
                         ];
@@ -260,20 +246,17 @@ class CreatorBalanceController extends Controller
                 $history = array_merge($history, $withdrawals->toArray());
             }
 
-            
             usort($history, function ($a, $b) {
                 return strtotime($b['date']) - strtotime($a['date']);
             });
 
-            
             $runningBalance = 0;
             foreach (array_reverse($history) as &$item) {
                 $runningBalance += $item['amount'];
                 $item['running_balance'] = $runningBalance;
-                $item['formatted_running_balance'] = 'R$ ' . number_format($runningBalance, 2, ',', '.');
+                $item['formatted_running_balance'] = 'R$ '.number_format($runningBalance, 2, ',', '.');
             }
 
-            
             $history = array_reverse($history);
 
             return response()->json([
@@ -304,26 +287,22 @@ class CreatorBalanceController extends Controller
         }
     }
 
-    
     public function withdrawalMethods(): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        
-        if (!$user->isCreator() && !$user->isStudent()) {
+        if (! $user->isCreator() && ! $user->isStudent()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only creators and students can access withdrawal methods',
             ], 403);
         }
 
-    
         try {
-            
+
             $methods = $user->getWithdrawalMethods();
 
-            
             $methodsArray = $methods->values()->toArray();
 
             Log::info('Withdrawal methods returned', [
@@ -352,21 +331,18 @@ class CreatorBalanceController extends Controller
         }
     }
 
-    
     public function workHistory(Request $request): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        
-        if (!$user->isCreator() && !$user->isStudent()) {
+        if (! $user->isCreator() && ! $user->isStudent()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only creators and students can access work history',
             ], 403);
         }
 
-        
         if ($user->isStudent()) {
             return response()->json([
                 'success' => true,
@@ -378,7 +354,7 @@ class CreatorBalanceController extends Controller
                     'total' => 0,
                     'from' => null,
                     'to' => null,
-                ]
+                ],
             ]);
         }
 
@@ -434,22 +410,20 @@ class CreatorBalanceController extends Controller
         }
     }
 
-    
     public function createStripePaymentMethodCheckout(Request $request): JsonResponse
     {
         try {
             /** @var \App\Models\User $user */
-        $user = Auth::user();
+            $user = Auth::user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
                     'message' => 'User not authenticated',
                 ], 401);
             }
 
-            
-            if (!$user->isCreator() && !$user->isStudent()) {
+            if (! $user->isCreator() && ! $user->isStudent()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Only creators and students can connect payment methods',
@@ -461,7 +435,7 @@ class CreatorBalanceController extends Controller
             ]);
 
             $stripeSecret = config('services.stripe.secret');
-            if (!$stripeSecret) {
+            if (! $stripeSecret) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Stripe is not configured',
@@ -470,10 +444,9 @@ class CreatorBalanceController extends Controller
 
             StripeClient::setApiKey($stripeSecret);
 
-            
             $customerId = $user->stripe_customer_id;
-            
-            if (!$customerId) {
+
+            if (! $customerId) {
                 Log::info('Creating new Stripe customer for creator', [
                     'user_id' => $user->id,
                     'email' => $user->email,
@@ -496,7 +469,7 @@ class CreatorBalanceController extends Controller
                     'customer_id' => $customerId,
                 ]);
             } else {
-                
+
                 try {
                     Customer::retrieve($customerId);
                 } catch (\Exception $e) {
@@ -519,17 +492,15 @@ class CreatorBalanceController extends Controller
                 }
             }
 
-            
             $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
 
-            
             $session = Session::create([
                 'customer' => $customerId,
-                'mode' => 'setup', 
+                'mode' => 'setup',
                 'payment_method_types' => ['card'],
                 'locale' => 'pt-BR',
-                'success_url' => $frontendUrl . '/creator/payment-method?payment_method=connected&session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url' => $frontendUrl . '/creator/payment-method?payment_method=cancelled',
+                'success_url' => $frontendUrl.'/creator/payment-method?payment_method=connected&session_id={CHECKOUT_SESSION_ID}',
+                'cancel_url' => $frontendUrl.'/creator/payment-method?payment_method=cancelled',
                 'metadata' => [
                     'user_id' => (string) $user->id,
                     'type' => 'creator_payment_method_setup',
@@ -558,42 +529,40 @@ class CreatorBalanceController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create payment method setup session: ' . $e->getMessage(),
+                'message' => 'Failed to create payment method setup session: '.$e->getMessage(),
             ], 500);
         }
     }
 
-    
     public function handleCheckoutSuccess(Request $request): JsonResponse
     {
         try {
             /** @var \App\Models\User $user */
-        $user = Auth::user();
+            $user = Auth::user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
                     'message' => 'User not authenticated',
                 ], 401);
             }
 
-            
-            if (!$user->isCreator() && !$user->isStudent()) {
+            if (! $user->isCreator() && ! $user->isStudent()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Only creators and students can connect payment methods',
                 ], 403);
             }
 
-            
             $sessionId = $request->input('session_id') ?? $request->query('session_id');
-            
-            if (!$sessionId) {
+
+            if (! $sessionId) {
                 Log::error('Session ID missing in creator checkout success request', [
                     'user_id' => $user->id,
                     'request_body' => $request->all(),
                     'request_query' => $request->query(),
                 ]);
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Session ID is required',
@@ -606,7 +575,7 @@ class CreatorBalanceController extends Controller
             ]);
 
             $stripeSecret = config('services.stripe.secret');
-            if (!$stripeSecret) {
+            if (! $stripeSecret) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Stripe is not configured',
@@ -615,7 +584,6 @@ class CreatorBalanceController extends Controller
 
             \Stripe\Stripe::setApiKey($stripeSecret);
 
-            
             try {
                 $session = \Stripe\Checkout\Session::retrieve($sessionId, [
                     'expand' => ['setup_intent', 'setup_intent.payment_method'],
@@ -626,7 +594,7 @@ class CreatorBalanceController extends Controller
                     'session_id' => $session->id,
                     'session_mode' => $session->mode ?? 'N/A',
                     'session_status' => $session->status ?? 'N/A',
-                    'has_setup_intent' => !is_null($session->setup_intent),
+                    'has_setup_intent' => ! is_null($session->setup_intent),
                 ]);
             } catch (\Exception $e) {
                 Log::error('Failed to retrieve Stripe Checkout Session for creator', [
@@ -634,51 +602,51 @@ class CreatorBalanceController extends Controller
                     'session_id' => $sessionId,
                     'error' => $e->getMessage(),
                 ]);
+
                 return response()->json([
                     'success' => false,
-                    'message' => 'Failed to retrieve checkout session: ' . $e->getMessage(),
+                    'message' => 'Failed to retrieve checkout session: '.$e->getMessage(),
                 ], 400);
             }
 
-            
             $sessionCustomerId = $session->customer;
             if (is_object($sessionCustomerId)) {
                 $sessionCustomerId = $sessionCustomerId->id;
             }
 
-            if (!$sessionCustomerId || $sessionCustomerId !== $user->stripe_customer_id) {
+            if (! $sessionCustomerId || $sessionCustomerId !== $user->stripe_customer_id) {
                 Log::warning('Session customer ID does not match user customer ID', [
                     'user_id' => $user->id,
                     'user_customer_id' => $user->stripe_customer_id,
                     'session_customer_id' => $sessionCustomerId,
                 ]);
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Invalid session - session does not belong to this user',
                 ], 403);
             }
 
-            
             $setupIntent = $session->setup_intent;
-            
+
             if (is_string($setupIntent)) {
                 $setupIntent = \Stripe\SetupIntent::retrieve($setupIntent, [
-                    'expand' => ['payment_method']
+                    'expand' => ['payment_method'],
                 ]);
             }
 
-            if (!$setupIntent || $setupIntent->status !== 'succeeded') {
+            if (! $setupIntent || $setupIntent->status !== 'succeeded') {
                 Log::warning('Setup intent not succeeded for creator', [
                     'user_id' => $user->id,
                     'setup_intent_status' => $setupIntent->status ?? 'no_status',
                 ]);
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Setup intent not completed',
                 ], 400);
             }
 
-            
             $paymentMethodId = null;
             if (is_object($setupIntent->payment_method)) {
                 $paymentMethodId = $setupIntent->payment_method->id ?? null;
@@ -686,19 +654,18 @@ class CreatorBalanceController extends Controller
                 $paymentMethodId = $setupIntent->payment_method;
             }
 
-            if (!$paymentMethodId) {
+            if (! $paymentMethodId) {
                 Log::error('No payment method ID in setup intent for creator', [
                     'user_id' => $user->id,
                     'setup_intent_id' => $setupIntent->id ?? 'no_id',
                 ]);
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Payment method not found in setup intent',
                 ], 400);
             }
 
-            
-            
             $user->refresh();
             if ($user->stripe_payment_method_id === $paymentMethodId) {
                 Log::info('Payment method already stored for creator, returning success', [
@@ -717,7 +684,6 @@ class CreatorBalanceController extends Controller
                 ]);
             }
 
-            
             try {
                 $paymentMethod = \Stripe\PaymentMethod::retrieve($paymentMethodId);
                 $cardBrand = $paymentMethod->card->brand ?? null;
@@ -742,28 +708,26 @@ class CreatorBalanceController extends Controller
             DB::beginTransaction();
 
             try {
-                
+
                 $updatedRows = DB::table('users')
                     ->where('id', $user->id)
                     ->update(['stripe_payment_method_id' => $paymentMethodId]);
 
-                
                 $actualStoredId = DB::table('users')
                     ->where('id', $user->id)
                     ->value('stripe_payment_method_id');
 
                 if ($actualStoredId !== $paymentMethodId) {
-                    
+
                     $user->refresh();
                     $user->stripe_payment_method_id = $paymentMethodId;
                     $user->save();
                     $user->refresh();
                 }
 
-                
                 $stripeCardMethod = \App\Models\WithdrawalMethod::where('code', 'stripe_card')->first();
-                
-                if (!$stripeCardMethod) {
+
+                if (! $stripeCardMethod) {
                     $stripeCardMethod = \App\Models\WithdrawalMethod::create([
                         'code' => 'stripe_card',
                         'name' => 'Cartão de Crédito/Débito (Stripe)',
@@ -777,13 +741,13 @@ class CreatorBalanceController extends Controller
                         'field_config' => [],
                         'sort_order' => 100,
                     ]);
-                    
+
                     Log::info('Created stripe_card withdrawal method in withdrawal_methods table', [
                         'withdrawal_method_id' => $stripeCardMethod->id,
                         'user_id' => $user->id,
                     ]);
                 } else {
-                    if (!$stripeCardMethod->is_active) {
+                    if (! $stripeCardMethod->is_active) {
                         $stripeCardMethod->update(['is_active' => true]);
                     }
                 }
@@ -827,8 +791,8 @@ class CreatorBalanceController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to process payment method: ' . $e->getMessage(),
+                'message' => 'Failed to process payment method: '.$e->getMessage(),
             ], 500);
         }
     }
-} 
+}

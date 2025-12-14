@@ -2,11 +2,7 @@
 
 return [
 
-    
-
     'default' => env('BROADCAST_DRIVER', 'null'),
-
-    
 
     'connections' => [
 
@@ -40,7 +36,7 @@ return [
                 'useTLS' => env('PUSHER_SCHEME', 'https') === 'https',
             ],
             'client_options' => [
-                
+
             ],
         ],
 

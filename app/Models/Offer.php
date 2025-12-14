@@ -2,12 +2,11 @@
 
 namespace App\Models;
 
+use App\Services\NotificationService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Carbon\Carbon;
-use App\Services\NotificationService;
 
 class Offer extends Model
 {
@@ -41,7 +40,6 @@ class Offer extends Model
         'is_barter' => 'boolean',
     ];
 
-    
     public function brand(): BelongsTo
     {
         return $this->belongsTo(User::class, 'brand_id');
@@ -67,7 +65,6 @@ class Offer extends Model
         return $this->hasOne(Contract::class);
     }
 
-    
     public function scopePending($query)
     {
         return $query->where('status', 'pending');
@@ -76,13 +73,13 @@ class Offer extends Model
     public function scopeActive($query)
     {
         return $query->where('status', 'pending')
-                    ->where('expires_at', '>', now());
+            ->where('expires_at', '>', now());
     }
 
     public function scopeExpired($query)
     {
         return $query->where('status', 'pending')
-                    ->where('expires_at', '<=', now());
+            ->where('expires_at', '<=', now());
     }
 
     public function scopeAccepted($query)
@@ -100,7 +97,6 @@ class Offer extends Model
         return $query->where('status', 'cancelled');
     }
 
-    
     public function isPending(): bool
     {
         return $this->status === 'pending';
@@ -138,22 +134,22 @@ class Offer extends Model
 
     public function canBeAccepted(): bool
     {
-        return $this->isPending() && !$this->isExpired();
+        return $this->isPending() && ! $this->isExpired();
     }
 
     public function canBeRejected(): bool
     {
-        return $this->isPending() && !$this->isExpired();
+        return $this->isPending() && ! $this->isExpired();
     }
 
     public function canBeCancelled(): bool
     {
-        return $this->isPending() && !$this->isExpired();
+        return $this->isPending() && ! $this->isExpired();
     }
 
     public function cancel(): bool
     {
-        if (!$this->canBeCancelled()) {
+        if (! $this->canBeCancelled()) {
             return false;
         }
 
@@ -161,7 +157,6 @@ class Offer extends Model
             'status' => 'cancelled',
         ]);
 
-        
         NotificationService::notifyUserOfOfferCancelled($this);
 
         return true;
@@ -169,12 +164,12 @@ class Offer extends Model
 
     public function accept(): bool
     {
-        if (!$this->canBeAccepted()) {
+        if (! $this->canBeAccepted()) {
             return false;
         }
 
         try {
-            
+
             \Illuminate\Support\Facades\DB::beginTransaction();
 
             $this->update([
@@ -182,39 +177,37 @@ class Offer extends Model
                 'accepted_at' => now(),
             ]);
 
-            
             if ($this->isBarter()) {
-                
+
                 $contract = Contract::create([
                     'offer_id' => $this->id,
                     'brand_id' => $this->brand_id,
                     'creator_id' => $this->creator_id,
                     'title' => $this->title ?? 'Contrato de Permuta',
                     'description' => $this->description ?? 'Contrato criado a partir de oferta de permuta',
-                    'budget' => 0, 
+                    'budget' => 0,
                     'platform_fee' => 0,
                     'creator_amount' => 0,
                     'estimated_days' => $this->estimated_days,
                     'requirements' => $this->requirements ?? [],
                     'started_at' => now(),
                     'expected_completion_at' => now()->addDays($this->estimated_days),
-                    'status' => 'active', 
+                    'status' => 'active',
                     'workflow_status' => 'active',
                 ]);
 
-                if (!$contract) {
+                if (! $contract) {
                     throw new \Exception('Failed to create barter contract');
                 }
 
                 \Illuminate\Support\Facades\DB::commit();
+
                 return true;
             }
 
-            
             $platformFee = $this->budget * 0.10;
             $creatorAmount = $this->budget * 0.90;
 
-            
             $contract = Contract::create([
                 'offer_id' => $this->id,
                 'brand_id' => $this->brand_id,
@@ -228,26 +221,24 @@ class Offer extends Model
                 'requirements' => $this->requirements ?? [],
                 'started_at' => now(),
                 'expected_completion_at' => now()->addDays($this->estimated_days),
-                'status' => 'pending', 
+                'status' => 'pending',
                 'workflow_status' => 'payment_pending',
             ]);
 
-            if (!$contract) {
+            if (! $contract) {
                 throw new \Exception('Failed to create contract');
             }
 
-            
-            $paymentService = new \App\Services\AutomaticPaymentService();
+            $paymentService = new \App\Services\AutomaticPaymentService;
             $paymentResult = $paymentService->processContractPayment($contract);
 
-            if (!$paymentResult['success']) {
-                
+            if (! $paymentResult['success']) {
+
                 $contract->update([
                     'status' => 'payment_failed',
                     'workflow_status' => 'payment_failed',
                 ]);
 
-                
                 \Illuminate\Support\Facades\Log::error('Automatic payment failed for contract', [
                     'contract_id' => $contract->id,
                     'offer_id' => $this->id,
@@ -255,19 +246,16 @@ class Offer extends Model
                 ]);
             }
 
-            
             \Illuminate\Support\Facades\DB::commit();
 
-            
             NotificationService::notifyUserOfOfferAccepted($this);
 
             return true;
 
         } catch (\Exception $e) {
-            
+
             \Illuminate\Support\Facades\DB::rollBack();
 
-            
             \Illuminate\Support\Facades\Log::error('Error accepting offer', [
                 'offer_id' => $this->id,
                 'brand_id' => $this->brand_id,
@@ -276,7 +264,6 @@ class Offer extends Model
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            
             $this->update([
                 'status' => 'pending',
                 'accepted_at' => null,
@@ -288,7 +275,7 @@ class Offer extends Model
 
     public function reject(?string $reason = null): bool
     {
-        if (!$this->canBeAccepted()) {
+        if (! $this->canBeAccepted()) {
             return false;
         }
 
@@ -298,7 +285,6 @@ class Offer extends Model
             'rejection_reason' => $reason,
         ]);
 
-        
         NotificationService::notifyUserOfOfferRejected($this, $reason);
 
         return true;
@@ -306,20 +292,20 @@ class Offer extends Model
 
     public function getFormattedBudgetAttribute(): string
     {
-        return 'R$ ' . number_format($this->budget, 2, ',', '.');
+        return 'R$ '.number_format($this->budget, 2, ',', '.');
     }
 
     public function getDaysUntilExpiryAttribute(): int
     {
         if ($this->expires_at->isPast()) {
-            return 0; 
+            return 0;
         }
-        
+
         $diffInHours = now()->diffInHours($this->expires_at, false);
         if ($diffInHours < 24) {
-            return 1; 
+            return 1;
         }
-        
+
         return now()->diffInDays($this->expires_at, false);
     }
 
@@ -340,11 +326,11 @@ class Offer extends Model
 
     protected static function booted()
     {
-        
+
         static::creating(function ($offer) {
-            if (!$offer->expires_at) {
+            if (! $offer->expires_at) {
                 $offer->expires_at = now()->addDay();
             }
         });
     }
-} 
+}

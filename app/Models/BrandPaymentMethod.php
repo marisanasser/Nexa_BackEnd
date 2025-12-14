@@ -30,49 +30,44 @@ class BrandPaymentMethod extends Model
         'is_active' => 'boolean',
     ];
 
-    
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
     }
 
-    
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
     }
 
-    
     public function scopeDefault($query)
     {
         return $query->where('is_default', true);
     }
 
-    
     public function setAsDefault(): void
     {
-        
+
         static::where('user_id', $this->user_id)
             ->where('id', '!=', $this->id)
             ->update(['is_default' => false]);
 
-        
         $this->update(['is_default' => true]);
     }
 
-    
     public function getMaskedCardNumberAttribute(): string
     {
         if ($this->card_last4) {
-            return '**** **** **** ' . $this->card_last4;
+            return '**** **** **** '.$this->card_last4;
         }
+
         return '**** **** **** ****';
     }
 
-    
     public function getFormattedCardInfoAttribute(): string
     {
         $brand = $this->card_brand ? ucfirst($this->card_brand) : 'Card';
-        return $brand . ' •••• ' . $this->card_last4;
+
+        return $brand.' •••• '.$this->card_last4;
     }
-} 
+}

@@ -43,21 +43,22 @@ class UserOnlineStatus extends Model
     public function setTypingInRoom(string $roomId, bool $isTyping): void
     {
         $typingRooms = $this->typing_in_rooms ?? [];
-        
+
         if ($isTyping) {
-            if (!in_array($roomId, $typingRooms)) {
+            if (! in_array($roomId, $typingRooms)) {
                 $typingRooms[] = $roomId;
             }
         } else {
-            $typingRooms = array_filter($typingRooms, fn($room) => $room !== $roomId);
+            $typingRooms = array_filter($typingRooms, fn ($room) => $room !== $roomId);
         }
-        
+
         $this->update(['typing_in_rooms' => $typingRooms]);
     }
 
     public function isTypingInRoom(string $roomId): bool
     {
         $typingRooms = $this->typing_in_rooms ?? [];
+
         return in_array($roomId, $typingRooms);
     }
 }

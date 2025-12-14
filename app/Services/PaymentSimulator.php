@@ -2,23 +2,19 @@
 
 namespace App\Services;
 
-use App\Models\Transaction;
-use App\Models\CreatorBalance;
 use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
-use Carbon\Carbon;
 
 class PaymentSimulator
 {
-    
     public static function isSimulationMode(): bool
     {
         return config('services.pagarme.simulation_mode', false);
     }
 
-    
     public static function simulateSubscriptionPayment(array $requestData, User $user, SubscriptionPlan $subscriptionPlan): array
     {
         Log::info('SIMULATION: Processing subscription payment', [
@@ -27,16 +23,12 @@ class PaymentSimulator
             'amount' => $subscriptionPlan->price,
         ]);
 
-        
-        usleep(500000); 
+        usleep(500000);
 
-        
-        $transactionId = 'SIM_' . time() . '_' . $user->id . '_' . rand(1000, 9999);
-        
-        
+        $transactionId = 'SIM_'.time().'_'.$user->id.'_'.rand(1000, 9999);
+
         $expiresAt = now()->addMonths($subscriptionPlan->duration_months);
 
-        
         $transaction = Transaction::create([
             'user_id' => $user->id,
             'pagarme_transaction_id' => $transactionId,
@@ -55,7 +47,6 @@ class PaymentSimulator
             'expires_at' => $expiresAt,
         ]);
 
-        
         $subscription = Subscription::updateOrCreate(
             ['user_id' => $user->id],
             [
@@ -65,12 +56,11 @@ class PaymentSimulator
                 'expires_at' => $expiresAt,
                 'amount_paid' => $subscriptionPlan->price,
                 'payment_method' => 'credit_card',
-                'transaction_id' => $transaction->id, 
+                'transaction_id' => $transaction->id,
                 'auto_renew' => true,
             ]
         );
 
-        
         $user->update([
             'has_premium' => true,
             'premium_expires_at' => $expiresAt,
@@ -92,7 +82,6 @@ class PaymentSimulator
         ];
     }
 
-    
     public static function simulateAccountPayment(array $requestData, User $user): array
     {
         Log::info('SIMULATION: Processing account payment', [
@@ -101,13 +90,10 @@ class PaymentSimulator
             'account_id' => $requestData['account_id'],
         ]);
 
-        
-        usleep(300000); 
+        usleep(300000);
 
-        
-        $transactionId = 'SIM_ACC_' . time() . '_' . $user->id . '_' . rand(1000, 9999);
+        $transactionId = 'SIM_ACC_'.time().'_'.$user->id.'_'.rand(1000, 9999);
 
-        
         $transaction = Transaction::create([
             'user_id' => $user->id,
             'pagarme_transaction_id' => $transactionId,
@@ -137,7 +123,6 @@ class PaymentSimulator
         ];
     }
 
-    
     public static function simulateContractPayment(array $requestData, User $user): array
     {
         Log::info('SIMULATION: Processing contract payment', [
@@ -146,13 +131,10 @@ class PaymentSimulator
             'contract_id' => $requestData['contract_id'] ?? null,
         ]);
 
-        
-        usleep(400000); 
+        usleep(400000);
 
-        
-        $transactionId = 'SIM_CONTRACT_' . time() . '_' . $user->id . '_' . rand(1000, 9999);
+        $transactionId = 'SIM_CONTRACT_'.time().'_'.$user->id.'_'.rand(1000, 9999);
 
-        
         $transaction = Transaction::create([
             'user_id' => $user->id,
             'pagarme_transaction_id' => $transactionId,
@@ -184,7 +166,6 @@ class PaymentSimulator
         ];
     }
 
-    
     public static function simulateWithdrawalProcessing(int $withdrawalId, string $method = 'bank_transfer'): array
     {
         Log::info('SIMULATION: Processing withdrawal', [
@@ -192,18 +173,16 @@ class PaymentSimulator
             'method' => $method,
         ]);
 
-        
-        $delay = match($method) {
-            'pix' => 200000, 
-            'bank_transfer' => 500000, 
-            'pagarme_bank_transfer' => 300000, 
-            default => 400000, 
+        $delay = match ($method) {
+            'pix' => 200000,
+            'bank_transfer' => 500000,
+            'pagarme_bank_transfer' => 300000,
+            default => 400000,
         };
-        
+
         usleep($delay);
 
-        
-        $transactionId = 'SIM_WD_' . strtoupper($method) . '_' . time() . '_' . $withdrawalId;
+        $transactionId = 'SIM_WD_'.strtoupper($method).'_'.time().'_'.$withdrawalId;
 
         Log::info('SIMULATION: Withdrawal processing completed', [
             'withdrawal_id' => $withdrawalId,
@@ -220,7 +199,6 @@ class PaymentSimulator
         ];
     }
 
-    
     public static function simulatePaymentMethodCreation(array $requestData, User $user): array
     {
         Log::info('SIMULATION: Creating payment method', [
@@ -228,11 +206,9 @@ class PaymentSimulator
             'card_last4' => substr($requestData['card_number'], -4),
         ]);
 
-        
-        usleep(200000); 
+        usleep(200000);
 
-        
-        $cardId = 'SIM_CARD_' . time() . '_' . $user->id . '_' . rand(1000, 9999);
+        $cardId = 'SIM_CARD_'.time().'_'.$user->id.'_'.rand(1000, 9999);
 
         return [
             'success' => true,
@@ -246,14 +222,13 @@ class PaymentSimulator
         ];
     }
 
-    
     private static function getRandomCardBrand(): string
     {
         $brands = ['visa', 'mastercard', 'amex', 'elo', 'hipercard'];
+
         return $brands[array_rand($brands)];
     }
 
-    
     public static function simulateError(string $message = 'Simulated payment error'): array
     {
         Log::info('SIMULATION: Simulating payment error', [
@@ -268,10 +243,9 @@ class PaymentSimulator
         ];
     }
 
-    
     public static function shouldSimulateError(): bool
     {
-        
+
         return rand(1, 100) <= 5;
     }
 }

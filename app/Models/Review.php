@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Services\NotificationService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Services\NotificationService;
 use Illuminate\Support\Facades\Log;
 
 class Review extends Model
@@ -27,7 +27,6 @@ class Review extends Model
         'is_public' => 'boolean',
     ];
 
-    
     public function contract(): BelongsTo
     {
         return $this->belongsTo(Contract::class);
@@ -43,7 +42,6 @@ class Review extends Model
         return $this->belongsTo(User::class, 'reviewed_id');
     }
 
-    
     public function scopePublic($query)
     {
         return $query->where('is_public', true);
@@ -64,15 +62,15 @@ class Review extends Model
         return $query->where('rating', '>=', $minRating);
     }
 
-    
     public function getAverageRatingAttribute(): float
     {
         if ($this->rating_categories && is_array($this->rating_categories)) {
             $sum = array_sum($this->rating_categories);
             $count = count($this->rating_categories);
+
             return $count > 0 ? round($sum / $count, 1) : $this->rating;
         }
-        
+
         return $this->rating;
     }
 
@@ -82,38 +80,60 @@ class Review extends Model
         $fullStars = floor($rating);
         $halfStar = $rating - $fullStars >= 0.5;
         $emptyStars = 5 - $fullStars - ($halfStar ? 1 : 0);
-        
-        return str_repeat('★', $fullStars) . 
-               ($halfStar ? '☆' : '') . 
+
+        return str_repeat('★', $fullStars).
+               ($halfStar ? '☆' : '').
                str_repeat('☆', $emptyStars);
     }
 
     public function getFormattedRatingAttribute(): string
     {
-        return number_format($this->average_rating, 1) . '/5.0';
+        return number_format($this->average_rating, 1).'/5.0';
     }
 
     public function getRatingCategoryAttribute(): string
     {
         $rating = $this->average_rating;
-        
-        if ($rating >= 4.5) return 'excellent';
-        if ($rating >= 4.0) return 'very_good';
-        if ($rating >= 3.5) return 'good';
-        if ($rating >= 3.0) return 'average';
-        if ($rating >= 2.0) return 'below_average';
+
+        if ($rating >= 4.5) {
+            return 'excellent';
+        }
+        if ($rating >= 4.0) {
+            return 'very_good';
+        }
+        if ($rating >= 3.5) {
+            return 'good';
+        }
+        if ($rating >= 3.0) {
+            return 'average';
+        }
+        if ($rating >= 2.0) {
+            return 'below_average';
+        }
+
         return 'poor';
     }
 
     public function getRatingColorAttribute(): string
     {
         $rating = $this->average_rating;
-        
-        if ($rating >= 4.5) return 'text-green-600';
-        if ($rating >= 4.0) return 'text-green-500';
-        if ($rating >= 3.5) return 'text-yellow-500';
-        if ($rating >= 3.0) return 'text-yellow-600';
-        if ($rating >= 2.0) return 'text-orange-500';
+
+        if ($rating >= 4.5) {
+            return 'text-green-600';
+        }
+        if ($rating >= 4.0) {
+            return 'text-green-500';
+        }
+        if ($rating >= 3.5) {
+            return 'text-yellow-500';
+        }
+        if ($rating >= 3.0) {
+            return 'text-yellow-600';
+        }
+        if ($rating >= 2.0) {
+            return 'text-orange-500';
+        }
+
         return 'text-red-500';
     }
 
@@ -129,24 +149,26 @@ class Review extends Model
 
     public function getCategoryRating(string $category): ?float
     {
-        if (!$this->rating_categories || !is_array($this->rating_categories)) {
+        if (! $this->rating_categories || ! is_array($this->rating_categories)) {
             return null;
         }
-        
+
         return $this->rating_categories[$category] ?? null;
     }
 
     public function getCategoryRatingStars(string $category): string
     {
         $rating = $this->getCategoryRating($category);
-        if ($rating === null) return '';
-        
+        if ($rating === null) {
+            return '';
+        }
+
         $fullStars = floor($rating);
         $halfStar = $rating - $fullStars >= 0.5;
         $emptyStars = 5 - $fullStars - ($halfStar ? 1 : 0);
-        
-        return str_repeat('★', $fullStars) . 
-               ($halfStar ? '☆' : '') . 
+
+        return str_repeat('★', $fullStars).
+               ($halfStar ? '☆' : '').
                str_repeat('☆', $emptyStars);
     }
 
@@ -154,22 +176,22 @@ class Review extends Model
     {
         static::created(function ($review) {
             try {
-                
+
                 NotificationService::notifyUserOfNewReview($review);
             } catch (\Exception $e) {
                 Log::error('Failed to notify user of new review', [
                     'review_id' => $review->id,
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ]);
             }
-            
+
             try {
-                
+
                 $review->updateCreatorAverageRating();
             } catch (\Exception $e) {
                 Log::error('Failed to update creator average rating', [
                     'review_id' => $review->id,
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ]);
             }
         });
@@ -178,11 +200,12 @@ class Review extends Model
     private function updateCreatorAverageRating(): void
     {
         $creator = $this->reviewed;
-        if (!$creator) {
+        if (! $creator) {
             Log::warning('Cannot update creator rating: reviewed user not found', [
                 'review_id' => $this->id,
-                'reviewed_id' => $this->reviewed_id
+                'reviewed_id' => $this->reviewed_id,
             ]);
+
             return;
         }
 
@@ -203,4 +226,4 @@ class Review extends Model
             'average_rating' => $averageRating ? round($averageRating, 1) : null,
         ]);
     }
-} 
+}

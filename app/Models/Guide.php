@@ -21,7 +21,6 @@ class Guide extends Model
         'screenshots' => 'array',
     ];
 
-    
     protected $appends = ['video_url', 'screenshot_urls'];
 
     public function getVideoUrlAttribute()
@@ -29,7 +28,7 @@ class Guide extends Model
         if (! $this->video_path) {
             return null;
         }
-        
+
         return Storage::url($this->video_path);
     }
 
@@ -38,19 +37,17 @@ class Guide extends Model
         if (! $this->screenshots || ! is_array($this->screenshots)) {
             return [];
         }
-        
+
         return array_map(function ($path) {
             return Storage::url($path);
         }, $this->screenshots);
     }
 
-    
     public function creator()
     {
         return $this->belongsTo(\App\Models\User::class, 'created_by');
     }
 
-    
     public function steps()
     {
         return $this->hasMany(\App\Models\Step::class);

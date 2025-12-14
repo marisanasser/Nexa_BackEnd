@@ -3,29 +3,25 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Mail\SignupMail;
 use App\Models\EmailToken;
-use App\Mail\SignupMail;  
-use Illuminate\Auth\Events\Registered;
+use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rules;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules;
 
 class RegisteredUserController extends Controller
 {
-    
     public function store(Request $request)
     {
-        
+
         Log::info('Registration request received', [
             'content_type' => $request->header('Content-Type'),
-            'has_files' => !empty($request->allFiles()),
+            'has_files' => ! empty($request->allFiles()),
             'all_files' => $request->allFiles(),
             'has_avatar' => $request->hasFile('avatar_url'),
             'request_method' => $request->method(),
@@ -33,7 +29,6 @@ class RegisteredUserController extends Controller
             'all_data' => $request->all(),
         ]);
 
-        
         $softDeletedUser = User::withTrashed()
             ->where('email', strtolower(trim($request->email)))
             ->whereNotNull('deleted_at')
@@ -64,78 +59,78 @@ class RegisteredUserController extends Controller
                 'string',
                 'min:2',
                 'max:255',
-                'regex:/^[\p{L}\p{M}\s\.\'\-]+$/u'
-                ],
+                'regex:/^[\p{L}\p{M}\s\.\'\-]+$/u',
+            ],
             'email' => [
-                'required', 
-                'string', 
-                'lowercase', 
-                'email', 
-                'max:255', 
+                'required',
+                'string',
+                'lowercase',
+                'email',
+                'max:255',
                 'unique:'.User::class,
-                'regex:/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/'
+                'regex:/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/',
             ],
             'password' => [
-                'required', 
-                'confirmed', 
+                'required',
+                'confirmed',
                 'min:8',
                 'max:128',
-                Rules\Password::defaults()
+                Rules\Password::defaults(),
             ],
             'role' => [
                 'sometimes',
                 'string',
                 Rule::in(['creator', 'brand', 'admin']),
-                'max:20'
+                'max:20',
             ],
             'whatsapp' => [
-                'nullable', 
-                'string', 
+                'nullable',
+                'string',
                 'max:20',
-                'regex:/^[\+]?[1-9][\d]{0,15}$/'
+                'regex:/^[\+]?[1-9][\d]{0,15}$/',
             ],
             'avatar_url' => [
-                'nullable', 
-                'image', 
+                'nullable',
+                'image',
                 'mimes:jpeg,png,jpg,gif,webp',
-                'max:2048', 
-                'dimensions:min_width=100,min_height=100,max_width=1024,max_height=1024'
+                'max:2048',
+                'dimensions:min_width=100,min_height=100,max_width=1024,max_height=1024',
             ],
             'bio' => [
-                'nullable', 
-                'string', 
+                'nullable',
+                'string',
                 'max:1000',
-                'min:10'
+                'min:10',
             ],
             'company_name' => [
-                'nullable', 
-                'string', 
+                'nullable',
+                'string',
                 'max:255',
                 'min:2',
-                'regex:/^[a-zA-Z0-9\s\-\.\&]+$/'
+                'regex:/^[a-zA-Z0-9\s\-\.\&]+$/',
             ],
             'gender' => [
-                'nullable', 
-                'string', 
+                'nullable',
+                'string',
                 Rule::in(['male', 'female', 'other']),
-                'max:10'
+                'max:10',
             ],
             'state' => [
-                'nullable', 
-                'string', 
+                'nullable',
+                'string',
                 'max:100',
-                'regex:/^[a-zA-Z\s\-]+$/'
+                'regex:/^[a-zA-Z\s\-]+$/',
             ],
             'language' => [
-                'nullable', 
-                'string', 
+                'nullable',
+                'string',
                 'max:10',
-                Rule::in(['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'zh', 'ja', 'ko', 'ar'])
+                Rule::in(['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'zh', 'ja', 'ko', 'ar']),
             ],
-            
+
             'isStudent' => [
                 'nullable',
-                'boolean'
+                'boolean',
             ],
         ], [
             'name.required' => 'O nome é obrigatório.',
@@ -165,21 +160,19 @@ class RegisteredUserController extends Controller
             'has_premium.boolean' => 'O status premium deve ser verdadeiro ou falso.',
         ]);
 
-        
         $this->validateCustomRules($request);
-        
+
         Log::info('Validation passed successfully');
 
-        
         $avatarUrl = null;
         if ($request->hasFile('avatar_url')) {
             Log::info('Avatar file detected', [
                 'filename' => $request->file('avatar_url')->getClientOriginalName(),
                 'size' => $request->file('avatar_url')->getSize(),
-                'mime' => $request->file('avatar_url')->getMimeType()
+                'mime' => $request->file('avatar_url')->getMimeType(),
             ]);
             $avatarUrl = $this->uploadAvatar($request->file('avatar_url'));
-            Log::info('Avatar URL generated: ' . $avatarUrl);
+            Log::info('Avatar URL generated: '.$avatarUrl);
         } else {
             Log::info('No avatar file in request');
         }
@@ -191,13 +184,11 @@ class RegisteredUserController extends Controller
             'gender' => $request->gender ?? 'other',
             'birth_date' => $request->birth_date ?? null,
         ]);
-        
-        
+
         $isStudent = $request->isStudent ?? false;
-        
-        
+
         $freeTrialExpiresAt = $isStudent ? now()->addYear() : null;
-        
+
         $user = User::create([
             'name' => trim($request->name),
             'email' => strtolower(trim($request->email)),
@@ -207,34 +198,32 @@ class RegisteredUserController extends Controller
             'avatar_url' => $avatarUrl,
             'bio' => $request->bio ? trim($request->bio) : null,
             'company_name' => $request->company_name ? trim($request->company_name) : null,
-            'student_verified' => false, 
+            'student_verified' => false,
             'student_expires_at' => null,
             'gender' => $request->gender ?? 'other',
             'birth_date' => $request->birth_date ?? null,
             'state' => $request->state ? trim($request->state) : null,
             'language' => 'en',
-            
+
             'has_premium' => false,
             'premium_expires_at' => null,
             'free_trial_expires_at' => $freeTrialExpiresAt,
-            'email_verified_at' => now(), 
+            'email_verified_at' => now(),
         ]);
-        
+
         Log::info('User created successfully', ['user_id' => $user->id]);
 
-        
         \App\Services\NotificationService::notifyAdminOfNewRegistration($user);
-        
-        
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         $frontend = config('app.frontend_url', env('APP_FRONTEND_URL', 'http://localhost:5000'));
         $link = "{$frontend}/{$user->role}?token={$token}";
-        
+
         try {
             Mail::to($user->email)->send(new SignupMail($user, $link));
         } catch (\Exception $e) {
-            Log::error('Error sending signup email: ' . $e->getMessage());
+            Log::error('Error sending signup email: '.$e->getMessage());
         }
         Log::info('User registration completed successfully', ['user_id' => $user->id, 'email' => $user->email]);
 
@@ -262,135 +251,132 @@ class RegisteredUserController extends Controller
                 'premium_expires_at' => $user->premium_expires_at,
                 'free_trial_expires_at' => $user->free_trial_expires_at,
                 'isStudent' => $isStudent,
-            ]
+            ],
         ], 201);
     }
-    
-     public function magicLogin(Request $request)
+
+    public function magicLogin(Request $request)
     {
         $tokenParam = $request->query('token');
-        if (!$tokenParam) {
+        if (! $tokenParam) {
             return response()->json(['error' => 'Token missing'], 400);
         }
 
         $record = EmailToken::where('token', $tokenParam)->first();
 
-        if (!$record) return response()->json(['error' => 'Invalid token'], 400);
-        if ($record->used) return response()->json(['error' => 'Token already used'], 400);
-        if ($record->expires_at->isPast()) return response()->json(['error' => 'Token expired'], 400);
+        if (! $record) {
+            return response()->json(['error' => 'Invalid token'], 400);
+        }
+        if ($record->used) {
+            return response()->json(['error' => 'Token already used'], 400);
+        }
+        if ($record->expires_at->isPast()) {
+            return response()->json(['error' => 'Token expired'], 400);
+        }
 
-        
         $record->update(['used' => true]);
 
         $user = $record->user;
-        
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'message' => 'Logged in',
             'token' => $token,
-            'user' => $user
+            'user' => $user,
         ]);
     }
-    
+
     private function uploadAvatar($file): string
     {
         try {
-            
-            $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-            Log::info('Generated filename: ' . $filename);
-            
-            
+
+            $filename = time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
+            Log::info('Generated filename: '.$filename);
+
             $path = $file->storeAs('avatars', $filename, 'public');
-            Log::info('File stored at path: ' . $path);
-            
-            
+            Log::info('File stored at path: '.$path);
+
             $url = Storage::url($path);
-            Log::info('Storage URL: ' . $url);
-            
+            Log::info('Storage URL: '.$url);
+
             return $url;
         } catch (\Exception $e) {
-            Log::error('Avatar upload failed: ' . $e->getMessage());
+            Log::error('Avatar upload failed: '.$e->getMessage());
             throw $e;
         }
     }
 
-    
-    private function validateCustomRules(Request $request): void    
+    private function validateCustomRules(Request $request): void
     {
-        
+
         if ($request->email) {
-            $domain = substr(strrchr($request->email, "@"), 1);
+            $domain = substr(strrchr($request->email, '@'), 1);
             $disallowedDomains = ['tempmail.com', '10minutemail.com', 'guerrillamail.com'];
-            
+
             if (in_array(strtolower($domain), $disallowedDomains)) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'email' => ['Endereços de e-mail temporários não são permitidos.']
+                    'email' => ['Endereços de e-mail temporários não são permitidos.'],
                 ]);
             }
         }
 
-        
         if ($request->password) {
             $password = $request->password;
             $errors = [];
 
-            if (!preg_match('/[A-Z]/', $password)) {
+            if (! preg_match('/[A-Z]/', $password)) {
                 $errors[] = 'A senha deve conter ao menos uma letra maiúscula.';
             }
-            if (!preg_match('/[a-z]/', $password)) {
+            if (! preg_match('/[a-z]/', $password)) {
                 $errors[] = 'A senha deve conter ao menos uma letra minúscula.';
             }
-            if (!preg_match('/[0-9]/', $password)) {
+            if (! preg_match('/[0-9]/', $password)) {
                 $errors[] = 'A senha deve conter ao menos um número.';
             }
-            if (!preg_match('/[^A-Za-z0-9]/', $password)) {
+            if (! preg_match('/[^A-Za-z0-9]/', $password)) {
                 $errors[] = 'A senha deve conter ao menos um caractere especial.';
             }
 
-            if (!empty($errors)) {
+            if (! empty($errors)) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'password' => $errors
+                    'password' => $errors,
                 ]);
             }
         }
 
-        
         if ($request->whatsapp) {
             $phone = $this->formatPhoneNumber($request->whatsapp);
             if (strlen($phone) < 10 || strlen($phone) > 15) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'whatsapp' => ['O número de telefone deve ter entre 10 e 15 dígitos.']
+                    'whatsapp' => ['O número de telefone deve ter entre 10 e 15 dígitos.'],
                 ]);
             }
         }
 
-        
         if ($request->bio) {
             $bio = $request->bio;
             $forbiddenWords = ['spam', 'advertisement', 'promote'];
-            
+
             foreach ($forbiddenWords as $word) {
                 if (stripos($bio, $word) !== false) {
                     throw \Illuminate\Validation\ValidationException::withMessages([
-                        'bio' => ['A bio contém conteúdo impróprio.']
+                        'bio' => ['A bio contém conteúdo impróprio.'],
                     ]);
                 }
             }
         }
     }
 
-    
     private function formatPhoneNumber(string $phone): string
     {
-        
+
         $phone = preg_replace('/[^\d+]/', '', $phone);
-        
-        
-        if (!str_starts_with($phone, '+')) {
-            $phone = '+' . $phone;
+
+        if (! str_starts_with($phone, '+')) {
+            $phone = '+'.$phone;
         }
-        
+
         return $phone;
     }
 }

@@ -31,76 +31,70 @@ class Subscription extends Model
         'expires_at' => 'datetime',
         'amount_paid' => 'decimal:2',
         'auto_renew' => 'boolean',
-        'cancelled_at' => 'datetime'
+        'cancelled_at' => 'datetime',
     ];
 
-    
     const STATUS_ACTIVE = 'active';
+
     const STATUS_EXPIRED = 'expired';
+
     const STATUS_CANCELLED = 'cancelled';
+
     const STATUS_PENDING = 'pending';
 
-    
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    
     public function plan(): BelongsTo
     {
         return $this->belongsTo(SubscriptionPlan::class, 'subscription_plan_id');
     }
 
-    
     public function transaction(): BelongsTo
     {
         return $this->belongsTo(Transaction::class);
     }
 
-    
     public function isActive(): bool
     {
-        return $this->status === self::STATUS_ACTIVE && 
-               $this->expires_at && 
+        return $this->status === self::STATUS_ACTIVE &&
+               $this->expires_at &&
                $this->expires_at->isFuture();
     }
 
-    
     public function isExpired(): bool
     {
-        return $this->status === self::STATUS_EXPIRED || 
+        return $this->status === self::STATUS_EXPIRED ||
                ($this->expires_at && $this->expires_at->isPast());
     }
 
-    
     public function isCancelled(): bool
     {
         return $this->status === self::STATUS_CANCELLED;
     }
 
-    
     public function getRemainingDaysAttribute(): int
     {
-        if (!$this->expires_at) {
+        if (! $this->expires_at) {
             return 0;
         }
+
         return max(0, now()->diffInDays($this->expires_at, false));
     }
 
-    
     public function scopeActive($query)
     {
         return $query->where('status', self::STATUS_ACTIVE)
-                    ->where('expires_at', '>', now());
+            ->where('expires_at', '>', now());
     }
 
-    
     public function scopeExpired($query)
     {
-        return $query->where(function($q) {
+        return $query->where(function ($q) {
             $q->where('status', self::STATUS_EXPIRED)
-              ->orWhere('expires_at', '<=', now());
+                ->orWhere('expires_at', '<=', now());
         });
     }
-} 
+}

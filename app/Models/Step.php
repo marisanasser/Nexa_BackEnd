@@ -11,13 +11,13 @@ class Step extends Model
     use HasFactory;
 
     protected $fillable = [
-        'guide_id', 
-        'title', 
-        'description', 
+        'guide_id',
+        'title',
+        'description',
         'video_path',
         'video_mime',
         'screenshots',
-        'order'
+        'order',
     ];
 
     protected $casts = [
@@ -36,6 +36,7 @@ class Step extends Model
         if (! $this->video_path) {
             return null;
         }
+
         return Storage::url($this->video_path);
     }
 
@@ -44,7 +45,7 @@ class Step extends Model
         if (! $this->screenshots || ! is_array($this->screenshots)) {
             return [];
         }
-        
+
         return array_map(function ($path) {
             return Storage::url($path);
         }, $this->screenshots);

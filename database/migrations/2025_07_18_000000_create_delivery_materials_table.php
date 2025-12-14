@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    
     public function up(): void
     {
         Schema::create('delivery_materials', function (Blueprint $table) {
@@ -29,8 +28,7 @@ return new class extends Migration
             $table->text('rejection_reason')->nullable();
             $table->text('comment')->nullable();
             $table->timestamps();
-            
-            
+
             $table->index(['contract_id', 'status']);
             $table->index(['creator_id', 'status']);
             $table->index(['brand_id', 'status']);
@@ -40,9 +38,8 @@ return new class extends Migration
         });
     }
 
-    
     public function down(): void
     {
         Schema::dropIfExists('delivery_materials');
     }
-}; 
+};

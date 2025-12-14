@@ -8,10 +8,8 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 
 class CampaignFactory extends Factory
 {
-    
     protected $model = Campaign::class;
 
-    
     public function definition(): array
     {
         return [
@@ -31,7 +29,6 @@ class CampaignFactory extends Factory
         ];
     }
 
-    
     public function approved(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -40,7 +37,6 @@ class CampaignFactory extends Factory
         ]);
     }
 
-    
     public function rejected(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -48,7 +44,6 @@ class CampaignFactory extends Factory
         ]);
     }
 
-    
     public function active(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -56,11 +51,10 @@ class CampaignFactory extends Factory
         ]);
     }
 
-    
     public function inactive(): static
     {
         return $this->state(fn (array $attributes) => [
             'is_active' => false,
         ]);
     }
-} 
+}

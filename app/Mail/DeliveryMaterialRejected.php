@@ -4,7 +4,6 @@ namespace App\Mail;
 
 use App\Models\DeliveryMaterial;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -15,11 +14,13 @@ class DeliveryMaterialRejected extends Mailable
     use Queueable, SerializesModels;
 
     public $material;
+
     public $contract;
+
     public $creator;
+
     public $brand;
 
-    
     public function __construct(DeliveryMaterial $material)
     {
         $this->material = $material;
@@ -28,7 +29,6 @@ class DeliveryMaterialRejected extends Mailable
         $this->brand = $material->brand;
     }
 
-    
     public function envelope(): Envelope
     {
         return new Envelope(
@@ -36,7 +36,6 @@ class DeliveryMaterialRejected extends Mailable
         );
     }
 
-    
     public function content(): Content
     {
         return new Content(
@@ -50,9 +49,8 @@ class DeliveryMaterialRejected extends Mailable
         );
     }
 
-    
     public function attachments(): array
     {
         return [];
     }
-} 
+}

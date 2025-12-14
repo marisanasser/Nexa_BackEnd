@@ -10,139 +10,135 @@ use Illuminate\Support\Facades\Route;
 
 class RouteServiceProvider extends ServiceProvider
 {
-    
     public const HOME = '/dashboard';
 
-    
     public function boot(): void
     {
-        
+
         RateLimiter::for('new-user-flow', function (Request $request) {
             return Limit::perMinute(25)->by($request->ip())->response(function () use ($request) {
-                
+
                 \Log::info('New user flow rate limited', [
                     'ip' => $request->ip(),
                     'user_agent' => $request->userAgent(),
                     'attempts_allowed' => 25,
-                    'lockout_minutes' => 5
+                    'lockout_minutes' => 5,
                 ]);
-                
+
                 return response()->json([
                     'message' => 'Muitas tentativas de criação de conta. Tente novamente em alguns instantes.',
-                    'retry_after' => 300, 
-                    'error_type' => 'new_user_flow_rate_limited'
+                    'retry_after' => 300,
+                    'error_type' => 'new_user_flow_rate_limited',
                 ], 429);
             });
         });
 
-        
         RateLimiter::for('auth', function (Request $request) {
             $config = config('rate_limiting.auth.login');
+
             return Limit::perMinute($config['attempts'])
                 ->by($request->ip())
                 ->response(function () use ($config, $request) {
-                    
+
                     \Log::info('Route-level auth rate limited', [
                         'ip' => $request->ip(),
                         'user_agent' => $request->userAgent(),
                         'attempts_allowed' => $config['attempts'],
-                        'lockout_minutes' => $config['lockout_minutes']
+                        'lockout_minutes' => $config['lockout_minutes'],
                     ]);
-                    
+
                     return response()->json([
                         'message' => config('rate_limiting.messages.auth.login'),
                         'retry_after' => $config['lockout_minutes'] * 60,
-                        'error_type' => 'auth_rate_limited'
+                        'error_type' => 'auth_rate_limited',
                     ], 429);
                 });
         });
 
-        
         RateLimiter::for('registration', function (Request $request) {
             $config = config('rate_limiting.auth.registration');
+
             return Limit::perMinute($config['attempts'])
                 ->by($request->ip())
                 ->response(function () use ($config, $request) {
-                    
+
                     \Log::info('Route-level registration rate limited', [
                         'ip' => $request->ip(),
                         'user_agent' => $request->userAgent(),
                         'attempts_allowed' => $config['attempts'],
-                        'lockout_minutes' => $config['lockout_minutes']
+                        'lockout_minutes' => $config['lockout_minutes'],
                     ]);
-                    
+
                     return response()->json([
                         'message' => config('rate_limiting.messages.auth.registration'),
                         'retry_after' => $config['lockout_minutes'] * 60,
-                        'error_type' => 'registration_rate_limited'
+                        'error_type' => 'registration_rate_limited',
                     ], 429);
                 });
         });
 
-        
         RateLimiter::for('password-reset', function (Request $request) {
             $config = config('rate_limiting.auth.password_reset');
+
             return Limit::perMinute($config['attempts'])
                 ->by($request->ip())
                 ->response(function () use ($config) {
                     return response()->json([
                         'message' => config('rate_limiting.messages.auth.password_reset'),
                         'retry_after' => $config['lockout_minutes'] * 60,
-                        'error_type' => 'password_reset_rate_limited'
+                        'error_type' => 'password_reset_rate_limited',
                     ], 429);
                 });
         });
 
-        
         RateLimiter::for('api', function (Request $request) {
             $config = config('rate_limiting.api.general');
+
             return Limit::perMinute($config['attempts'])
                 ->by($request->user()?->id ?: $request->ip());
         });
 
-        
         RateLimiter::for('dashboard', function (Request $request) {
-            return Limit::perMinute(200) 
+            return Limit::perMinute(200)
                 ->by($request->user()?->id ?: $request->ip())
-                ->response(function () use ($request) {
+                ->response(function () {
                     return response()->json([
                         'message' => 'Dashboard rate limit exceeded. Please wait a moment.',
-                        'retry_after' => 60, 
-                        'error_type' => 'dashboard_rate_limited'
+                        'retry_after' => 60,
+                        'error_type' => 'dashboard_rate_limited',
                     ], 429);
                 });
         });
 
-        
         RateLimiter::for('chat', function (Request $request) {
-            return Limit::perMinute(300) 
+            return Limit::perMinute(300)
                 ->by($request->user()?->id ?: $request->ip())
-                ->response(function () use ($request) {
+                ->response(function () {
                     return response()->json([
                         'message' => 'Chat rate limit exceeded. Please wait a moment.',
-                        'retry_after' => 60, 
-                        'error_type' => 'chat_rate_limited'
+                        'retry_after' => 60,
+                        'error_type' => 'chat_rate_limited',
                     ], 429);
                 });
         });
 
-        
         RateLimiter::for('notifications', function (Request $request) {
             $config = config('rate_limiting.api.notifications');
+
             return Limit::perMinute($config['attempts'])
                 ->by($request->user()?->id ?: $request->ip());
         });
 
-        
         RateLimiter::for('user-status', function (Request $request) {
             $config = config('rate_limiting.api.user_status');
+
             return Limit::perMinute($config['attempts'])
                 ->by($request->user()?->id ?: $request->ip());
         });
 
-        
         RateLimiter::for('payment', function (Request $request) {
             $config = config('rate_limiting.api.payment');
+
             return Limit::perMinute($config['attempts'])
                 ->by($request->user()?->id ?: $request->ip());
         });

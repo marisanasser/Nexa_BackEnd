@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\User;
+use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
 class CustomTestUsersSeeder extends Seeder
@@ -29,7 +29,12 @@ class CustomTestUsersSeeder extends Seeder
                 'email_verified_at' => now(),
             ]
         );
-        
+
+        $creator->update([
+            'has_premium' => true,
+            'premium_expires_at' => now()->addMonths(12),
+        ]);
+
         $this->command->info("User Brand: {$brand->email} created.");
         $this->command->info("User Creator: {$creator->email} created.");
     }

@@ -6,46 +6,44 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    
     public function up(): void
     {
-        
+
         Schema::table('contracts', function (Blueprint $table) {
-            
+
             $table->dropColumn('workflow_status');
         });
 
         Schema::table('contracts', function (Blueprint $table) {
-            
+
             $table->enum('workflow_status', [
                 'active',
-                'waiting_review', 
+                'waiting_review',
                 'payment_pending',
                 'payment_failed',
                 'payment_available',
                 'payment_withdrawn',
-                'terminated'
+                'terminated',
             ])->default('active')->after('status');
         });
     }
 
-    
     public function down(): void
     {
         Schema::table('contracts', function (Blueprint $table) {
-            
+
             $table->dropColumn('workflow_status');
         });
 
         Schema::table('contracts', function (Blueprint $table) {
-            
+
             $table->enum('workflow_status', [
                 'active',
-                'waiting_review', 
+                'waiting_review',
                 'payment_pending',
                 'payment_available',
                 'payment_withdrawn',
-                'terminated'
+                'terminated',
             ])->default('active')->after('status');
         });
     }

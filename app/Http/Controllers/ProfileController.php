@@ -2,29 +2,26 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\Log;
 
 class ProfileController extends Controller
 {
-
-    
     public function show(): JsonResponse
     {
         try {
             /** @var \App\Models\User $user */
-        $user = Auth::user();
-            
-            if (!$user) {
+            $user = Auth::user();
+
+            if (! $user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not authenticated'
+                    'message' => 'User not authenticated',
                 ], 401);
             }
 
@@ -50,10 +47,10 @@ class ProfileController extends Controller
                     'twitter_handle' => $user->twitter_handle,
                     'industry' => $user->industry,
                     'niche' => $user->niche,
-                    'state' => $user->state, 
+                    'state' => $user->state,
                     'language' => $user->language,
                     'languages' => $user->languages ?: ($user->language ? [$user->language] : []),
-                    'categories' => ['General'], 
+                    'categories' => ['General'],
                     'has_premium' => $user->has_premium,
                     'student_verified' => $user->student_verified,
                     'premium_expires_at' => $user->premium_expires_at,
@@ -61,52 +58,48 @@ class ProfileController extends Controller
                     'created_at' => $user->created_at,
                     'updated_at' => $user->updated_at,
                 ],
-                'message' => 'Profile retrieved successfully'
+                'message' => 'Profile retrieved successfully',
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to retrieve profile: ' . $e->getMessage()
+                'message' => 'Failed to retrieve profile: '.$e->getMessage(),
             ], 500);
         }
     }
 
-    
     public function update(Request $request): JsonResponse
     {
-        
-        error_log("Content-Type: " . $request->header('Content-Type'));
-        error_log("Request method: " . $request->method());
-        error_log("Request role: " . $request->input('role'));
-        error_log("Request state: " . $request->input('state'));
-        error_log("Request all data: " . json_encode($request->all()));
-        error_log("Request files: " . json_encode($request->allFiles()));
-        error_log("Raw content length: " . strlen($request->getContent()));
-        
+
+        error_log('Content-Type: '.$request->header('Content-Type'));
+        error_log('Request method: '.$request->method());
+        error_log('Request role: '.$request->input('role'));
+        error_log('Request state: '.$request->input('state'));
+        error_log('Request all data: '.json_encode($request->all()));
+        error_log('Request files: '.json_encode($request->allFiles()));
+        error_log('Raw content length: '.strlen($request->getContent()));
+
         try {
             /** @var \App\Models\User $user */
-        $user = Auth::user();
+            $user = Auth::user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not authenticated'
+                    'message' => 'User not authenticated',
                 ], 401);
             }
 
-            
             $contentType = $request->header('Content-Type');
             $isMultipart = strpos($contentType, 'multipart/form-data') !== false;
-            
-            error_log("Is multipart: " . ($isMultipart ? 'true' : 'false'));
 
-            
-            if ($isMultipart && empty($request->all()) && !empty($request->getContent())) {
-                error_log("Attempting manual multipart parsing");
+            error_log('Is multipart: '.($isMultipart ? 'true' : 'false'));
+
+            if ($isMultipart && empty($request->all()) && ! empty($request->getContent())) {
+                error_log('Attempting manual multipart parsing');
                 $parsedData = $this->parseMultipartData($request);
-                error_log("Manually parsed data: " . json_encode($parsedData));
-                
-                
+                error_log('Manually parsed data: '.json_encode($parsedData));
+
                 foreach ($parsedData as $key => $value) {
                     if ($key !== 'avatar') {
                         $request->merge([$key => $value]);
@@ -114,7 +107,6 @@ class ProfileController extends Controller
                 }
             }
 
-            
             $validationRules = [
                 'name' => 'sometimes|string|max:255',
                 'email' => [
@@ -137,16 +129,15 @@ class ProfileController extends Controller
                 'industry' => 'sometimes|string|max:255',
                 'profession' => 'sometimes|string|max:255',
                 'niche' => 'sometimes|string|max:255',
-                'state' => 'sometimes|string|max:255', 
+                'state' => 'sometimes|string|max:255',
                 'language' => 'sometimes|string|max:50',
-                'languages' => 'sometimes|string', 
-                'categories' => 'sometimes|string', 
+                'languages' => 'sometimes|string',
+                'categories' => 'sometimes|string',
                 'avatar' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:10240',
             ];
 
-            
             $creatorType = $request->input('creator_type') ?? $user->creator_type ?? null;
-            
+
             if ($creatorType === 'influencer' || $creatorType === 'both') {
                 $validationRules['instagram_handle'] = 'required|string|max:255';
             } else {
@@ -155,22 +146,21 @@ class ProfileController extends Controller
 
             $validator = Validator::make($request->all(), $validationRules);
 
-            
             $hasAvatarFile = false;
             $avatarFile = null;
-            
+
             if ($request->hasFile('avatar')) {
                 $hasAvatarFile = true;
                 $avatarFile = $request->file('avatar');
-                error_log("Avatar file found via hasFile()");
+                error_log('Avatar file found via hasFile()');
             } else {
-                
-                if ($isMultipart && !empty($request->getContent())) {
+
+                if ($isMultipart && ! empty($request->getContent())) {
                     $parsedData = $this->parseMultipartData($request);
                     if (isset($parsedData['avatar']) && $parsedData['avatar'] instanceof \Illuminate\Http\UploadedFile) {
                         $hasAvatarFile = true;
                         $avatarFile = $parsedData['avatar'];
-                        error_log("Avatar file found via manual parsing");
+                        error_log('Avatar file found via manual parsing');
                     }
                 }
             }
@@ -179,15 +169,14 @@ class ProfileController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
             $data = $validator->validated();
 
-            
             if ($hasAvatarFile && $avatarFile) {
-                
+
                 try {
                     if ($user->avatar_url) {
                         $oldPath = str_replace('/storage/', '', $user->avatar_url);
@@ -196,55 +185,47 @@ class ProfileController extends Controller
                         }
                     }
                 } catch (\Throwable $e) {
-                    
+
                 }
 
-                
                 $avatarPath = $avatarFile->store('avatars', 'public');
-                $data['avatar_url'] = '/storage/' . $avatarPath;
+                $data['avatar_url'] = '/storage/'.$avatarPath;
             }
 
-            
             if (isset($data['languages'])) {
                 $languages = json_decode($data['languages'], true);
-                if (is_array($languages) && !empty($languages)) {
+                if (is_array($languages) && ! empty($languages)) {
                     $data['languages'] = $languages;
-                    $data['language'] = $languages[0]; 
+                    $data['language'] = $languages[0];
                 } else {
                     $data['languages'] = [];
                     $data['language'] = null;
                 }
             }
 
-            
             if (isset($data['gender'])) {
                 $genderMapping = [
                     'Female' => 'female',
                     'Male' => 'male',
                     'Non-binary' => 'other',
-                    'Prefer not to say' => 'other'
+                    'Prefer not to say' => 'other',
                 ];
                 $data['gender'] = $genderMapping[$data['gender']] ?? $data['gender'];
             }
 
-            
             if (array_key_exists('role', $data)) {
                 unset($data['role']);
             }
 
-            
             $state = $request->input('state');
             if ($state) {
                 $data['state'] = $state;
             }
-            
-            
-            unset($data['categories']); 
 
-            
+            unset($data['categories']);
+
             $user->update($data);
 
-            
             $user->refresh();
 
             return response()->json([
@@ -280,26 +261,25 @@ class ProfileController extends Controller
                     'created_at' => $user->created_at,
                     'updated_at' => $user->updated_at,
                 ],
-                'message' => 'Profile updated successfully'
+                'message' => 'Profile updated successfully',
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update profile: ' . $e->getMessage()
+                'message' => 'Failed to update profile: '.$e->getMessage(),
             ], 500);
         }
     }
 
-    
     public function deleteAvatar(): JsonResponse
     {
         try {
             /** @var \App\Models\User $user */
-        $user = Auth::user();
-            if (!$user) {
+            $user = Auth::user();
+            if (! $user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not authenticated'
+                    'message' => 'User not authenticated',
                 ], 401);
             }
 
@@ -318,26 +298,25 @@ class ProfileController extends Controller
                 'profile' => [
                     'id' => $user->id,
                     'avatar' => $user->avatar_url,
-                ]
+                ],
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Falha ao remover avatar: ' . $e->getMessage()
+                'message' => 'Falha ao remover avatar: '.$e->getMessage(),
             ], 500);
         }
     }
 
-    
     public function uploadAvatar(Request $request): JsonResponse
     {
         try {
             /** @var \App\Models\User $user */
-        $user = Auth::user();
-            if (!$user) {
+            $user = Auth::user();
+            if (! $user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not authenticated'
+                    'message' => 'User not authenticated',
                 ], 401);
             }
 
@@ -356,11 +335,10 @@ class ProfileController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
-            
             try {
                 if ($user->avatar_url) {
                     $oldPath = str_replace('/storage/', '', $user->avatar_url);
@@ -368,11 +346,12 @@ class ProfileController extends Controller
                         Storage::disk('public')->delete($oldPath);
                     }
                 }
-            } catch (\Throwable $e) {}
+            } catch (\Throwable $e) {
+            }
 
             $avatarFile = $request->file('avatar');
             $avatarPath = $avatarFile->store('avatars', 'public');
-            $user->avatar_url = '/storage/' . $avatarPath;
+            $user->avatar_url = '/storage/'.$avatarPath;
             $user->save();
 
             return response()->json([
@@ -382,41 +361,40 @@ class ProfileController extends Controller
                     'id' => $user->id,
                     'avatar' => $user->avatar_url,
                     'avatar_url' => $user->avatar_url,
-                ]
+                ],
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Falha ao enviar avatar: ' . $e->getMessage()
+                'message' => 'Falha ao enviar avatar: '.$e->getMessage(),
             ], 500);
         }
     }
 
-    
     public function uploadAvatarBase64(Request $request): JsonResponse
     {
         try {
             /** @var \App\Models\User $user */
-        $user = Auth::user();
-            if (!$user) {
+            $user = Auth::user();
+            if (! $user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not authenticated'
+                    'message' => 'User not authenticated',
                 ], 401);
             }
 
             $dataUrl = $request->input('avatar_base64');
-            if (!$dataUrl || !is_string($dataUrl)) {
+            if (! $dataUrl || ! is_string($dataUrl)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'avatar_base64 é obrigatório'
+                    'message' => 'avatar_base64 é obrigatório',
                 ], 422);
             }
 
-            if (!preg_match('/^data:(image\\/(jpeg|jpg|png|webp));base64,(.*)$/i', $dataUrl, $matches)) {
+            if (! preg_match('/^data:(image\\/(jpeg|jpg|png|webp));base64,(.*)$/i', $dataUrl, $matches)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Formato base64 inválido'
+                    'message' => 'Formato base64 inválido',
                 ], 422);
             }
 
@@ -427,19 +405,17 @@ class ProfileController extends Controller
             if ($binary === false) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Falha ao decodificar base64'
+                    'message' => 'Falha ao decodificar base64',
                 ], 422);
             }
 
-            
             if (strlen($binary) > 10 * 1024 * 1024) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Arquivo muito grande (limite 10MB)'
+                    'message' => 'Arquivo muito grande (limite 10MB)',
                 ], 422);
             }
 
-            
             try {
                 if ($user->avatar_url) {
                     $oldPath = str_replace('/storage/', '', $user->avatar_url);
@@ -447,14 +423,14 @@ class ProfileController extends Controller
                         Storage::disk('public')->delete($oldPath);
                     }
                 }
-            } catch (\Throwable $e) {}
+            } catch (\Throwable $e) {
+            }
 
-            
-            $filename = 'avatar_' . $user->id . '_' . time() . '.' . $ext;
-            $path = 'avatars/' . $filename;
+            $filename = 'avatar_'.$user->id.'_'.time().'.'.$ext;
+            $path = 'avatars/'.$filename;
             Storage::disk('public')->put($path, $binary);
 
-            $user->avatar_url = '/storage/' . $path;
+            $user->avatar_url = '/storage/'.$path;
             $user->save();
 
             return response()->json([
@@ -464,60 +440,54 @@ class ProfileController extends Controller
                     'id' => $user->id,
                     'avatar' => $user->avatar_url,
                     'avatar_url' => $user->avatar_url,
-                ]
+                ],
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Falha ao enviar avatar (base64): ' . $e->getMessage()
+                'message' => 'Falha ao enviar avatar (base64): '.$e->getMessage(),
             ], 500);
         }
     }
 
-    
     private function parseMultipartData(Request $request): array
     {
         $rawContent = $request->getContent();
         $contentType = $request->header('Content-Type');
-        
-        
-        if (!preg_match('/boundary=(.+)$/', $contentType, $matches)) {
+
+        if (! preg_match('/boundary=(.+)$/', $contentType, $matches)) {
             return [];
         }
-        
-        $boundary = '--' . trim($matches[1]);
+
+        $boundary = '--'.trim($matches[1]);
         $parts = explode($boundary, $rawContent);
         $parsedData = [];
-        
+
         foreach ($parts as $part) {
             if (empty(trim($part)) || $part === '--') {
                 continue;
             }
-            
-            
+
             $headerEnd = strpos($part, "\r\n\r\n");
             if ($headerEnd === false) {
                 continue;
             }
-            
+
             $headers = substr($part, 0, $headerEnd);
             $content = substr($part, $headerEnd + 4);
             $content = rtrim($content, "\r\n-");
-            
-            
+
             if (preg_match('/name="([^"]+)"/', $headers, $matches)) {
                 $fieldName = $matches[1];
-                
-                
+
                 if (preg_match('/filename="([^"]+)"/', $headers, $matches)) {
                     $filename = $matches[1];
-                    
-                    if (!empty($content)) {
-                        
+
+                    if (! empty($content)) {
+
                         $tempPath = tempnam(sys_get_temp_dir(), 'upload_');
                         file_put_contents($tempPath, $content);
-                        
-                        
+
                         $parsedData[$fieldName] = new \Illuminate\Http\UploadedFile(
                             $tempPath,
                             $filename,
@@ -527,12 +497,12 @@ class ProfileController extends Controller
                         );
                     }
                 } else {
-                    
+
                     $parsedData[$fieldName] = $content;
                 }
             }
         }
-        
+
         return $parsedData;
     }
-} 
+}

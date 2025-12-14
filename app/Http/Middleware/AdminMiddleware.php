@@ -8,16 +8,15 @@ use Symfony\Component\HttpFoundation\Response;
 
 class AdminMiddleware
 {
-    
     public function handle(Request $request, Closure $next): Response
     {
-        if (!$request->user() || !$request->user()->isAdmin()) {
+        if (! $request->user() || ! $request->user()->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Access denied. Admin privileges required.'
+                'message' => 'Access denied. Admin privileges required.',
             ], 403);
         }
 
         return $next($request);
     }
-} 
+}

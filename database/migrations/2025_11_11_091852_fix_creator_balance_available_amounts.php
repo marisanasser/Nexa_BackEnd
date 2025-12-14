@@ -1,21 +1,14 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 return new class extends Migration
 {
-    
     public function up(): void
     {
-        
-        
-        
-        
-        
+
         $balances = DB::table('creator_balances')
             ->where('total_earned', '>', 0)
             ->where('available_balance', '=', 0)
@@ -28,12 +21,11 @@ return new class extends Migration
         ]);
 
         foreach ($balances as $balance) {
-            
-            
+
             $amountToAdd = $balance->total_earned - $balance->total_withdrawn;
-            
+
             if ($amountToAdd > 0) {
-                
+
                 DB::table('creator_balances')
                     ->where('id', $balance->id)
                     ->update([
@@ -56,10 +48,5 @@ return new class extends Migration
         ]);
     }
 
-    
-    public function down(): void
-    {
-        
-        
-    }
+    public function down(): void {}
 };

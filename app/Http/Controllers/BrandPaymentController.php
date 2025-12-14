@@ -4,14 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreBrandPaymentMethodRequest;
 use App\Services\PaymentService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Stripe\Stripe;
-use Stripe\Customer;
 use Stripe\Checkout\Session;
+use Stripe\Customer;
+use Stripe\Stripe;
 
 class BrandPaymentController extends Controller
 {
@@ -22,13 +22,12 @@ class BrandPaymentController extends Controller
         $this->paymentService = $paymentService;
     }
 
-
     public function savePaymentMethod(StoreBrandPaymentMethodRequest $request): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = auth()->user();
 
-        if (!$user->isBrand()) {
+        if (! $user->isBrand()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only brands can manage payment methods',
@@ -37,7 +36,7 @@ class BrandPaymentController extends Controller
 
         Log::info('Save payment method request', [
             'user_id' => $user->id,
-            'is_default' => $request->boolean('is_default')
+            'is_default' => $request->boolean('is_default'),
         ]);
 
         try {
@@ -51,30 +50,29 @@ class BrandPaymentController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Payment method added successfully',
-                'data' => $paymentMethod
+                'data' => $paymentMethod,
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to create payment method', [
                 'user_id' => $user->id,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create payment method. Please try again.',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
-
 
     public function getPaymentMethods(): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = auth()->user();
 
-        if (!$user->isBrand()) {
+        if (! $user->isBrand()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only brands can access payment methods',
@@ -95,17 +93,16 @@ class BrandPaymentController extends Controller
                     'is_default' => $method->is_default,
                     'created_at' => $method->created_at,
                 ];
-            })
+            }),
         ]);
     }
-
 
     public function setDefaultPaymentMethod(Request $request): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = auth()->user();
 
-        if (!$user->isBrand()) {
+        if (! $user->isBrand()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only brands can manage payment methods',
@@ -146,13 +143,12 @@ class BrandPaymentController extends Controller
         }
     }
 
-
     public function deletePaymentMethod(Request $request): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = auth()->user();
 
-        if (!$user->isBrand()) {
+        if (! $user->isBrand()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only brands can manage payment methods',
@@ -186,21 +182,20 @@ class BrandPaymentController extends Controller
         }
     }
 
-
     public function createCheckoutSession(Request $request): JsonResponse
     {
         try {
             /** @var \App\Models\User $user */
             $user = auth()->user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
                     'message' => 'User not authenticated',
                 ], 401);
             }
 
-            if (!$user->isBrand()) {
+            if (! $user->isBrand()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Only brands can add payment methods',
@@ -239,15 +234,14 @@ class BrandPaymentController extends Controller
         }
     }
 
-
     public function handleCheckoutSuccess(Request $request): JsonResponse
     {
         try {
 
-          /** @var \App\Models\User $user */
+            /** @var \App\Models\User $user */
             $user = auth()->user();
 
-            if (!$user || !$user->isBrand()) {
+            if (! $user || ! $user->isBrand()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized or not a brand',
@@ -256,7 +250,7 @@ class BrandPaymentController extends Controller
 
             $sessionId = $request->input('session_id') ?? $request->query('session_id');
 
-            if (!$sessionId) {
+            if (! $sessionId) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Session ID is required',
@@ -287,11 +281,10 @@ class BrandPaymentController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to save payment method. ' . $e->getMessage(),
+                'message' => 'Failed to save payment method. '.$e->getMessage(),
             ], 500);
         }
     }
-
 
     public function createFundingCheckout(Request $request): JsonResponse
     {
@@ -299,7 +292,7 @@ class BrandPaymentController extends Controller
             /** @var \App\Models\User $user */
             $user = auth()->user();
 
-            if (!$user->isBrand()) {
+            if (! $user->isBrand()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Only brands can create funding checkout sessions',
@@ -320,12 +313,11 @@ class BrandPaymentController extends Controller
                 ], 422);
             }
 
-
             $chatRoom = \App\Models\ChatRoom::where('room_id', $request->chat_room_id)->first();
             $campaignId = $chatRoom ? $chatRoom->campaign_id : null;
 
             $stripeSecret = config('services.stripe.secret');
-            if (!$stripeSecret) {
+            if (! $stripeSecret) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Stripe is not configured',
@@ -334,10 +326,9 @@ class BrandPaymentController extends Controller
 
             Stripe::setApiKey($stripeSecret);
 
-
             $customerId = $user->stripe_customer_id;
 
-            if (!$customerId) {
+            if (! $customerId) {
                 $customer = Customer::create([
                     'email' => $user->email,
                     'name' => $user->name,
@@ -368,7 +359,6 @@ class BrandPaymentController extends Controller
             $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
             $amount = $request->amount;
 
-
             $checkoutSession = Session::create([
                 'customer' => $customerId,
                 'mode' => 'payment',
@@ -385,8 +375,8 @@ class BrandPaymentController extends Controller
                     ],
                     'quantity' => 1,
                 ]],
-                'success_url' => $frontendUrl . '/brand?component=Pagamentos&offer_funding_success=true&session_id={CHECKOUT_SESSION_ID}&creator_id=' . $request->creator_id . '&chat_room_id=' . urlencode($request->chat_room_id) . '&amount=' . $amount,
-                'cancel_url' => $frontendUrl . '/brand?component=Pagamentos&offer_funding_canceled=true&creator_id=' . $request->creator_id . '&chat_room_id=' . urlencode($request->chat_room_id),
+                'success_url' => $frontendUrl.'/brand?component=Pagamentos&offer_funding_success=true&session_id={CHECKOUT_SESSION_ID}&creator_id='.$request->creator_id.'&chat_room_id='.urlencode($request->chat_room_id).'&amount='.$amount,
+                'cancel_url' => $frontendUrl.'/brand?component=Pagamentos&offer_funding_canceled=true&creator_id='.$request->creator_id.'&chat_room_id='.urlencode($request->chat_room_id),
                 'metadata' => [
                     'user_id' => (string) $user->id,
                     'type' => 'offer_funding',
@@ -425,17 +415,13 @@ class BrandPaymentController extends Controller
         }
     }
 
-
-
-
-
     public function handleOfferFundingSuccess(Request $request): JsonResponse
     {
         try {
             /** @var \App\Models\User $user */
             $user = auth()->user();
 
-            if (!$user || !$user->isBrand()) {
+            if (! $user || ! $user->isBrand()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Only brands can access this endpoint',
@@ -444,7 +430,7 @@ class BrandPaymentController extends Controller
 
             $sessionId = $request->input('session_id') ?? $request->query('session_id');
 
-            if (!$sessionId) {
+            if (! $sessionId) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Session ID is required',
@@ -458,11 +444,9 @@ class BrandPaymentController extends Controller
 
             Stripe::setApiKey(config('services.stripe.secret'));
 
-
             $session = Session::retrieve($sessionId, [
                 'expand' => ['payment_intent', 'payment_intent.charges.data.payment_method_details'],
             ]);
-
 
             $metadata = $session->metadata ?? null;
             $sessionUserId = null;
@@ -473,17 +457,17 @@ class BrandPaymentController extends Controller
                 $sessionUserId = $metadata->user_id ?? null;
             }
 
-            if (!$sessionUserId || (string)$sessionUserId !== (string)$user->id) {
+            if (! $sessionUserId || (string) $sessionUserId !== (string) $user->id) {
                 Log::warning('Session does not belong to user', [
                     'session_user_id' => $sessionUserId,
                     'authenticated_user_id' => $user->id,
                 ]);
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Invalid session',
                 ], 403);
             }
-
 
             if ($session->payment_status !== 'paid') {
                 return response()->json([
@@ -491,7 +475,6 @@ class BrandPaymentController extends Controller
                     'message' => 'Payment not completed',
                 ], 400);
             }
-
 
             $amount = null;
             if (is_array($metadata)) {
@@ -502,19 +485,17 @@ class BrandPaymentController extends Controller
 
             $transactionAmount = $amount ? (float) $amount : ($session->amount_total / 100);
 
-
             $paymentIntentId = $session->payment_intent;
             if (is_object($paymentIntentId)) {
                 $paymentIntentId = $paymentIntentId->id;
             }
 
-            if (!$paymentIntentId) {
+            if (! $paymentIntentId) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Payment intent not found',
                 ], 400);
             }
-
 
             $existingTransaction = \App\Models\Transaction::where('stripe_payment_intent_id', $paymentIntentId)
                 ->where('user_id', $user->id)
@@ -525,7 +506,6 @@ class BrandPaymentController extends Controller
                     'transaction_id' => $existingTransaction->id,
                     'user_id' => $user->id,
                 ]);
-
 
                 $this->createOfferFundingNotification($user->id, $transactionAmount, $metadata, $existingTransaction->id);
 
@@ -539,7 +519,6 @@ class BrandPaymentController extends Controller
                 ]);
             }
 
-
             $paymentIntent = \Stripe\PaymentIntent::retrieve($paymentIntentId, [
                 'expand' => ['charges.data.payment_method_details'],
             ]);
@@ -551,13 +530,12 @@ class BrandPaymentController extends Controller
                 ], 400);
             }
 
-
             $charge = null;
             $cardBrand = null;
             $cardLast4 = null;
             $cardHolderName = null;
 
-            if (!empty($paymentIntent->charges->data)) {
+            if (! empty($paymentIntent->charges->data)) {
                 $charge = $paymentIntent->charges->data[0];
                 $paymentMethodDetails = $charge->payment_method_details->card ?? null;
                 if ($paymentMethodDetails) {
@@ -591,7 +569,6 @@ class BrandPaymentController extends Controller
                     'paid_at' => now(),
                 ]);
 
-
                 $campaignId = null;
                 if (is_array($metadata)) {
                     $campaignId = $metadata['campaign_id'] ?? null;
@@ -623,7 +600,6 @@ class BrandPaymentController extends Controller
                     'amount' => $transactionAmount,
                 ]);
 
-
                 $this->createOfferFundingNotification($user->id, $transactionAmount, $metadata, $transaction->id);
 
                 return response()->json([
@@ -652,21 +628,18 @@ class BrandPaymentController extends Controller
         }
     }
 
-
-
     public function checkFundingStatus(Request $request): JsonResponse
     {
         try {
-          /** @var \App\Models\User $user */
+            /** @var \App\Models\User $user */
             $user = auth()->user();
 
-            if (!$user || !$user->isBrand()) {
+            if (! $user || ! $user->isBrand()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Only brands can access this endpoint',
                 ], 403);
             }
-
 
             $hasFunding = \App\Models\Transaction::where('user_id', $user->id)
                 ->where('status', 'paid')
@@ -675,7 +648,6 @@ class BrandPaymentController extends Controller
                         ->orWhereJsonContains('payment_data->type', 'platform_funding');
                 })
                 ->exists();
-
 
             $brandBalance = \App\Models\BrandBalance::where('brand_id', $user->id)->first();
             $hasBalance = $brandBalance && $brandBalance->total_funded > 0;
@@ -727,7 +699,6 @@ class BrandPaymentController extends Controller
                 $amount,
                 $fundingData
             );
-
 
             \App\Services\NotificationService::sendSocketNotification($userId, $notification);
 

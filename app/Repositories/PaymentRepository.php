@@ -3,10 +3,10 @@
 namespace App\Repositories;
 
 use App\Models\BrandPaymentMethod;
-use App\Models\User;
-use App\Models\SubscriptionPlan;
 use App\Models\Subscription as LocalSubscription;
+use App\Models\SubscriptionPlan;
 use App\Models\Transaction;
+use App\Models\User;
 
 class PaymentRepository
 {
@@ -39,7 +39,7 @@ class PaymentRepository
     {
         $user->update(['stripe_customer_id' => $stripeCustomerId]);
     }
-    
+
     public function updateUserDefaultPaymentMethod(User $user, ?string $stripePaymentMethodId): void
     {
         $user->update(['stripe_payment_method_id' => $stripePaymentMethodId]);

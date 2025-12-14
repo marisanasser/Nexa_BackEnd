@@ -7,13 +7,10 @@ use Illuminate\Support\Facades\File;
 
 class SetupStorageDirectories extends Command
 {
-    
     protected $signature = 'storage:setup-directories';
 
-    
     protected $description = 'Create all necessary storage directories if they do not exist';
 
-    
     public function handle()
     {
         $this->info('Setting up storage directories...');
@@ -33,7 +30,7 @@ class SetupStorageDirectories extends Command
         $exists = 0;
 
         foreach ($directories as $directory) {
-            if (!File::exists($directory)) {
+            if (! File::exists($directory)) {
                 File::makeDirectory($directory, 0755, true);
                 $this->line("✓ Created: {$directory}");
                 $created++;
@@ -44,11 +41,11 @@ class SetupStorageDirectories extends Command
         }
 
         $this->newLine();
-        
+
         if ($created > 0) {
             $this->info("✓ Successfully created {$created} directory(ies)");
         }
-        
+
         if ($exists > 0) {
             $this->info("• {$exists} directory(ies) already exist");
         }
@@ -59,4 +56,3 @@ class SetupStorageDirectories extends Command
         return 0;
     }
 }
-

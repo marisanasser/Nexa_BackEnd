@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    
     public function up(): void
     {
         Schema::create('brand_payment_methods', function (Blueprint $table) {
@@ -21,15 +20,14 @@ return new class extends Migration
             $table->boolean('is_default')->default(false);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
-            
+
             $table->unique(['user_id', 'card_hash']);
             $table->index(['user_id', 'is_default']);
         });
     }
 
-    
     public function down(): void
     {
         Schema::dropIfExists('brand_payment_methods');
     }
-}; 
+};

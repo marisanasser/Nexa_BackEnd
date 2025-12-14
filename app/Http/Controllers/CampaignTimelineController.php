@@ -4,19 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\CampaignTimeline;
 use App\Models\Contract;
-use App\Models\User;
-use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Log;
 use App\Services\NotificationService;
-use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class CampaignTimelineController extends Controller
 {
-    
     public function index(Request $request): JsonResponse
     {
         $request->validate([
@@ -24,12 +20,11 @@ class CampaignTimelineController extends Controller
         ]);
 
         $contract = Contract::findOrFail($request->contract_id);
-        
-        
+
         if (Auth::user()->role === 'brand' && $contract->brand_id !== Auth::id()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
-        
+
         if (Auth::user()->role === 'creator' && $contract->creator_id !== Auth::id()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
@@ -42,7 +37,6 @@ class CampaignTimelineController extends Controller
         ]);
     }
 
-    
     public function createMilestones(Request $request): JsonResponse
     {
         $request->validate([
@@ -50,22 +44,18 @@ class CampaignTimelineController extends Controller
         ]);
 
         $contract = Contract::with('offer')->findOrFail($request->contract_id);
-        
-        
+
         if (Auth::user()->role !== 'brand' || $contract->brand_id !== Auth::id()) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
-        
         if ($contract->timeline()->exists()) {
             return response()->json(['error' => 'Timeline já existe para este contrato'], 400);
         }
 
-        
-        
         $startDate = $contract->offer?->created_at ?? $contract->created_at ?? now();
         $totalDays = $contract->estimated_days ?? 7;
-        
+
         $milestones = [
             [
                 'milestone_type' => 'script_submission',
@@ -108,42 +98,39 @@ class CampaignTimelineController extends Controller
             \Log::error('Failed to create timeline milestones', [
                 'contract_id' => $contract->id,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'success' => false,
-                'error' => 'Falha ao criar milestones da timeline: ' . $e->getMessage()
+                'error' => 'Falha ao criar milestones da timeline: '.$e->getMessage(),
             ], 500);
         }
     }
 
-    
     public function uploadFile(Request $request): JsonResponse
     {
         $request->validate([
             'milestone_id' => 'required|exists:campaign_timelines,id',
-            'file' => 'required|file|max:10240', 
+            'file' => 'required|file|max:10240',
         ]);
 
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
-        
-        
+
         if (Auth::user()->role === 'brand' && $contract->brand_id !== Auth::id()) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
-        
+
         if (Auth::user()->role === 'creator' && $contract->creator_id !== Auth::id()) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
-        
         if (Auth::user()->role !== 'creator' && in_array($milestone->milestone_type, ['script_submission', 'video_submission'])) {
             return response()->json(['error' => 'Apenas o criador pode enviar arquivos para milestones de submissão'], 403);
         }
 
-        if (!$milestone->canUploadFile()) {
+        if (! $milestone->canUploadFile()) {
             return response()->json(['error' => 'Não é possível enviar arquivo para este milestone'], 400);
         }
 
@@ -151,8 +138,7 @@ class CampaignTimelineController extends Controller
         $fileName = $file->getClientOriginalName();
         $fileSize = $file->getSize();
         $fileType = $file->getMimeType();
-        
-        
+
         $filePath = $file->store('timeline-files', 'public');
 
         $milestone->uploadFile($filePath, $fileName, $fileSize, $fileType);
@@ -164,7 +150,6 @@ class CampaignTimelineController extends Controller
         ]);
     }
 
-    
     public function approveMilestone(Request $request): JsonResponse
     {
         $request->validate([
@@ -174,26 +159,24 @@ class CampaignTimelineController extends Controller
 
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
-        
-        
+
         if (Auth::user()->role !== 'brand' || $contract->brand_id !== Auth::id()) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
-        if (!$milestone->canBeApproved()) {
+        if (! $milestone->canBeApproved()) {
             return response()->json(['error' => 'Não é possível aprovar este milestone'], 400);
         }
 
         try {
             $milestone->markAsApproved($request->comment);
 
-            
             try {
                 NotificationService::notifyCreatorOfMilestoneApproval($milestone);
             } catch (\Exception $notificationError) {
                 Log::error('Failed to send milestone approval notification', [
                     'milestone_id' => $milestone->id,
-                    'error' => $notificationError->getMessage()
+                    'error' => $notificationError->getMessage(),
                 ]);
             }
 
@@ -206,7 +189,7 @@ class CampaignTimelineController extends Controller
             Log::error('Failed to approve milestone', [
                 'milestone_id' => $milestone->id,
                 'user_id' => Auth::id(),
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return response()->json([
@@ -216,7 +199,6 @@ class CampaignTimelineController extends Controller
         }
     }
 
-    
     public function completeMilestone(Request $request): JsonResponse
     {
         $request->validate([
@@ -225,30 +207,28 @@ class CampaignTimelineController extends Controller
 
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
-        
-        
+
         if (Auth::user()->role === 'brand' && $contract->brand_id !== Auth::id()) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
-        
+
         if (Auth::user()->role === 'creator' && $contract->creator_id !== Auth::id()) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
-        if (!$milestone->canBeCompleted()) {
+        if (! $milestone->canBeCompleted()) {
             return response()->json(['error' => 'Não é possível concluir este milestone'], 400);
         }
 
         $milestone->markAsCompleted();
 
-                    return response()->json([
-                'success' => true,
-                'data' => $milestone->fresh(),
-                'message' => 'Milestone concluído com sucesso',
-            ]);
+        return response()->json([
+            'success' => true,
+            'data' => $milestone->fresh(),
+            'message' => 'Milestone concluído com sucesso',
+        ]);
     }
 
-    
     public function justifyDelay(Request $request): JsonResponse
     {
         $request->validate([
@@ -258,13 +238,12 @@ class CampaignTimelineController extends Controller
 
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
-        
-        
+
         if (Auth::user()->role !== 'brand' || $contract->brand_id !== Auth::id()) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
-        if (!$milestone->canJustifyDelay()) {
+        if (! $milestone->canJustifyDelay()) {
             return response()->json(['error' => 'Não é possível justificar atraso para este milestone'], 400);
         }
 
@@ -277,7 +256,6 @@ class CampaignTimelineController extends Controller
         ]);
     }
 
-    
     public function markAsDelayed(Request $request): JsonResponse
     {
         $request->validate([
@@ -287,12 +265,11 @@ class CampaignTimelineController extends Controller
 
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
-        
-        
+
         if (Auth::user()->role === 'brand' && $contract->brand_id !== Auth::id()) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
-        
+
         if (Auth::user()->role === 'creator' && $contract->creator_id !== Auth::id()) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
@@ -306,7 +283,6 @@ class CampaignTimelineController extends Controller
         ]);
     }
 
-    
     public function downloadFile(Request $request): JsonResponse
     {
         $request->validate([
@@ -315,23 +291,22 @@ class CampaignTimelineController extends Controller
 
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
-        
-        
+
         if (Auth::user()->role === 'brand' && $contract->brand_id !== Auth::id()) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
-        
+
         if (Auth::user()->role === 'creator' && $contract->creator_id !== Auth::id()) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
-        if (!$milestone->file_path) {
+        if (! $milestone->file_path) {
             return response()->json(['error' => 'Nenhum arquivo disponível para download'], 404);
         }
 
-        $filePath = storage_path('app/public/' . $milestone->file_path);
-        
-        if (!file_exists($filePath)) {
+        $filePath = storage_path('app/public/'.$milestone->file_path);
+
+        if (! file_exists($filePath)) {
             return response()->json(['error' => 'Arquivo não encontrado'], 404);
         }
 
@@ -346,7 +321,6 @@ class CampaignTimelineController extends Controller
         ]);
     }
 
-    
     public function extendTimeline(Request $request): JsonResponse
     {
         $request->validate([
@@ -357,8 +331,7 @@ class CampaignTimelineController extends Controller
 
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
-        
-        
+
         if (Auth::user()->role !== 'brand' || $contract->brand_id !== Auth::id()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
@@ -375,7 +348,6 @@ class CampaignTimelineController extends Controller
         ]);
     }
 
-    
     public function getStatistics(Request $request): JsonResponse
     {
         $request->validate([
@@ -383,19 +355,17 @@ class CampaignTimelineController extends Controller
         ]);
 
         $contract = Contract::findOrFail($request->contract_id);
-        
-        
+
         if (Auth::user()->role === 'brand' && $contract->brand_id !== Auth::id()) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
-        
+
         if (Auth::user()->role === 'creator' && $contract->creator_id !== Auth::id()) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
-        
         $timeline = $contract->timeline()->with('deliveryMaterials.creator')->get();
-        
+
         $statistics = [
             'total_milestones' => $timeline->count(),
             'completed_milestones' => $timeline->where('status', 'completed')->count(),
@@ -405,7 +375,7 @@ class CampaignTimelineController extends Controller
             'overdue_milestones' => $timeline->filter(function ($milestone) {
                 return $milestone->isOverdue();
             })->count(),
-            'progress_percentage' => $timeline->count() > 0 ? 
+            'progress_percentage' => $timeline->count() > 0 ?
                 round(($timeline->where('status', 'completed')->count() / $timeline->count()) * 100) : 0,
         ];
 
@@ -415,7 +385,6 @@ class CampaignTimelineController extends Controller
         ]);
     }
 
-    
     public function rejectMilestone(Request $request): JsonResponse
     {
         $request->validate([
@@ -425,13 +394,12 @@ class CampaignTimelineController extends Controller
 
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
-        
-        
+
         if (Auth::user()->role !== 'brand' || $contract->brand_id !== Auth::id()) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
-        if (!$milestone->canBeApproved()) {
+        if (! $milestone->canBeApproved()) {
             return response()->json(['error' => 'Não é possível rejeitar este milestone'], 400);
         }
 
@@ -441,13 +409,12 @@ class CampaignTimelineController extends Controller
                 'comment' => $request->comment,
             ]);
 
-            
             try {
                 NotificationService::notifyCreatorOfMilestoneRejection($milestone);
             } catch (\Exception $notificationError) {
                 Log::error('Failed to send milestone rejection notification', [
                     'milestone_id' => $milestone->id,
-                    'error' => $notificationError->getMessage()
+                    'error' => $notificationError->getMessage(),
                 ]);
             }
 
@@ -460,7 +427,7 @@ class CampaignTimelineController extends Controller
             Log::error('Failed to reject milestone', [
                 'milestone_id' => $milestone->id,
                 'user_id' => Auth::id(),
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return response()->json([
@@ -470,7 +437,6 @@ class CampaignTimelineController extends Controller
         }
     }
 
-    
     public function checkAndSendDelayWarnings(): JsonResponse
     {
         try {
@@ -484,20 +450,19 @@ class CampaignTimelineController extends Controller
             $warningsSent = 0;
             foreach ($overdueMilestones as $milestone) {
                 try {
-                    
+
                     NotificationService::notifyCreatorOfMilestoneDelay($milestone);
-                    
-                    
+
                     $milestone->update([
                         'delay_notified_at' => now(),
                         'is_delayed' => true,
                     ]);
-                    
+
                     $warningsSent++;
                 } catch (\Exception $e) {
                     Log::error('Failed to send delay warning for milestone', [
                         'milestone_id' => $milestone->id,
-                        'error' => $e->getMessage()
+                        'error' => $e->getMessage(),
                     ]);
                 }
             }
@@ -509,7 +474,7 @@ class CampaignTimelineController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to check and send delay warnings', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return response()->json([
@@ -518,4 +483,4 @@ class CampaignTimelineController extends Controller
             ], 500);
         }
     }
-} 
+}

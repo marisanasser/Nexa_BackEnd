@@ -6,14 +6,13 @@ use App\Models\ConnectionRequest;
 use App\Models\DirectChatRoom;
 use App\Models\DirectMessage;
 use App\Models\User;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
 class ConnectionController extends Controller
 {
-    
     public function sendConnectionRequest(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -34,7 +33,6 @@ class ConnectionController extends Controller
         $user = Auth::user();
         $receiver = User::find($request->receiver_id);
 
-        
         if ($user->id === $receiver->id) {
             return response()->json([
                 'success' => false,
@@ -42,15 +40,13 @@ class ConnectionController extends Controller
             ], 400);
         }
 
-        
-        if (!$user->isBrand() || !$receiver->isCreator()) {
+        if (! $user->isBrand() || ! $receiver->isCreator()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only brands can send connection requests to creators',
             ], 403);
         }
 
-        
         $existingRequest = ConnectionRequest::where('sender_id', $user->id)
             ->where('receiver_id', $receiver->id)
             ->first();
@@ -62,7 +58,6 @@ class ConnectionController extends Controller
             ], 400);
         }
 
-        
         $connectionRequest = ConnectionRequest::create([
             'sender_id' => $user->id,
             'receiver_id' => $receiver->id,
@@ -78,24 +73,21 @@ class ConnectionController extends Controller
         ], 201);
     }
 
-    
     public function acceptConnectionRequest(Request $request, int $requestId): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
         $connectionRequest = ConnectionRequest::findOrFail($requestId);
 
-        if (!$connectionRequest->canBeAcceptedBy($user)) {
+        if (! $connectionRequest->canBeAcceptedBy($user)) {
             return response()->json([
                 'success' => false,
                 'message' => 'You cannot accept this connection request',
             ], 403);
         }
 
-        
         $connectionRequest->accept();
 
-        
         $directChatRoom = DirectChatRoom::findOrCreateRoom(
             $connectionRequest->sender_id,
             $connectionRequest->receiver_id,
@@ -112,14 +104,13 @@ class ConnectionController extends Controller
         ]);
     }
 
-    
     public function rejectConnectionRequest(Request $request, int $requestId): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
         $connectionRequest = ConnectionRequest::findOrFail($requestId);
 
-        if (!$connectionRequest->canBeRejectedBy($user)) {
+        if (! $connectionRequest->canBeRejectedBy($user)) {
             return response()->json([
                 'success' => false,
                 'message' => 'You cannot reject this connection request',
@@ -134,14 +125,13 @@ class ConnectionController extends Controller
         ]);
     }
 
-    
     public function cancelConnectionRequest(Request $request, int $requestId): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
         $connectionRequest = ConnectionRequest::findOrFail($requestId);
 
-        if (!$connectionRequest->canBeCancelledBy($user)) {
+        if (! $connectionRequest->canBeCancelledBy($user)) {
             return response()->json([
                 'success' => false,
                 'message' => 'You cannot cancel this connection request',
@@ -156,12 +146,11 @@ class ConnectionController extends Controller
         ]);
     }
 
-    
     public function getConnectionRequests(Request $request): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        $type = $request->get('type', 'received'); 
+        $type = $request->get('type', 'received');
 
         $query = ConnectionRequest::with(['sender', 'receiver', 'campaign']);
 
@@ -171,7 +160,6 @@ class ConnectionController extends Controller
             $query->byReceiver($user->id);
         }
 
-        
         if ($request->has('status')) {
             $status = $request->get('status');
             if (in_array($status, ['pending', 'accepted', 'rejected', 'cancelled'])) {
@@ -187,7 +175,6 @@ class ConnectionController extends Controller
         ]);
     }
 
-    
     public function getDirectChatRooms(): JsonResponse
     {
         /** @var \App\Models\User $user */
@@ -197,21 +184,21 @@ class ConnectionController extends Controller
         if ($user->isBrand()) {
             $directChatRooms = DirectChatRoom::where('brand_id', $user->id)
                 ->with(['creator', 'lastMessage.sender'])
-                ->orderBy('created_at', 'desc') 
-                ->orderBy('last_message_at', 'desc') 
+                ->orderBy('created_at', 'desc')
+                ->orderBy('last_message_at', 'desc')
                 ->get();
         } elseif ($user->isCreator()) {
             $directChatRooms = DirectChatRoom::where('creator_id', $user->id)
                 ->with(['brand', 'lastMessage.sender'])
-                ->orderBy('created_at', 'desc') 
-                ->orderBy('last_message_at', 'desc') 
+                ->orderBy('created_at', 'desc')
+                ->orderBy('last_message_at', 'desc')
                 ->get();
         }
 
         $formattedRooms = $directChatRooms->map(function ($room) use ($user) {
             $otherUser = $room->getOtherUser($user->id);
             $lastMessage = $room->lastMessage->first();
-            
+
             return [
                 'id' => $room->id,
                 'room_id' => $room->room_id,
@@ -243,27 +230,25 @@ class ConnectionController extends Controller
         ]);
     }
 
-    
     public function getDirectMessages(Request $request, string $roomId): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
         $room = DirectChatRoom::where('room_id', $roomId)
             ->where(function ($query) use ($user) {
                 $query->where('brand_id', $user->id)
-                      ->orWhere('creator_id', $user->id);
+                    ->orWhere('creator_id', $user->id);
             })
             ->first();
 
-        if (!$room) {
+        if (! $room) {
             return response()->json([
                 'success' => false,
                 'message' => 'Direct chat room not found',
             ], 404);
         }
 
-        
         $room->messages()
             ->where('sender_id', '!=', $user->id)
             ->where('is_read', false)
@@ -307,13 +292,12 @@ class ConnectionController extends Controller
         ]);
     }
 
-    
     public function sendDirectMessage(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'room_id' => 'required|string',
             'message' => 'required_without:file|string|max:1000',
-            'file' => 'nullable|file|max:10240', 
+            'file' => 'nullable|file|max:10240',
         ]);
 
         if ($validator->fails()) {
@@ -326,15 +310,15 @@ class ConnectionController extends Controller
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
         $room = DirectChatRoom::where('room_id', $request->room_id)
             ->where(function ($query) use ($user) {
                 $query->where('brand_id', $user->id)
-                      ->orWhere('creator_id', $user->id);
+                    ->orWhere('creator_id', $user->id);
             })
             ->first();
 
-        if (!$room) {
+        if (! $room) {
             return response()->json([
                 'success' => false,
                 'message' => 'Direct chat room not found',
@@ -348,17 +332,15 @@ class ConnectionController extends Controller
             'message_type' => 'text',
         ];
 
-        
         if ($request->hasFile('file')) {
             $file = $request->file('file');
-            $fileName = time() . '_' . $file->getClientOriginalName();
+            $fileName = time().'_'.$file->getClientOriginalName();
             $filePath = $file->storeAs('direct-chat-files', $fileName, 'public');
-            
-            
+
             if (empty($messageData['message'])) {
                 $messageData['message'] = $file->getClientOriginalName();
             }
-            
+
             $messageData['message_type'] = $this->getFileType($file->getMimeType());
             $messageData['file_path'] = $filePath;
             $messageData['file_name'] = $file->getClientOriginalName();
@@ -368,10 +350,8 @@ class ConnectionController extends Controller
 
         $message = DirectMessage::create($messageData);
 
-        
         $room->update(['last_message_at' => now()]);
 
-        
         $message->load('sender');
 
         return response()->json([
@@ -396,13 +376,12 @@ class ConnectionController extends Controller
         ]);
     }
 
-    
     public function searchCreators(Request $request): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        if (!$user->isBrand()) {
+        if (! $user->isBrand()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only brands can search for creators',
@@ -411,18 +390,15 @@ class ConnectionController extends Controller
 
         $query = User::where('role', 'creator');
 
-        
         if ($request->has('search')) {
             $search = $request->get('search');
             $query->where('name', 'like', "%{$search}%");
         }
 
-        
         if ($request->has('state')) {
             $query->where('state', $request->get('state'));
         }
 
-        
         if ($request->has('verified')) {
             $query->where('student_verified', $request->get('verified'));
         }
@@ -437,12 +413,12 @@ class ConnectionController extends Controller
         ]);
     }
 
-    
     private function getFileType(string $mimeType): string
     {
         if (str_starts_with($mimeType, 'image/')) {
             return 'image';
         }
+
         return 'file';
     }
-} 
+}

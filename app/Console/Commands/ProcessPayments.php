@@ -8,13 +8,10 @@ use Illuminate\Support\Facades\Log;
 
 class ProcessPayments extends Command
 {
-    
     protected $signature = 'payments:process';
 
-    
     protected $description = 'Process pending job payments';
 
-    
     public function handle()
     {
         $this->info('Starting payment processing...');
@@ -35,8 +32,8 @@ class ProcessPayments extends Command
                 }
             } catch (\Exception $e) {
                 $failed++;
-                $this->error("Payment {$payment->id} failed with error: " . $e->getMessage());
-                
+                $this->error("Payment {$payment->id} failed with error: ".$e->getMessage());
+
                 Log::error('Payment processing error', [
                     'payment_id' => $payment->id,
                     'error' => $e->getMessage(),
@@ -48,4 +45,4 @@ class ProcessPayments extends Command
 
         return 0;
     }
-} 
+}

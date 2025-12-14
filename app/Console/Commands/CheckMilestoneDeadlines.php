@@ -2,29 +2,24 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Models\CampaignTimeline;
-use App\Models\Contract;
 use App\Models\User;
 use App\Services\NotificationService;
-use Carbon\Carbon;
+use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 class CheckMilestoneDeadlines extends Command
 {
-    
     protected $signature = 'milestones:check-deadlines';
 
-    
     protected $description = 'Check milestone deadlines and send automatic delay warnings';
 
-    
     public function handle()
     {
         $this->info('Checking milestone deadlines...');
 
         try {
-            
+
             $overdueMilestones = CampaignTimeline::where('deadline', '<', now())
                 ->where('status', 'pending')
                 ->where('is_delayed', false)
@@ -34,6 +29,7 @@ class CheckMilestoneDeadlines extends Command
 
             if ($overdueMilestones->isEmpty()) {
                 $this->info('No overdue milestones found.');
+
                 return 0;
             }
 
@@ -46,10 +42,8 @@ class CheckMilestoneDeadlines extends Command
                 try {
                     $this->info("Processing milestone: {$milestone->title} (ID: {$milestone->id})");
 
-                    
                     NotificationService::notifyCreatorOfMilestoneDelay($milestone);
-                    
-                    
+
                     $milestone->update([
                         'delay_notified_at' => now(),
                         'is_delayed' => true,
@@ -58,14 +52,13 @@ class CheckMilestoneDeadlines extends Command
                     $warningsSent++;
                     $this->info("✓ Warning sent for milestone: {$milestone->title}");
 
-                    
                     $this->checkAndApplyPenalties($milestone);
 
                 } catch (\Exception $e) {
                     $this->error("Failed to process milestone {$milestone->id}: {$e->getMessage()}");
                     Log::error('Failed to process milestone in command', [
                         'milestone_id' => $milestone->id,
-                        'error' => $e->getMessage()
+                        'error' => $e->getMessage(),
                     ]);
                 }
             }
@@ -80,41 +73,37 @@ class CheckMilestoneDeadlines extends Command
             $this->error("Command failed: {$e->getMessage()}");
             Log::error('CheckMilestoneDeadlines command failed', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
+
             return 1;
         }
     }
 
-    
     private function checkAndApplyPenalties(CampaignTimeline $milestone)
     {
         try {
-            
+
             $daysOverdue = $milestone->getDaysOverdue();
-            
-            if ($daysOverdue >= 7 && !$milestone->penalty_applied) {
+
+            if ($daysOverdue >= 7 && ! $milestone->penalty_applied) {
                 $this->info("Applying penalty for milestone: {$milestone->title} (overdue for {$daysOverdue} days)");
-                
-                
+
                 $creator = $milestone->contract->creator;
-                
-                
+
                 $creator->update([
                     'penalty_until' => now()->addDays(7),
                     'penalty_reason' => 'Milestone overdue for more than 7 days',
                     'penalty_milestone_id' => $milestone->id,
                 ]);
 
-                
                 $milestone->update([
                     'penalty_applied' => true,
                     'penalty_applied_at' => now(),
                 ]);
 
-                
                 $this->sendPenaltyNotification($milestone, $creator);
-                
+
                 $this->info("✓ Penalty applied to creator: {$creator->name}");
             }
 
@@ -122,16 +111,15 @@ class CheckMilestoneDeadlines extends Command
             $this->error("Failed to apply penalty for milestone {$milestone->id}: {$e->getMessage()}");
             Log::error('Failed to apply penalty', [
                 'milestone_id' => $milestone->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
 
-    
     private function sendPenaltyNotification(CampaignTimeline $milestone, User $creator)
     {
         try {
-            
+
             \App\Models\Notification::create([
                 'user_id' => $creator->id,
                 'type' => 'milestone_penalty',
@@ -148,14 +136,12 @@ class CheckMilestoneDeadlines extends Command
                 'read_at' => null,
             ]);
 
-            
             try {
-                
-                
+
             } catch (\Exception $emailError) {
                 Log::error('Failed to send penalty email', [
                     'creator_id' => $creator->id,
-                    'error' => $emailError->getMessage()
+                    'error' => $emailError->getMessage(),
                 ]);
             }
 
@@ -163,8 +149,8 @@ class CheckMilestoneDeadlines extends Command
             Log::error('Failed to send penalty notification', [
                 'creator_id' => $creator->id,
                 'milestone_id' => $milestone->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
-} 
+}

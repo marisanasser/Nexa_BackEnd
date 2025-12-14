@@ -4,7 +4,6 @@ namespace Database\Factories;
 
 use App\Models\Offer;
 use App\Models\User;
-use App\Models\Campaign;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class OfferFactory extends Factory
@@ -24,7 +23,7 @@ class OfferFactory extends Factory
             'requirements' => json_encode([
                 'format' => 'video',
                 'duration' => '60 seconds',
-                'style' => 'modern'
+                'style' => 'modern',
             ]),
             'status' => 'pending',
             'expires_at' => now()->addDays(30),
@@ -57,4 +56,4 @@ class OfferFactory extends Factory
             'expired_at' => now()->subDay(),
         ]);
     }
-} 
+}

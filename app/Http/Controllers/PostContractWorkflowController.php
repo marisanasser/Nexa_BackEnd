@@ -4,23 +4,20 @@ namespace App\Http\Controllers;
 
 use App\Models\Contract;
 use App\Models\User;
-use App\Models\Withdrawal;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
-use App\Services\NotificationService;
+use Illuminate\Support\Facades\Validator;
 
 class PostContractWorkflowController extends Controller
 {
-    
     public function getContractsWaitingForReview(): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        if (!$user->isBrand()) {
+        if (! $user->isBrand()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only brands can access this endpoint',
@@ -69,13 +66,12 @@ class PostContractWorkflowController extends Controller
         }
     }
 
-    
     public function getContractsWithPaymentAvailable(): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        if (!$user->isCreator()) {
+        if (! $user->isCreator()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Only creators can access this endpoint',
@@ -134,7 +130,6 @@ class PostContractWorkflowController extends Controller
         }
     }
 
-    
     public function getWorkHistory(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -169,7 +164,7 @@ class PostContractWorkflowController extends Controller
 
             $contracts->getCollection()->transform(function ($contract) use ($type) {
                 $otherUser = $type === 'creator' ? $contract->brand : $contract->creator;
-                
+
                 return [
                     'id' => $contract->id,
                     'title' => $contract->title,
@@ -194,7 +189,6 @@ class PostContractWorkflowController extends Controller
                 ];
             });
 
-            
             $stats = $this->calculateWorkHistoryStats($user, $type);
 
             return response()->json([
@@ -219,7 +213,6 @@ class PostContractWorkflowController extends Controller
         }
     }
 
-    
     private function calculateWorkHistoryStats(User $user, string $type): array
     {
         $query = Contract::where('status', 'completed')
@@ -233,14 +226,13 @@ class PostContractWorkflowController extends Controller
 
         $totalContracts = $query->count();
         $totalEarnings = $type === 'creator' ? $query->sum('creator_amount') : $query->sum('budget');
-        
-        
+
         $reviews = $query->with('review')->get()->pluck('review')->filter();
         $averageRating = $reviews->count() > 0 ? $reviews->avg('rating') : 0;
 
         return [
             'total_contracts' => $totalContracts,
-            'total_earnings' => $type === 'creator' ? 'R$ ' . number_format($totalEarnings, 2, ',', '.') : 'R$ ' . number_format($totalEarnings, 2, ',', '.'),
+            'total_earnings' => $type === 'creator' ? 'R$ '.number_format($totalEarnings, 2, ',', '.') : 'R$ '.number_format($totalEarnings, 2, ',', '.'),
             'average_rating' => round($averageRating, 1),
             'total_reviews' => $reviews->count(),
         ];

@@ -2,9 +2,4 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-
-class CreatorReviewController extends Controller
-{
-    
-}
+class CreatorReviewController extends Controller {}

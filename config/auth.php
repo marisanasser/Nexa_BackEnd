@@ -2,28 +2,22 @@
 
 return [
 
-    
-
     'defaults' => [
         'guard' => 'web',
         'passwords' => 'users',
     ],
-
-    
 
     'guards' => [
         'web' => [
             'driver' => 'session',
             'provider' => 'users',
         ],
-        
+
         'api' => [
             'driver' => 'sanctum',
             'provider' => 'users',
         ],
     ],
-
-    
 
     'providers' => [
         'users' => [
@@ -31,13 +25,7 @@ return [
             'model' => App\Models\User::class,
         ],
 
-        
-        
-        
-        
     ],
-
-    
 
     'passwords' => [
         'users' => [
@@ -47,8 +35,6 @@ return [
             'throttle' => 60,
         ],
     ],
-
-    
 
     'password_timeout' => 10800,
 

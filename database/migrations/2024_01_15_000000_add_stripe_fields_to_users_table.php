@@ -6,21 +6,19 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
             $table->string('stripe_account_id')->nullable()->after('premium_expires_at');
             $table->string('stripe_payment_method_id')->nullable()->after('stripe_account_id');
             $table->enum('stripe_verification_status', ['pending', 'verified', 'failed'])->default('pending')->after('stripe_payment_method_id');
-            
+
             $table->index(['stripe_account_id']);
             $table->index(['stripe_payment_method_id']);
             $table->index(['stripe_verification_status']);
         });
     }
 
-    
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {

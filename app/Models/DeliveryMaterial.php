@@ -22,7 +22,7 @@ class DeliveryMaterial extends Model
         'media_type',
         'title',
         'description',
-        'status', 
+        'status',
         'submitted_at',
         'reviewed_at',
         'reviewed_by',
@@ -36,7 +36,6 @@ class DeliveryMaterial extends Model
         'file_size' => 'integer',
     ];
 
-    
     public function contract(): BelongsTo
     {
         return $this->belongsTo(Contract::class);
@@ -62,32 +61,29 @@ class DeliveryMaterial extends Model
         return $this->belongsTo(CampaignTimeline::class, 'milestone_id');
     }
 
-    
     public function getFileUrlAttribute(): string
     {
-        return asset('storage/' . $this->file_path);
+        return asset('storage/'.$this->file_path);
     }
 
     public function getFormattedFileSizeAttribute(): string
     {
         $bytes = $this->file_size;
         $units = ['B', 'KB', 'MB', 'GB'];
-        
+
         for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
             $bytes /= 1024;
         }
-        
-        return round($bytes, 2) . ' ' . $units[$i];
+
+        return round($bytes, 2).' '.$units[$i];
     }
 
     public function getThumbnailUrlAttribute(): string
     {
-        
-        
+
         return $this->file_url;
     }
 
-    
     public function isPending(): bool
     {
         return $this->status === 'pending';
@@ -130,7 +126,7 @@ class DeliveryMaterial extends Model
             'reviewed_at' => now(),
             'reviewed_by' => $brandId,
             'comment' => $comment,
-            'rejection_reason' => null
+            'rejection_reason' => null,
         ]);
 
         return true;
@@ -143,7 +139,7 @@ class DeliveryMaterial extends Model
             'reviewed_at' => now(),
             'reviewed_by' => $brandId,
             'rejection_reason' => $reason,
-            'comment' => $comment
+            'comment' => $comment,
         ]);
 
         return true;
@@ -157,6 +153,7 @@ class DeliveryMaterial extends Model
         if ($this->isRejected()) {
             return 'red';
         }
+
         return 'yellow';
     }
 
@@ -168,6 +165,7 @@ class DeliveryMaterial extends Model
         if ($this->isRejected()) {
             return '❌';
         }
+
         return '⏳';
     }
 
@@ -184,4 +182,4 @@ class DeliveryMaterial extends Model
                 return '📎';
         }
     }
-} 
+}

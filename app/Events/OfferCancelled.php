@@ -2,11 +2,9 @@
 
 namespace App\Events;
 
-use App\Models\Offer;
 use App\Models\ChatRoom;
-use Illuminate\Broadcasting\Channel;
+use App\Models\Offer;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
@@ -17,7 +15,9 @@ class OfferCancelled implements ShouldBroadcast
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public $offer;
+
     public $chatRoom;
+
     public $senderId;
 
     /**
@@ -38,7 +38,7 @@ class OfferCancelled implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('chat.' . $this->chatRoom->room_id),
+            new PrivateChannel('chat.'.$this->chatRoom->room_id),
         ];
     }
 

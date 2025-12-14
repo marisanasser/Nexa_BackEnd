@@ -4,11 +4,7 @@ use Illuminate\Support\Str;
 
 return [
 
-    
-
     'default' => env('CACHE_DRIVER', 'file'),
-
-    
 
     'stores' => [
 
@@ -42,7 +38,7 @@ return [
                 env('MEMCACHED_PASSWORD'),
             ],
             'options' => [
-                
+
             ],
             'servers' => [
                 [
@@ -73,8 +69,6 @@ return [
         ],
 
     ],
-
-    
 
     'prefix' => env('CACHE_PREFIX', Str::slug(env('APP_NAME', 'laravel'), '_').'_cache_'),
 

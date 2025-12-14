@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Services\NotificationService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Services\NotificationService;
 
 class Bid extends Model
 {
@@ -20,7 +20,7 @@ class Bid extends Model
         'estimated_delivery_days',
         'status',
         'accepted_at',
-        'rejection_reason'
+        'rejection_reason',
     ];
 
     protected $casts = [
@@ -28,7 +28,6 @@ class Bid extends Model
         'accepted_at' => 'datetime',
     ];
 
-    
     public function campaign(): BelongsTo
     {
         return $this->belongsTo(Campaign::class);
@@ -39,7 +38,6 @@ class Bid extends Model
         return $this->belongsTo(User::class);
     }
 
-    
     public function scopePending($query)
     {
         return $query->where('status', 'pending');
@@ -55,7 +53,6 @@ class Bid extends Model
         return $query->where('status', 'rejected');
     }
 
-    
     public function isPending(): bool
     {
         return $this->status === 'pending';
@@ -78,20 +75,18 @@ class Bid extends Model
 
     public function accept(): bool
     {
-        
+
         $this->campaign->bids()->where('id', '!=', $this->id)->update(['status' => 'rejected']);
-        
+
         $this->update([
             'status' => 'accepted',
-            'accepted_at' => now()
+            'accepted_at' => now(),
         ]);
 
-        
         $this->campaign->update([
-            'final_price' => $this->bid_amount
+            'final_price' => $this->bid_amount,
         ]);
 
-        
         NotificationService::notifyCreatorOfProposalStatus($this, 'accepted');
 
         return true;
@@ -101,10 +96,9 @@ class Bid extends Model
     {
         $this->update([
             'status' => 'rejected',
-            'rejection_reason' => $reason
+            'rejection_reason' => $reason,
         ]);
 
-        
         NotificationService::notifyCreatorOfProposalStatus($this, 'rejected', $reason);
 
         return true;
@@ -113,7 +107,7 @@ class Bid extends Model
     public function withdraw(): bool
     {
         $this->update([
-            'status' => 'withdrawn'
+            'status' => 'withdrawn',
         ]);
 
         return true;

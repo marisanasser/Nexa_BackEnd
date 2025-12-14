@@ -8,13 +8,10 @@ use Illuminate\Support\Facades\Log;
 
 class ExpireOffers extends Command
 {
-    
     protected $signature = 'offers:expire';
 
-    
     protected $description = 'Expire offers that are older than 1 day';
 
-    
     public function handle()
     {
         $this->info('Starting offer expiration process...');
@@ -42,10 +39,9 @@ class ExpireOffers extends Command
 
         $this->info("Expired {$count} offers successfully.");
 
-        
         $messageCount = \App\Models\Message::count();
         $offerMessageCount = \App\Models\Message::where('message_type', 'offer')->count();
-        
+
         Log::info('Message statistics', [
             'total_messages' => $messageCount,
             'offer_messages' => $offerMessageCount,
@@ -54,4 +50,4 @@ class ExpireOffers extends Command
 
         return 0;
     }
-} 
+}

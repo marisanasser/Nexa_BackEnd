@@ -2,10 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class HealthCheckController extends Controller
 {
@@ -26,9 +24,10 @@ class HealthCheckController extends Controller
         ];
 
         // Determine overall status
-        if ($status['services']['database']['status'] !== 'ok' || 
+        if ($status['services']['database']['status'] !== 'ok' ||
             $status['services']['cache']['status'] !== 'ok') {
             $status['status'] = 'error';
+
             return response()->json($status, 503);
         }
 
@@ -41,16 +40,16 @@ class HealthCheckController extends Controller
             $startTime = microtime(true);
             DB::connection()->getPdo();
             $latency = round((microtime(true) - $startTime) * 1000, 2);
-            
+
             return [
                 'status' => 'ok',
-                'latency_ms' => $latency
+                'latency_ms' => $latency,
             ];
         } catch (\Exception $e) {
             return [
                 'status' => 'error',
                 'message' => 'Could not connect to the database',
-                'error' => config('app.debug') ? $e->getMessage() : null
+                'error' => config('app.debug') ? $e->getMessage() : null,
             ];
         }
     }
@@ -65,13 +64,13 @@ class HealthCheckController extends Controller
             return [
                 'status' => 'ok',
                 'driver' => config('cache.default'),
-                'latency_ms' => $latency
+                'latency_ms' => $latency,
             ];
         } catch (\Exception $e) {
             return [
                 'status' => 'error',
                 'message' => 'Could not connect to cache',
-                'error' => config('app.debug') ? $e->getMessage() : null
+                'error' => config('app.debug') ? $e->getMessage() : null,
             ];
         }
     }

@@ -2,25 +2,22 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
 use App\Models\Guide;
 use App\Models\Step;
+use Illuminate\Database\Seeder;
 
 class GuideSeeder extends Seeder
 {
-    
     public function run(): void
     {
-        
+
         $brandGuide = Guide::create([
             'title' => 'Guia Nexa para Marcas',
             'audience' => 'Brand',
             'description' => 'Aprenda como criar e gerenciar campanhas eficazes na plataforma Nexa. Este guia abrange desde a configuração inicial até o monitoramento de resultados.',
-            'created_by' => 1, 
+            'created_by' => 1,
         ]);
 
-        
         $brandSteps = [
             [
                 'title' => 'Definir Objetivo da Campanha',
@@ -58,15 +55,13 @@ class GuideSeeder extends Seeder
             ]);
         }
 
-        
         $creatorGuide = Guide::create([
             'title' => 'Guia Nexa para Criadores',
             'audience' => 'Creator',
             'description' => 'Descubra como maximizar seu sucesso na plataforma Nexa. Este guia abrange desde a otimização do perfil até a entrega de conteúdo de alta qualidade.',
-            'created_by' => 1, 
+            'created_by' => 1,
         ]);
 
-        
         $creatorSteps = [
             [
                 'title' => 'Perfil e Alinhamento de Nicho',

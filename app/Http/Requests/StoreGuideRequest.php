@@ -8,7 +8,7 @@ class StoreGuideRequest extends FormRequest
 {
     public function authorize()
     {
-        
+
         return true;
     }
 

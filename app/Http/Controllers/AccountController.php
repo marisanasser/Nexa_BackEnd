@@ -4,17 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Exception;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
 
 class AccountController extends Controller
 {
-    
     public function removeAccount(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -32,9 +30,8 @@ class AccountController extends Controller
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
-        
-        if (!Hash::check($request->password, $user->password)) {
+
+        if (! Hash::check($request->password, $user->password)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Senha incorreta. Por favor, verifique sua senha.',
@@ -42,7 +39,7 @@ class AccountController extends Controller
         }
 
         try {
-            
+
             Log::info('User account removal initiated', [
                 'user_id' => $user->id,
                 'email' => $user->email,
@@ -51,10 +48,8 @@ class AccountController extends Controller
                 'user_agent' => $request->userAgent(),
             ]);
 
-            
             $user->delete();
 
-            
             $user->tokens()->delete();
 
             return response()->json([
@@ -75,7 +70,6 @@ class AccountController extends Controller
         }
     }
 
-    
     public function restoreAccount(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -92,28 +86,26 @@ class AccountController extends Controller
         }
 
         try {
-            
+
             $user = User::withTrashed()
                 ->where('email', $request->email)
                 ->whereNotNull('deleted_at')
                 ->first();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Nenhuma conta removida encontrada com este e-mail.',
                 ], 404);
             }
 
-            
-            if (!Hash::check($request->password, $user->password)) {
+            if (! Hash::check($request->password, $user->password)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Senha incorreta. Por favor, verifique sua senha.',
                 ], 401);
             }
 
-            
             $daysSinceDeletion = now()->diffInDays($user->deleted_at);
             if ($daysSinceDeletion > 30) {
                 return response()->json([
@@ -122,10 +114,8 @@ class AccountController extends Controller
                 ], 403);
             }
 
-            
             $user->restore();
 
-            
             Log::info('User account restored', [
                 'user_id' => $user->id,
                 'email' => $user->email,
@@ -134,7 +124,6 @@ class AccountController extends Controller
                 'user_agent' => $request->userAgent(),
             ]);
 
-            
             $token = $user->createToken('auth_token')->plainTextToken;
 
             return response()->json([
@@ -166,7 +155,6 @@ class AccountController extends Controller
         }
     }
 
-    
     public function checkRemovedAccount(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -182,20 +170,19 @@ class AccountController extends Controller
         }
 
         try {
-            
+
             $removedUser = User::withTrashed()
                 ->where('email', $request->email)
                 ->whereNotNull('deleted_at')
                 ->first();
 
-            if (!$removedUser) {
+            if (! $removedUser) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Nenhuma conta removida encontrada com este e-mail.',
                 ], 404);
             }
 
-            
             $daysSinceDeletion = now()->diffInDays($removedUser->deleted_at);
             $canRestore = $daysSinceDeletion <= 30;
 
@@ -218,21 +205,20 @@ class AccountController extends Controller
             ], 500);
         }
     }
-    
 
     public function checkAccount(Request $request): JsonResponse
     {
-         $request->validate([
-        'email' => 'required|email',
-    ]);
+        $request->validate([
+            'email' => 'required|email',
+        ]);
 
-    $exists = \App\Models\User::where('email', $request->email)->exists();
+        $exists = \App\Models\User::where('email', $request->email)->exists();
 
-    return response()->json([
-        'exists' => $exists,
-        'message' => $exists 
-            ? 'Email already exists.' 
-            : 'You must regist.',
-    ]);
+        return response()->json([
+            'exists' => $exists,
+            'message' => $exists
+                ? 'Email already exists.'
+                : 'You must regist.',
+        ]);
     }
 }
