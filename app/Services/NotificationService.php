@@ -523,7 +523,8 @@ class NotificationService
                 $sender->id,
                 $sender->name,
                 $messagePreview,
-                'campaign'
+                'campaign',
+                $chatRoom->room_id
             );
             
             
@@ -556,7 +557,8 @@ class NotificationService
                 $sender->id,
                 $sender->name,
                 $messagePreview,
-                'direct'
+                'direct',
+                $chatRoom->room_id
             );
             
             

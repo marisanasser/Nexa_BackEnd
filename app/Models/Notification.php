@@ -256,7 +256,7 @@ class Notification extends Model
         ]);
     }
 
-    public static function createNewMessage($userId, $senderId, $senderName, $messagePreview, $chatType = 'direct'): self
+    public static function createNewMessage($userId, $senderId, $senderName, $messagePreview, $chatType = 'direct', $chatRoomId = null): self
     {
         return self::create([
             'user_id' => $userId,
@@ -268,6 +268,7 @@ class Notification extends Model
                 'sender_name' => $senderName,
                 'message_preview' => $messagePreview,
                 'chat_type' => $chatType,
+                'chat_room_id' => $chatRoomId,
             ],
         ]);
     }
