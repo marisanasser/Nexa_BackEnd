@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\UserOnlineStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Http\JsonResponse;
@@ -13,9 +14,15 @@ class SignoutController extends Controller
     
     public function __invoke(Request $request): JsonResponse
     {
+        $user = $request->user();
         
-        if ($request->user() && $request->user()->currentAccessToken()) {
-            $request->user()->currentAccessToken()->delete();
+        if ($user) {
+            $onlineStatus = $user->onlineStatus ?? UserOnlineStatus::firstOrCreate(['user_id' => $user->id]);
+            $onlineStatus->updateOnlineStatus(false);
+
+            if ($user->currentAccessToken()) {
+                $user->currentAccessToken()->delete();
+            }
         }
 
         

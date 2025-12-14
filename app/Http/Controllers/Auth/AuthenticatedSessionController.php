@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\UserOnlineStatus;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -19,6 +20,9 @@ class AuthenticatedSessionController extends Controller
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
+
+        $onlineStatus = $user->onlineStatus ?? UserOnlineStatus::firstOrCreate(['user_id' => $user->id]);
+        $onlineStatus->updateOnlineStatus(true);
 
         
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -50,9 +54,15 @@ class AuthenticatedSessionController extends Controller
     
     public function destroy(Request $request): JsonResponse
     {
+        $user = $request->user();
         
-        if ($request->user() && $request->user()->currentAccessToken()) {
-            $request->user()->currentAccessToken()->delete();
+        if ($user) {
+            $onlineStatus = $user->onlineStatus ?? UserOnlineStatus::firstOrCreate(['user_id' => $user->id]);
+            $onlineStatus->updateOnlineStatus(false);
+
+            if ($user->currentAccessToken()) {
+                $user->currentAccessToken()->delete();
+            }
         }
 
         

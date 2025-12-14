@@ -95,6 +95,7 @@ class ChatController extends Controller
                     'id' => $otherUser->id,
                     'name' => $otherUser->name,
                     'avatar' => $otherUser->avatar_url,
+                    'online' => $otherUser->onlineStatus?->is_online ?? false,
                 ],
                 'last_message' => $lastMessage ? [
                     'id' => $lastMessage->id,
