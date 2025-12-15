@@ -19,7 +19,7 @@ class ChatController extends Controller
 {
     use OfferChatMessageTrait;
 
-    public function getChatRooms(): JsonResponse
+    public function getChatRooms(Request $request): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
@@ -30,12 +30,14 @@ class ChatController extends Controller
         ]);
 
         $chatRooms = collect();
+        $perPage = (int) $request->query('per_page', 100);
 
         if ($user->isBrand()) {
             $chatRooms = ChatRoom::where('brand_id', $user->id)
                 ->with(['creator', 'campaign', 'lastMessage.sender'])
                 ->orderBy('created_at', 'desc')
                 ->orderBy('last_message_at', 'desc')
+                ->limit($perPage)
                 ->get();
 
             // Log::info('Found chat rooms for brand', [ ... ]);
@@ -44,6 +46,7 @@ class ChatController extends Controller
                 ->with(['brand', 'campaign', 'lastMessage.sender'])
                 ->orderBy('created_at', 'desc')
                 ->orderBy('last_message_at', 'desc')
+                ->limit($perPage)
                 ->get();
 
             // Log::info('Found chat rooms for creator/student', [ ... ]);
@@ -52,6 +55,7 @@ class ChatController extends Controller
             $chatRooms = ChatRoom::with(['creator', 'brand', 'campaign', 'lastMessage.sender'])
                 ->orderBy('created_at', 'desc')
                 ->orderBy('last_message_at', 'desc')
+                ->limit($perPage)
                 ->get();
 
             // Log::info('Found chat rooms for admin', [ ... ]);
@@ -178,12 +182,18 @@ class ChatController extends Controller
             ]);
         }
 
-        $messages = $room->messages()
-            ->with('sender')
-            ->orderBy('created_at', 'asc')
-            ->get();
+        $perPage = (int) $request->query('per_page', 50);
+        $page = (int) $request->query('page', 1);
 
-        $nullSenderMessages = $messages->filter(function ($message) {
+        $messagesQuery = $room->messages()
+            ->with('sender')
+            ->orderBy('created_at', 'desc');
+
+        $messagesPaginator = $messagesQuery->paginate($perPage, ['*'], 'page', $page);
+
+        $messagesCollection = collect($messagesPaginator->items())->reverse()->values();
+
+        $nullSenderMessages = $messagesCollection->filter(function ($message) {
             return $message->sender === null;
         });
 
@@ -198,12 +208,15 @@ class ChatController extends Controller
         Log::info('Retrieved messages from database', [
             'room_id' => $roomId,
             'user_id' => $user->id,
-            'total_messages' => $messages->count(),
-            'message_ids' => $messages->pluck('id')->toArray(),
-            'message_types' => $messages->pluck('message_type')->countBy()->toArray(),
+            'page' => $messagesPaginator->currentPage(),
+            'per_page' => $messagesPaginator->perPage(),
+            'total_messages' => $messagesPaginator->total(),
+            'page_message_count' => $messagesCollection->count(),
+            'message_ids' => $messagesCollection->pluck('id')->toArray(),
+            'message_types' => $messagesCollection->pluck('message_type')->countBy()->toArray(),
         ]);
 
-        $formattedMessages = $messages->map(function ($message) use ($user) {
+        $formattedMessages = $messagesCollection->map(function ($message) use ($user) {
             $messageData = [
                 'id' => $message->id,
                 'message' => $message->message,
@@ -303,6 +316,13 @@ class ChatController extends Controller
                     'campaign_title' => $room->campaign->title,
                 ],
                 'messages' => $formattedMessages,
+                'meta' => [
+                    'current_page' => $messagesPaginator->currentPage(),
+                    'last_page' => $messagesPaginator->lastPage(),
+                    'per_page' => $messagesPaginator->perPage(),
+                    'total' => $messagesPaginator->total(),
+                    'has_more' => $messagesPaginator->currentPage() < $messagesPaginator->lastPage(),
+                ],
             ],
         ]);
     }

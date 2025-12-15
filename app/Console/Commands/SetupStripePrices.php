@@ -55,13 +55,14 @@ class SetupStripePrices extends Command
 
                 if ($this->option('force') && $plan->stripe_price_id) {
                     try {
-                        $oldPrice = Price::retrieve($plan->stripe_price_id);
-                        $oldPrice->delete();
+                        $updatedPrice = Price::update($plan->stripe_price_id, [
+                            'active' => false,
+                        ]);
                         $this->newLine();
-                        $this->info("Deleted old price for plan '{$plan->name}': {$plan->stripe_price_id}");
+                        $this->info("Deactivated old price for plan '{$plan->name}': {$updatedPrice->id}");
                     } catch (\Exception $e) {
                         $this->newLine();
-                        $this->warn("Could not delete old price for plan '{$plan->name}': ".$e->getMessage());
+                        $this->warn("Could not deactivate old price for plan '{$plan->name}': ".$e->getMessage());
                     }
                 }
 
