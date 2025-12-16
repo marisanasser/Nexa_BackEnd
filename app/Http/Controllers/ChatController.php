@@ -34,7 +34,17 @@ class ChatController extends Controller
 
         if ($user->isBrand()) {
             $chatRooms = ChatRoom::where('brand_id', $user->id)
-                ->with(['creator', 'campaign', 'lastMessage.sender'])
+                ->with([
+                    'creator.onlineStatus',
+                    'campaign',
+                    'lastMessage.sender',
+                ])
+                ->withCount([
+                    'messages as unread_messages_count' => function ($query) use ($user) {
+                        $query->where('sender_id', '!=', $user->id)
+                            ->where('is_read', false);
+                    },
+                ])
                 ->orderBy('created_at', 'desc')
                 ->orderBy('last_message_at', 'desc')
                 ->limit($perPage)
@@ -43,7 +53,17 @@ class ChatController extends Controller
             // Log::info('Found chat rooms for brand', [ ... ]);
         } elseif ($user->isCreator() || $user->isStudent()) {
             $chatRooms = ChatRoom::where('creator_id', $user->id)
-                ->with(['brand', 'campaign', 'lastMessage.sender'])
+                ->with([
+                    'brand.onlineStatus',
+                    'campaign',
+                    'lastMessage.sender',
+                ])
+                ->withCount([
+                    'messages as unread_messages_count' => function ($query) use ($user) {
+                        $query->where('sender_id', '!=', $user->id)
+                            ->where('is_read', false);
+                    },
+                ])
                 ->orderBy('created_at', 'desc')
                 ->orderBy('last_message_at', 'desc')
                 ->limit($perPage)
@@ -52,7 +72,18 @@ class ChatController extends Controller
             // Log::info('Found chat rooms for creator/student', [ ... ]);
         } elseif ($user->isAdmin()) {
 
-            $chatRooms = ChatRoom::with(['creator', 'brand', 'campaign', 'lastMessage.sender'])
+            $chatRooms = ChatRoom::with([
+                'creator.onlineStatus',
+                'brand.onlineStatus',
+                'campaign',
+                'lastMessage.sender',
+            ])
+                ->withCount([
+                    'messages as unread_messages_count' => function ($query) use ($user) {
+                        $query->where('sender_id', '!=', $user->id)
+                            ->where('is_read', false);
+                    },
+                ])
                 ->orderBy('created_at', 'desc')
                 ->orderBy('last_message_at', 'desc')
                 ->limit($perPage)
@@ -107,10 +138,7 @@ class ChatController extends Controller
                     'is_sender' => $lastMessage->sender_id === $user->id,
                     'created_at' => $lastMessage->created_at->toISOString(),
                 ] : null,
-                'unread_count' => $room->messages()
-                    ->where('sender_id', '!=', $user->id)
-                    ->where('is_read', false)
-                    ->count(),
+                'unread_count' => $room->unread_messages_count ?? 0,
                 'last_message_at' => $room->last_message_at?->toISOString(),
             ];
         })->filter();
@@ -483,9 +511,18 @@ class ChatController extends Controller
 
             Log::info('Emitting socket event for message', $socketData);
 
-            // Dispatch event for Reverb/Broadcasting
             $offerData = $message->offer_data ? json_decode($message->offer_data, true) : null;
-            event(new NewMessage($message, $room, $offerData));
+
+            try {
+                event(new NewMessage($message, $room, $offerData));
+            } catch (\Throwable $broadcastException) {
+                Log::error('Failed to broadcast NewMessage event', [
+                    'error' => $broadcastException->getMessage(),
+                    'trace' => $broadcastException->getTraceAsString(),
+                    'message_id' => $message->id,
+                    'room_id' => $room->room_id,
+                ]);
+            }
 
             Log::info('Message sent successfully', [
                 'message_id' => $message->id,

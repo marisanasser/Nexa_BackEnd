@@ -572,7 +572,15 @@ class ContractController extends Controller
 
                 $this->sendContractCompletionMessage($contract, $user);
 
-                event(new ContractCompleted($contract, $contract->offer->chatRoom, $user->id));
+                try {
+                    event(new ContractCompleted($contract, $contract->offer->chatRoom, $user->id));
+                } catch (\Throwable $broadcastException) {
+                    Log::error('Failed to broadcast ContractCompleted event', [
+                        'contract_id' => $contract->id,
+                        'user_id' => $user->id,
+                        'error' => $broadcastException->getMessage(),
+                    ]);
+                }
 
                 Log::info('Campaign completed successfully', [
                     'contract_id' => $contract->id,
