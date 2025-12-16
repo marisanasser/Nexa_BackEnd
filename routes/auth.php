@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Auth\NewPasswordController;
+use App\Http\Controllers\Auth\OtpController;
 use App\Http\Controllers\Auth\PagarMeAuthController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
@@ -41,6 +42,15 @@ Route::get('/google/callback', [GoogleController::class, 'handleGoogleCallback']
 Route::post('/google/auth', [GoogleController::class, 'handleGoogleWithRole'])
     ->middleware('throttle:auth')
     ->name('google.auth');
+
+// OTP Routes
+Route::post('/otp/send', [OtpController::class, 'send'])
+    ->middleware('throttle:6,1') // Limit to 6 requests per minute
+    ->name('otp.send');
+
+Route::post('/otp/verify', [OtpController::class, 'verify'])
+    ->middleware('throttle:10,1')
+    ->name('otp.verify');
 
 // Route::post('/pagarme/auth', [PagarMeAuthController::class, 'authenticate'])
 //    ->middleware('throttle:auth')

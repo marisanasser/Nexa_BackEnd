@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\MessagesRead;
 use App\Events\NewMessage;
+use App\Events\UserTyping;
 use App\Models\CampaignApplication;
 use App\Models\ChatRoom;
 use App\Models\Message;
@@ -94,6 +95,8 @@ class ChatController extends Controller
 
         $formattedRooms = $chatRooms->map(function ($room) use ($user) {
             $otherUser = $user->isBrand() ? $room->creator : $room->brand;
+            
+            // Get the actual latest message from the relationship
             $lastMessage = $room->lastMessage->first();
 
             if ($user->isAdmin()) {
@@ -102,7 +105,6 @@ class ChatController extends Controller
                 } elseif ($lastMessage && $lastMessage->sender_id === $room->creator_id) {
                     $otherUser = $room->creator;
                 } else {
-
                     $otherUser = $room->creator ?? $room->brand;
                 }
             }
@@ -219,7 +221,7 @@ class ChatController extends Controller
 
         $messagesPaginator = $messagesQuery->paginate($perPage, ['*'], 'page', $page);
 
-        $messagesCollection = collect($messagesPaginator->items())->reverse()->values();
+        $messagesCollection = collect($messagesPaginator->items())->sortBy('created_at')->values();
 
         $nullSenderMessages = $messagesCollection->filter(function ($message) {
             return $message->sender === null;
@@ -827,6 +829,19 @@ class ChatController extends Controller
 
         $onlineStatus = UserOnlineStatus::firstOrCreate(['user_id' => $user->id]);
         $onlineStatus->setTypingInRoom($request->room_id, $request->is_typing);
+
+        // Broadcast the typing event
+        try {
+            // Removing toOthers() to ensure delivery even if X-Socket-Id header is missing or incorrect
+            // The frontend should filter out its own typing events anyway
+            broadcast(new UserTyping($request->room_id, $user, $request->is_typing));
+        } catch (\Throwable $e) {
+            Log::error('Failed to broadcast typing status', [
+                'error' => $e->getMessage(),
+                'user_id' => $user->id,
+                'room_id' => $request->room_id,
+            ]);
+        }
 
         return response()->json([
             'success' => true,

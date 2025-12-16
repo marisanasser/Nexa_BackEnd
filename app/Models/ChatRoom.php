@@ -42,7 +42,7 @@ class ChatRoom extends Model
 
     public function messages(): HasMany
     {
-        return $this->hasMany(Message::class)->orderBy('created_at', 'asc');
+        return $this->hasMany(Message::class);
     }
 
     public function offers(): HasMany
@@ -52,7 +52,7 @@ class ChatRoom extends Model
 
     public function lastMessage(): HasMany
     {
-        return $this->hasMany(Message::class)->latest();
+        return $this->hasMany(Message::class)->latest('created_at');
     }
 
     public function updateLastMessageTimestamp(): void
