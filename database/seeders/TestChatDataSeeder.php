@@ -254,6 +254,122 @@ class TestChatDataSeeder extends Seeder
             }
         }
 
+        if ($brandTest) {
+            $extraCreatorsForBrandTest = [
+                $creator1,
+                $creator2,
+                $creatorTest,
+            ];
+
+            $index = 1;
+
+            foreach ($extraCreatorsForBrandTest as $extraCreator) {
+                if (! $extraCreator) {
+                    continue;
+                }
+
+                $campaignExtra = Campaign::firstOrCreate(
+                    [
+                        'brand_id' => $brandTest->id,
+                        'title' => 'Campaign Extra ' . $index . ' for Brand Test',
+                    ],
+                    [
+                        'description' => 'Campanha extra de teste ' . $index . ' para Brand Test',
+                        'budget' => 1000 + ($index * 100),
+                        'location' => 'São Paulo',
+                        'requirements' => 'Requisitos extras de teste ' . $index,
+                        'target_states' => ['SP'],
+                        'category' => 'teste',
+                        'campaign_type' => 'instagram',
+                        'status' => 'approved',
+                        'deadline' => now()->addDays(30 + $index),
+                        'max_bids' => 10 + $index,
+                        'is_active' => true,
+                    ]
+                );
+
+                $chatRoomExtra = ChatRoom::findOrCreateRoom(
+                    $campaignExtra->id,
+                    $brandTest->id,
+                    $extraCreator->id
+                );
+
+                Message::create([
+                    'chat_room_id' => $chatRoomExtra->id,
+                    'sender_id' => $brandTest->id,
+                    'message' => 'Olá ' . $extraCreator->name . ', esta é uma conversa extra de teste ' . $index . '.',
+                    'message_type' => 'text',
+                ]);
+
+                Message::create([
+                    'chat_room_id' => $chatRoomExtra->id,
+                    'sender_id' => $extraCreator->id,
+                    'message' => 'Olá ' . $brandTest->name . ', mensagem recebida na conversa extra de teste ' . $index . '.',
+                    'message_type' => 'text',
+                ]);
+
+                $index++;
+            }
+        }
+
+        if ($creatorTest) {
+            $extraBrandsForCreatorTest = [
+                $brand1,
+                $brand2,
+                $brandTest,
+            ];
+
+            $index = 1;
+
+            foreach ($extraBrandsForCreatorTest as $extraBrand) {
+                if (! $extraBrand) {
+                    continue;
+                }
+
+                $campaignForCreatorTest = Campaign::firstOrCreate(
+                    [
+                        'brand_id' => $extraBrand->id,
+                        'title' => 'Creator Test Extra Campaign ' . $index,
+                    ],
+                    [
+                        'description' => 'Campanha extra de teste ' . $index . ' para Creator Test',
+                        'budget' => 1200 + ($index * 100),
+                        'location' => 'São Paulo',
+                        'requirements' => 'Requisitos para Creator Test extra ' . $index,
+                        'target_states' => ['SP'],
+                        'category' => 'teste',
+                        'campaign_type' => 'instagram',
+                        'status' => 'approved',
+                        'deadline' => now()->addDays(20 + $index),
+                        'max_bids' => 5 + $index,
+                        'is_active' => true,
+                    ]
+                );
+
+                $chatRoomForCreatorTest = ChatRoom::findOrCreateRoom(
+                    $campaignForCreatorTest->id,
+                    $extraBrand->id,
+                    $creatorTest->id
+                );
+
+                Message::create([
+                    'chat_room_id' => $chatRoomForCreatorTest->id,
+                    'sender_id' => $extraBrand->id,
+                    'message' => 'Olá Creator Test, esta é uma conversa extra de teste ' . $index . ' com ' . $extraBrand->name . '.',
+                    'message_type' => 'text',
+                ]);
+
+                Message::create([
+                    'chat_room_id' => $chatRoomForCreatorTest->id,
+                    'sender_id' => $creatorTest->id,
+                    'message' => 'Olá ' . $extraBrand->name . ', Creator Test respondendo na conversa extra ' . $index . '.',
+                    'message_type' => 'text',
+                ]);
+
+                $index++;
+            }
+        }
+
         $this->command?->info('TestChatDataSeeder executed.');
     }
 }
