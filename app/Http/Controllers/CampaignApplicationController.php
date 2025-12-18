@@ -217,7 +217,7 @@ class CampaignApplicationController extends Controller
             ]);
 
             $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
-            $redirectUrl = $frontendUrl.'/brand?component=Pagamentos&requires_stripe_account=true&application_id='.$application->id.'&campaign_id='.$application->campaign_id;
+            $redirectUrl = $frontendUrl.'/dashboard/payment-methods?requires_stripe_account=true&application_id='.$application->id.'&campaign_id='.$application->campaign_id;
 
             return response()->json([
                 'success' => false,
@@ -294,8 +294,8 @@ class CampaignApplicationController extends Controller
                     'mode' => 'setup',
                     'payment_method_types' => ['card'],
                     'locale' => 'pt-BR',
-                    'success_url' => $frontendUrl.'/brand?component=Pagamentos&success=true&session_id={CHECKOUT_SESSION_ID}&application_id='.$application->id.'&campaign_id='.$application->campaign_id,
-                    'cancel_url' => $frontendUrl.'/brand?component=Pagamentos&canceled=true&application_id='.$application->id.'&campaign_id='.$application->campaign_id,
+                    'success_url' => $frontendUrl.'/dashboard/payment-methods?success=true&session_id={CHECKOUT_SESSION_ID}&application_id='.$application->id.'&campaign_id='.$application->campaign_id,
+                    'cancel_url' => $frontendUrl.'/dashboard/payment-methods?canceled=true&application_id='.$application->id.'&campaign_id='.$application->campaign_id,
                     'metadata' => [
                         'user_id' => (string) $user->id,
                         'type' => 'payment_method_setup',
@@ -330,7 +330,7 @@ class CampaignApplicationController extends Controller
                 ]);
 
                 $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
-                $redirectUrl = $frontendUrl.'/brand?component=Pagamentos';
+                $redirectUrl = $frontendUrl.'/dashboard/payment-methods';
 
                 return response()->json([
                     'success' => false,
@@ -430,8 +430,8 @@ class CampaignApplicationController extends Controller
                             ],
                             'quantity' => 1,
                         ]],
-                        'success_url' => $frontendUrl.'/brand?component=Pagamentos&funding_success=true&session_id={CHECKOUT_SESSION_ID}&contract_id='.$contractToFund->id.'&application_id='.$application->id.'&campaign_id='.$application->campaign_id,
-                        'cancel_url' => $frontendUrl.'/brand?component=Pagamentos&funding_canceled=true&contract_id='.$contractToFund->id.'&application_id='.$application->id.'&campaign_id='.$application->campaign_id,
+                        'success_url' => $frontendUrl.'/dashboard/payment-methods?funding_success=true&session_id={CHECKOUT_SESSION_ID}&contract_id='.$contractToFund->id.'&application_id='.$application->id.'&campaign_id='.$application->campaign_id,
+                        'cancel_url' => $frontendUrl.'/dashboard/payment-methods?funding_canceled=true&contract_id='.$contractToFund->id.'&application_id='.$application->id.'&campaign_id='.$application->campaign_id,
                         'metadata' => [
                             'user_id' => (string) $user->id,
                             'type' => 'contract_funding',

@@ -21,6 +21,7 @@ class CampaignController extends Controller
         try {
             
             $user = auth()->user();
+            assert($user instanceof User);
             $query = Campaign::with(['brand', 'bids'])->withCount('applications');
 
             error_log('Request'.json_encode($request));
@@ -163,6 +164,7 @@ class CampaignController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
             $query = Campaign::with(['brand', 'approvedBy', 'bids'])->withCount('applications');
 
             if ($user->isCreator() || $user->isStudent()) {
@@ -213,6 +215,7 @@ class CampaignController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             if (! $user->isAdmin()) {
                 return response()->json(['error' => 'Unauthorized. Admin access required.'], 403);
@@ -264,6 +267,7 @@ class CampaignController extends Controller
     {
         try {
             $authUser = auth()->user();
+            assert($authUser instanceof User);
 
             if (! $authUser->isAdmin() && $authUser->id !== $user->id) {
                 return response()->json(['error' => 'Unauthorized to view other user campaigns'], 403);
@@ -308,6 +312,7 @@ class CampaignController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             $validStatuses = ['pending', 'approved', 'rejected', 'completed', 'cancelled'];
             if (! in_array($status, $validStatuses)) {
@@ -429,6 +434,7 @@ class CampaignController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             if (! $user->isBrand()) {
                 return response()->json(['error' => 'Only brands can create campaigns'], 403);
@@ -519,6 +525,7 @@ class CampaignController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             if ($user->isCreator()) {
 
@@ -553,12 +560,12 @@ class CampaignController extends Controller
 
     public function update(Request $request, int $id): JsonResponse
     {
-        \Log::info('Update campaign request:', [
+        Log::info('Update campaign request:', [
             'request' => $request->all(),
         ]);
         try {
             $campaign = Campaign::findOrFail($id);
-            \Log::info('Campaign found:', [
+            Log::info('Campaign found:', [
                 'campaign' => $campaign,
             ]);
 
@@ -566,9 +573,9 @@ class CampaignController extends Controller
             $isMultipart = strpos($contentType, 'multipart/form-data') !== false;
 
             if ($isMultipart && empty($request->all()) && ! empty($request->getContent())) {
-                \Log::info('Multipart request detected but empty, attempting manual parsing');
+                Log::info('Multipart request detected but empty, attempting manual parsing');
                 $parsedData = $this->parseMultipartData($request);
-                \Log::info('Manually parsed data:', [
+                Log::info('Manually parsed data:', [
                     'fields_count' => count($parsedData),
                     'fields' => array_keys($parsedData),
                 ]);
@@ -591,7 +598,7 @@ class CampaignController extends Controller
                     }
                 }
 
-                \Log::info('After manual parsing:', [
+                Log::info('After manual parsing:', [
                     'request_all_count' => count($request->all()),
                     'has_title' => $request->has('title'),
                     'title_value' => $request->input('title'),
@@ -622,7 +629,7 @@ class CampaignController extends Controller
             $fields = ['title', 'description', 'budget', 'requirements', 'remuneration_type',
                 'target_states', 'target_genders', 'target_creator_types',
                 'min_age', 'max_age', 'category', 'campaign_type', 'deadline', 'status'];
-            \Log::info('Fields to process:', [
+            Log::info('Fields to process:', [
                 'fields' => $fields,
             ]);
             $data = [];
@@ -640,7 +647,7 @@ class CampaignController extends Controller
                 $data = $request->only($fields);
             }
 
-            \Log::info('Campaign update data:', [
+            Log::info('Campaign update data:', [
                 'data_from_input' => $data,
                 'all_request' => $allRequestData,
                 'content_type' => $request->header('Content-Type'),
@@ -658,7 +665,7 @@ class CampaignController extends Controller
                     $deadline = \Carbon\Carbon::createFromFormat('Y-m-d', $data['deadline'])->startOfDay();
                     $data['deadline'] = $deadline->format('Y-m-d');
                 } catch (\Exception $e) {
-                    \Log::warning('Invalid deadline format', ['deadline' => $data['deadline']]);
+                    Log::warning('Invalid deadline format', ['deadline' => $data['deadline']]);
                     unset($data['deadline']);
                 }
             }
@@ -739,26 +746,26 @@ class CampaignController extends Controller
 
                 DB::commit();
 
-                \Log::info('Campaign database update committed', ['id' => $campaign->id]);
+                Log::info('Campaign database update committed', ['id' => $campaign->id]);
 
             } catch (\Exception $e) {
 
                 DB::rollBack();
 
-                \Log::error('Campaign update transaction rolled back', [
+                Log::error('Campaign update transaction rolled back', [
                     'campaign_id' => $campaign->id,
                     'error' => $e->getMessage(),
                 ]);
 
                 if ($uploadedFiles['image']) {
                     $this->deleteFile($uploadedFiles['image']);
-                    \Log::info('Rolled back: deleted uploaded image', [
+                    Log::info('Rolled back: deleted uploaded image', [
                         'file' => $uploadedFiles['image'],
                     ]);
                 }
                 if ($uploadedFiles['logo']) {
                     $this->deleteFile($uploadedFiles['logo']);
-                    \Log::info('Rolled back: deleted uploaded logo', [
+                    Log::info('Rolled back: deleted uploaded logo', [
                         'file' => $uploadedFiles['logo'],
                     ]);
                 }
@@ -766,7 +773,7 @@ class CampaignController extends Controller
                     $this->deleteFile($uploadedAttachment);
                 }
                 if (! empty($uploadedFiles['attachments'])) {
-                    \Log::info('Rolled back: deleted uploaded attachments', [
+                    Log::info('Rolled back: deleted uploaded attachments', [
                         'count' => count($uploadedFiles['attachments']),
                     ]);
                 }
@@ -776,14 +783,14 @@ class CampaignController extends Controller
 
             if ($oldFilesToDelete['image']) {
                 $this->deleteFile($oldFilesToDelete['image']);
-                \Log::info('Deleted old campaign image after successful update', [
+                Log::info('Deleted old campaign image after successful update', [
                     'campaign_id' => $campaign->id,
                     'old_image_url' => $oldFilesToDelete['image'],
                 ]);
             }
             if ($oldFilesToDelete['logo']) {
                 $this->deleteFile($oldFilesToDelete['logo']);
-                \Log::info('Deleted old campaign logo after successful update', [
+                Log::info('Deleted old campaign logo after successful update', [
                     'campaign_id' => $campaign->id,
                     'old_logo' => $oldFilesToDelete['logo'],
                 ]);
@@ -792,13 +799,13 @@ class CampaignController extends Controller
                 $this->deleteFile($oldAttachment);
             }
             if (! empty($oldFilesToDelete['attachments'])) {
-                \Log::info('Deleted old campaign attachments after successful update', [
+                Log::info('Deleted old campaign attachments after successful update', [
                     'campaign_id' => $campaign->id,
                     'old_attachments_count' => count($oldFilesToDelete['attachments']),
                 ]);
             }
 
-            \Log::info('Campaign updated successfully', ['id' => $campaign->id]);
+            Log::info('Campaign updated successfully', ['id' => $campaign->id]);
 
             return response()->json([
                 'success' => true,
@@ -806,7 +813,7 @@ class CampaignController extends Controller
                 'data' => $campaign->fresh()->load(['brand', 'bids']),
             ]);
         } catch (\Exception $e) {
-            \Log::error('Failed to update campaign', [
+            Log::error('Failed to update campaign', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -823,6 +830,7 @@ class CampaignController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             if (! $user->isAdmin() && (! $user->isBrand() || $campaign->brand_id !== $user->id)) {
                 return response()->json(['error' => 'Unauthorized to delete this campaign'], 403);
@@ -869,6 +877,7 @@ class CampaignController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
             $query = Campaign::query();
 
             if ($user->isCreator()) {
@@ -931,6 +940,7 @@ class CampaignController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             if (! $user->isAdmin()) {
                 return response()->json(['error' => 'Unauthorized. Admin access required.'], 403);
@@ -969,6 +979,7 @@ class CampaignController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             if (! $user->isAdmin()) {
                 return response()->json(['error' => 'Unauthorized. Admin access required.'], 403);
@@ -1018,6 +1029,7 @@ class CampaignController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             if (! $user->isAdmin() && ($user->isBrand() && $campaign->brand_id !== $user->id)) {
                 return response()->json(['error' => 'Unauthorized to archive this campaign'], 403);
@@ -1237,6 +1249,7 @@ class CampaignController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             if (! $user->isBrand() || $campaign->brand_id !== $user->id) {
                 return response()->json(['error' => 'Unauthorized to modify this campaign'], 403);
@@ -1278,6 +1291,7 @@ class CampaignController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             if (! $user->isAdmin()) {
                 return response()->json(['error' => 'Unauthorized. Admin access required.'], 403);
@@ -1305,6 +1319,7 @@ class CampaignController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             if (! $user->isCreator() && ! $user->isStudent()) {
                 return response()->json(['error' => 'Unauthorized. Creator or student access required.'], 403);
@@ -1350,6 +1365,7 @@ class CampaignController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             if (! $user->isCreator() && ! $user->isStudent()) {
                 return response()->json(['error' => 'Unauthorized. Creator or student access required.'], 403);

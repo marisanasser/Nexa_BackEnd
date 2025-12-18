@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Aws\Sns\SnsClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -63,6 +64,7 @@ class StripeController extends Controller
 
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             Log::info('Stripe account creation request started', [
                 'user_id' => $user?->id,
@@ -302,6 +304,7 @@ class StripeController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             Log::info('Stripe account status check requested', [
                 'user_id' => $user?->id,
@@ -378,6 +381,7 @@ class StripeController extends Controller
 
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             Log::info('Payment method verification requested', [
                 'user_id' => $user?->id,
@@ -474,6 +478,7 @@ class StripeController extends Controller
     {
         try {
             $user = auth()->user();
+            assert($user instanceof User);
 
             Log::info('Stripe account link creation requested', [
                 'user_id' => $user?->id,
@@ -721,7 +726,9 @@ class StripeController extends Controller
             }
 
             try {
+
                 $user = auth()->user();
+                assert($user instanceof User);
 
                 if (! $user) {
                     return response()->json([

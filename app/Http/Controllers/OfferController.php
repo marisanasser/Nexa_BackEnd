@@ -121,7 +121,7 @@ class OfferController extends Controller
             ]);
 
             $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
-            $redirectUrl = $frontendUrl.'/brand?component=Pagamentos&requires_stripe_account=true&action=send_offer&creator_id='.$request->creator_id.'&chat_room_id='.$request->chat_room_id;
+            $redirectUrl = $frontendUrl.'/dashboard/payment-methods?requires_stripe_account=true&action=send_offer&creator_id='.$request->creator_id.'&chat_room_id='.$request->chat_room_id;
 
             return response()->json([
                 'success' => false,
@@ -180,8 +180,8 @@ class OfferController extends Controller
                     'mode' => 'setup',
                     'payment_method_types' => ['card'],
                     'locale' => 'pt-BR',
-                    'success_url' => $frontendUrl.'/brand?component=Pagamentos&success=true&session_id={CHECKOUT_SESSION_ID}&action=send_offer&creator_id='.$request->creator_id.'&chat_room_id='.$request->chat_room_id,
-                    'cancel_url' => $frontendUrl.'/brand?component=Pagamentos&canceled=true&action=send_offer&creator_id='.$request->creator_id.'&chat_room_id='.$request->chat_room_id,
+                    'success_url' => $frontendUrl.'/dashboard/payment-methods?success=true&session_id={CHECKOUT_SESSION_ID}&action=send_offer&creator_id='.$request->creator_id.'&chat_room_id='.$request->chat_room_id,
+                    'cancel_url' => $frontendUrl.'/dashboard/payment-methods?canceled=true&action=send_offer&creator_id='.$request->creator_id.'&chat_room_id='.$request->chat_room_id,
                     'metadata' => [
                         'user_id' => (string) $user->id,
                         'type' => 'payment_method_setup',
@@ -214,7 +214,7 @@ class OfferController extends Controller
                 ]);
 
                 $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
-                $redirectUrl = $frontendUrl.'/brand?component=Pagamentos&requires_funding=true&action=send_offer';
+                $redirectUrl = $frontendUrl.'/dashboard/payment-methods?requires_funding=true&action=send_offer';
 
                 return response()->json([
                     'success' => false,

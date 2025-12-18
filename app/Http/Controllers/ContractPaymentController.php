@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\BrandPaymentMethod;
 use App\Models\Contract;
 use App\Models\Transaction;
+use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\PaymentSimulator;
 use Illuminate\Http\JsonResponse;
@@ -27,7 +28,16 @@ class ContractPaymentController extends Controller
 
     public function processContractPayment(Request $request): JsonResponse
     {
-        $user = auth()->user();
+        $userId = auth()->id();
+
+        if (! $userId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not authenticated',
+            ], 401);
+        }
+
+        $user = User::findOrFail($userId);
 
         if (! $user->isBrand()) {
             return response()->json([
@@ -232,7 +242,8 @@ class ContractPaymentController extends Controller
                 'payment_method_id' => $pmId,
             ]);
 
-            \Stripe\PaymentMethod::attach($pmId, ['customer' => $customer->id]);
+            $paymentMethod = \Stripe\PaymentMethod::retrieve($pmId);
+            $paymentMethod->attach(['customer' => $customer->id]);
 
             if ($user->stripe_payment_method_id !== $pmId) {
                 $updatedRows = DB::table('users')
@@ -458,7 +469,16 @@ class ContractPaymentController extends Controller
 
     public function getAvailablePaymentMethods(Request $request): JsonResponse
     {
-        $user = auth()->user();
+        $userId = auth()->id();
+
+        if (! $userId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not authenticated',
+            ], 401);
+        }
+
+        $user = User::findOrFail($userId);
 
         if (! $user->isBrand()) {
             return response()->json([
@@ -488,7 +508,16 @@ class ContractPaymentController extends Controller
 
     public function retryPayment(Request $request): JsonResponse
     {
-        $user = auth()->user();
+        $userId = auth()->id();
+
+        if (! $userId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not authenticated',
+            ], 401);
+        }
+
+        $user = User::findOrFail($userId);
 
         if (! $user->isBrand()) {
             return response()->json([
@@ -541,7 +570,16 @@ class ContractPaymentController extends Controller
     public function createContractCheckoutSession(Request $request): JsonResponse
     {
         try {
-            $user = auth()->user();
+            $userId = auth()->id();
+
+            if (! $userId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated',
+                ], 401);
+            }
+
+            $user = User::findOrFail($userId);
 
             if (! $user->isBrand()) {
                 return response()->json([
@@ -653,8 +691,8 @@ class ContractPaymentController extends Controller
                     ],
                     'quantity' => 1,
                 ]],
-                'success_url' => $frontendUrl.'/brand?component=Pagamentos&funding_success=true&session_id={CHECKOUT_SESSION_ID}&contract_id='.$contract->id,
-                'cancel_url' => $frontendUrl.'/brand?component=Pagamentos&funding_canceled=true&contract_id='.$contract->id,
+                'success_url' => $frontendUrl.'/dashboard/payment-methods?funding_success=true&session_id={CHECKOUT_SESSION_ID}&contract_id='.$contract->id,
+                'cancel_url' => $frontendUrl.'/dashboard/payment-methods?funding_canceled=true&contract_id='.$contract->id,
                 'metadata' => [
                     'user_id' => (string) $user->id,
                     'type' => 'contract_funding',
@@ -695,14 +733,16 @@ class ContractPaymentController extends Controller
     public function getTransactionHistory(Request $request): JsonResponse
     {
         try {
-            $user = auth()->user();
+            $userId = auth()->id();
 
-            if (! $user) {
+            if (! $userId) {
                 return response()->json([
                     'success' => false,
                     'message' => 'User not authenticated',
                 ], 401);
             }
+
+            $user = User::findOrFail($userId);
 
             $perPage = min($request->get('per_page', 10), 100);
             $page = $request->get('page', 1);
@@ -767,14 +807,16 @@ class ContractPaymentController extends Controller
     public function getBrandTransactionHistory(Request $request): JsonResponse
     {
         try {
-            $user = auth()->user();
+            $userId = auth()->id();
 
-            if (! $user) {
+            if (! $userId) {
                 return response()->json([
                     'success' => false,
                     'message' => 'User not authenticated',
                 ], 401);
             }
+
+            $user = User::findOrFail($userId);
 
             if (! $user->isBrand()) {
                 return response()->json([

@@ -359,33 +359,33 @@ class BrandPaymentController extends Controller
             $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
             $amount = $request->amount;
 
-            $checkoutSession = Session::create([
-                'customer' => $customerId,
-                'mode' => 'payment',
-                'payment_method_types' => ['card'],
-                'locale' => 'pt-BR',
-                'line_items' => [[
-                    'price_data' => [
-                        'currency' => 'brl',
-                        'product_data' => [
-                            'name' => 'Platform Funding for Offer',
-                            'description' => 'Fund your platform account to send offers',
+                $checkoutSession = Session::create([
+                    'customer' => $customerId,
+                    'mode' => 'payment',
+                    'payment_method_types' => ['card'],
+                    'locale' => 'pt-BR',
+                    'line_items' => [[
+                        'price_data' => [
+                            'currency' => 'brl',
+                            'product_data' => [
+                                'name' => 'Platform Funding for Offer',
+                                'description' => 'Fund your platform account to send offers',
+                            ],
+                            'unit_amount' => (int) round($amount * 100),
                         ],
-                        'unit_amount' => (int) round($amount * 100),
+                        'quantity' => 1,
+                    ]],
+                    'success_url' => $frontendUrl.'/dashboard/payment-methods?offer_funding_success=true&session_id={CHECKOUT_SESSION_ID}&creator_id='.$request->creator_id.'&chat_room_id='.urlencode($request->chat_room_id).'&amount='.$amount,
+                    'cancel_url' => $frontendUrl.'/dashboard/payment-methods?offer_funding_canceled=true&creator_id='.$request->creator_id.'&chat_room_id='.urlencode($request->chat_room_id),
+                    'metadata' => [
+                        'user_id' => (string) $user->id,
+                        'type' => 'offer_funding',
+                        'creator_id' => (string) $request->creator_id,
+                        'chat_room_id' => $request->chat_room_id,
+                        'amount' => (string) $amount,
+                        'campaign_id' => $campaignId ? (string) $campaignId : null,
                     ],
-                    'quantity' => 1,
-                ]],
-                'success_url' => $frontendUrl.'/brand?component=Pagamentos&offer_funding_success=true&session_id={CHECKOUT_SESSION_ID}&creator_id='.$request->creator_id.'&chat_room_id='.urlencode($request->chat_room_id).'&amount='.$amount,
-                'cancel_url' => $frontendUrl.'/brand?component=Pagamentos&offer_funding_canceled=true&creator_id='.$request->creator_id.'&chat_room_id='.urlencode($request->chat_room_id),
-                'metadata' => [
-                    'user_id' => (string) $user->id,
-                    'type' => 'offer_funding',
-                    'creator_id' => (string) $request->creator_id,
-                    'chat_room_id' => $request->chat_room_id,
-                    'amount' => (string) $amount,
-                    'campaign_id' => $campaignId ? (string) $campaignId : null,
-                ],
-            ]);
+                ]);
 
             Log::info('Platform funding checkout session created', [
                 'session_id' => $checkoutSession->id,
