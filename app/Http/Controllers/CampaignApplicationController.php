@@ -8,7 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
-use Laravel\Reverb\Loggers\Log;
+use Illuminate\Support\Facades\Log;
 use Stripe\Account;
 use Stripe\Checkout\Session;
 use Stripe\Customer;

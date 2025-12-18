@@ -33,13 +33,15 @@ class OtpController extends Controller
 
         try {
             if ($type === 'email') {
-                // In a real scenario, use a Mailable class
-                // Mail::to($contact)->send(new OtpMail($code));
-                
-                // For development/demo, we'll just log it
-                Log::info("OTP for {$contact}: {$code}");
+                Mail::raw(
+                    "Seu código de verificação Nexa é: {$code}. Ele expira em 10 minutos.",
+                    function ($message) use ($contact) {
+                        $message->to($contact)->subject('Código de verificação Nexa');
+                    }
+                );
+
+                Log::info("OTP email sent to {$contact}: {$code}");
             } else if ($type === 'whatsapp') {
-                // Integrate with WhatsApp provider (e.g., Twilio, Z-API)
                 Log::info("WhatsApp OTP for {$contact}: {$code}");
             }
 

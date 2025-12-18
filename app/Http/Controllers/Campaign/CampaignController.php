@@ -19,8 +19,9 @@ class CampaignController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
+            
             $user = auth()->user();
-            $query = Campaign::with(['brand', 'bids']);
+            $query = Campaign::with(['brand', 'bids'])->withCount('applications');
 
             error_log('Request'.json_encode($request));
 
@@ -162,7 +163,7 @@ class CampaignController extends Controller
     {
         try {
             $user = auth()->user();
-            $query = Campaign::with(['brand', 'approvedBy', 'bids']);
+            $query = Campaign::with(['brand', 'approvedBy', 'bids'])->withCount('applications');
 
             if ($user->isCreator() || $user->isStudent()) {
                 $query->approved()->active();

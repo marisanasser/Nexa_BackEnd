@@ -556,19 +556,22 @@ class StripeController extends Controller
                 }
             }
 
+            $refreshUrl = config('app.frontend_url').'/dashboard/payment-methods?stripe_connect_refresh=1';
+            $returnUrl = config('app.frontend_url').'/dashboard/payment-methods?stripe_connect_return=1';
+
             Log::info('Creating Stripe account link for onboarding', [
                 'user_id' => $user->id,
                 'stripe_account_id' => $user->stripe_account_id,
-                'refresh_url' => config('app.frontend_url').'/creator/stripe-connect?refresh=true',
-                'return_url' => config('app.frontend_url').'/creator',
+                'refresh_url' => $refreshUrl,
+                'return_url' => $returnUrl,
             ]);
 
             try {
 
                 $accountLink = \Stripe\AccountLink::create([
                     'account' => $user->stripe_account_id,
-                    'refresh_url' => config('app.frontend_url').'/creator/stripe-connect?refresh=true',
-                    'return_url' => config('app.frontend_url').'/creator',
+                    'refresh_url' => $refreshUrl,
+                    'return_url' => $returnUrl,
                     'type' => 'account_onboarding',
                 ]);
 
