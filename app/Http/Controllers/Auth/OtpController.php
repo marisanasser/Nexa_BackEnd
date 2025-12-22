@@ -31,6 +31,14 @@ class OtpController extends Controller
         $key = "otp_{$type}_{$contact}";
         Cache::put($key, $code, 600);
 
+        if (app()->environment('local')) {
+            Log::info("OTP generated for {$type} {$contact}: {$code}");
+            return response()->json([
+                'message' => 'Código de verificação enviado com sucesso.',
+                'dev_code' => $code
+            ]);
+        }
+
         try {
             if ($type === 'email') {
                 Mail::raw(

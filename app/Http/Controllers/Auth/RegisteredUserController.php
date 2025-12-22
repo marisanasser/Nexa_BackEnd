@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
 
@@ -29,10 +31,13 @@ class RegisteredUserController extends Controller
             'all_data' => $request->all(),
         ]);
 
-        $softDeletedUser = User::withTrashed()
-            ->where('email', strtolower(trim($request->email)))
-            ->whereNotNull('deleted_at')
-            ->first();
+        $softDeletedUser = null;
+        if (Schema::hasColumn('users', 'deleted_at')) {
+            $softDeletedUser = User::withTrashed()
+                ->where('email', strtolower(trim($request->email)))
+                ->whereNotNull('deleted_at')
+                ->first();
+        }
 
         if ($softDeletedUser) {
             $daysSinceDeletion = now()->diffInDays($softDeletedUser->deleted_at);
@@ -189,7 +194,7 @@ class RegisteredUserController extends Controller
 
         $freeTrialExpiresAt = $isStudent ? now()->addYear() : null;
 
-        $user = User::create([
+        $attributes = [
             'name' => trim($request->name),
             'email' => strtolower(trim($request->email)),
             'password' => Hash::make($request->password),
@@ -204,12 +209,45 @@ class RegisteredUserController extends Controller
             'birth_date' => $request->birth_date ?? null,
             'state' => $request->state ? trim($request->state) : null,
             'language' => 'en',
-
             'has_premium' => false,
             'premium_expires_at' => null,
             'free_trial_expires_at' => $freeTrialExpiresAt,
             'email_verified_at' => now(),
-        ]);
+        ];
+
+        $filtered = [];
+        foreach ($attributes as $key => $value) {
+            if (Schema::hasColumn('users', $key)) {
+                $filtered[$key] = $value;
+            } else {
+                Log::warning('Skipping non-existent users column', ['column' => $key]);
+            }
+        }
+
+        try {
+            if (Schema::hasColumn('users', 'created_at')) {
+                $filtered['created_at'] = now();
+            }
+            if (Schema::hasColumn('users', 'updated_at')) {
+                $filtered['updated_at'] = now();
+            }
+
+            $id = DB::table('users')->insertGetId($filtered);
+            $user = User::withoutGlobalScopes()->find($id);
+            if (! $user) {
+                $row = DB::table('users')->where('id', $id)->first();
+                if ($row) {
+                    $user = new User((array) $row);
+                    $user->exists = true;
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('User creation failed', ['error' => $e->getMessage(), 'filtered' => $filtered]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Falha ao criar conta. Tente novamente mais tarde.',
+            ], 422);
+        }
 
         Log::info('User created successfully', ['user_id' => $user->id]);
 
