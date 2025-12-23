@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Throwable;
 
 class PortfolioController extends Controller
 {
@@ -322,6 +323,14 @@ class PortfolioController extends Controller
                 $filePath = $file->store('portfolio/'.$user->id, 'public');
 
                 $data['profile_picture'] = $filePath;
+                
+                // Sync to User Avatar
+                try {
+                    $user->avatar_url = '/storage/' . $filePath;
+                    $user->save();
+                } catch (Throwable $e) {
+                    Log::error('Failed to sync portfolio picture to user avatar: ' . $e->getMessage());
+                }
             }
 
             Log::info('About to update portfolio with data', [

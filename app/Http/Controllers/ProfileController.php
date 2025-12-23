@@ -117,31 +117,31 @@ class ProfileController extends Controller
                 ],
                 'role' => 'sometimes|string|max:255',
                 'whatsapp' => 'sometimes|string|max:20',
-                'bio' => 'sometimes|string|max:1000',
-                'company_name' => 'sometimes|string|max:255',
+                'bio' => 'sometimes|nullable|string|max:1000',
+                'company_name' => 'sometimes|nullable|string|max:255',
                 'gender' => 'sometimes|string|max:50',
                 'birth_date' => 'sometimes|date',
                 'creator_type' => 'sometimes|string|in:ugc,influencer,both',
-                'tiktok_handle' => 'sometimes|string|max:255',
-                'youtube_channel' => 'sometimes|string|max:255',
-                'facebook_page' => 'sometimes|string|max:255',
-                'twitter_handle' => 'sometimes|string|max:255',
-                'industry' => 'sometimes|string|max:255',
-                'profession' => 'sometimes|string|max:255',
-                'niche' => 'sometimes|string|max:255',
-                'state' => 'sometimes|string|max:255',
-                'language' => 'sometimes|string|max:50',
-                'languages' => 'sometimes|string',
-                'categories' => 'sometimes|string',
-                'avatar' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:10240',
+                'tiktok_handle' => 'sometimes|nullable|string|max:255',
+                'youtube_channel' => 'sometimes|nullable|string|max:255',
+                'facebook_page' => 'sometimes|nullable|string|max:255',
+                'twitter_handle' => 'sometimes|nullable|string|max:255',
+                'industry' => 'sometimes|nullable|string|max:255',
+                'profession' => 'sometimes|nullable|string|max:255',
+                'niche' => 'sometimes|nullable|string|max:255',
+                'state' => 'sometimes|nullable|string|max:255',
+                'language' => 'sometimes|nullable|string|max:50',
+                'languages' => 'sometimes',
+                'categories' => 'sometimes|nullable|string',
+                'avatar' => 'sometimes|nullable|image|mimes:jpeg,png,jpg,gif,webp|max:10240',
             ];
 
-            $creatorType = $request->input('creator_type') ?? $user->creator_type ?? null;
+            $creatorTypeFromRequest = $request->input('creator_type');
 
-            if ($creatorType === 'influencer' || $creatorType === 'both') {
+            if ($creatorTypeFromRequest === 'influencer' || $creatorTypeFromRequest === 'both') {
                 $validationRules['instagram_handle'] = 'required|string|max:255';
             } else {
-                $validationRules['instagram_handle'] = 'sometimes|string|max:255';
+                $validationRules['instagram_handle'] = 'sometimes|nullable|string|max:255';
             }
 
             $validator = Validator::make($request->all(), $validationRules);
@@ -166,6 +166,12 @@ class ProfileController extends Controller
             }
 
             if ($validator->fails()) {
+                Log::error('Profile update validation failed', [
+                    'user_id' => $user->id,
+                    'errors' => $validator->errors()->toArray(),
+                    'input_data' => $request->all(),
+                ]);
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
@@ -192,8 +198,19 @@ class ProfileController extends Controller
                 $data['avatar_url'] = '/storage/'.$avatarPath;
             }
 
-            if (isset($data['languages'])) {
-                $languages = json_decode($data['languages'], true);
+            if (array_key_exists('languages', $data)) {
+                $languagesRaw = $data['languages'];
+                $languages = null;
+
+                if (is_string($languagesRaw)) {
+                    $decoded = json_decode($languagesRaw, true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        $languages = $decoded;
+                    }
+                } elseif (is_array($languagesRaw)) {
+                    $languages = $languagesRaw;
+                }
+
                 if (is_array($languages) && ! empty($languages)) {
                     $data['languages'] = $languages;
                     $data['language'] = $languages[0];
@@ -353,6 +370,16 @@ class ProfileController extends Controller
             $avatarPath = $avatarFile->store('avatars', 'public');
             $user->avatar_url = '/storage/'.$avatarPath;
             $user->save();
+
+            // Sync with Portfolio
+            try {
+                if ($user->portfolio) {
+                    $user->portfolio->profile_picture = $avatarPath;
+                    $user->portfolio->save();
+                }
+            } catch (\Throwable $e) {
+                // Ignore sync errors
+            }
 
             return response()->json([
                 'success' => true,
