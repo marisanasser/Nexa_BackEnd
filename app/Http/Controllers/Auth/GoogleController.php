@@ -86,10 +86,6 @@ class GoogleController extends Controller
                     ]);
                 }
 
-                if ($role && $user->role !== $role) {
-                    $updateData['role'] = $role;
-                }
-
                 if ($isStudent && ! $user->student_verified) {
                     $updateData['free_trial_expires_at'] = now()->addMonth();
 
