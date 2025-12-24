@@ -18,9 +18,15 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 COPY . /var/www/html
 
+RUN mkdir -p bootstrap/cache storage/logs \
+    && chmod -R 777 bootstrap/cache storage \
+    && chmod +x start.sh
+
 ARG COMPOSER_FLAGS="--no-interaction --prefer-dist --optimize-autoloader --no-dev"
 RUN composer install $COMPOSER_FLAGS
 
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-EXPOSE 9000
+EXPOSE 8000
+
+ENTRYPOINT ["/var/www/html/start.sh"]

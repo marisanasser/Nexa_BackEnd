@@ -17,6 +17,7 @@ return [
         'http://127.0.0.1:5000',
         'http://127.0.0.1:5001',
         'http://127.0.0.1:5173',
+        'https://nexa-frontend-1044548850970.southamerica-east1.run.app',
     ])),
 
     'allowed_origins_patterns' => [],

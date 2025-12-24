@@ -20,11 +20,14 @@ class GoogleController extends Controller
 
     public function redirectToGoogle(): JsonResponse
     {
-        $url = $this->googleProvider()->stateless()->redirect()->getTargetUrl();
+        $provider = $this->googleProvider()->stateless();
+        $clientId = config('services.google.client_id');
+        $url = $provider->redirect()->getTargetUrl();
 
         return response()->json([
             'success' => true,
             'redirect_url' => $url,
+            'debug_client_id' => $clientId,
         ]);
     }
 

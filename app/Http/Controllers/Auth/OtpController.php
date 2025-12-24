@@ -31,14 +31,6 @@ class OtpController extends Controller
         $key = "otp_{$type}_{$contact}";
         Cache::put($key, $code, 600);
 
-        if (app()->environment('local')) {
-            Log::info("OTP generated for {$type} {$contact}: {$code}");
-            return response()->json([
-                'message' => 'Código de verificação enviado com sucesso.',
-                'dev_code' => $code
-            ]);
-        }
-
         try {
             if ($type === 'email') {
                 Mail::raw(
@@ -52,16 +44,18 @@ class OtpController extends Controller
             } else if ($type === 'whatsapp') {
                 Log::info("WhatsApp OTP for {$contact}: {$code}");
             }
-
-            return response()->json([
-                'message' => 'Código de verificação enviado com sucesso.',
-                // In production, NEVER return the code here. Only for dev/demo convenience if needed.
-                'dev_code' => app()->environment('local') ? $code : null
-            ]);
         } catch (\Exception $e) {
             Log::error("Failed to send OTP: " . $e->getMessage());
-            return response()->json(['message' => 'Falha ao enviar código.'], 500);
         }
+
+        Log::info("OTP generated for {$type} {$contact}: {$code}");
+
+        $debug = filter_var(env('OTP_DEBUG', true), FILTER_VALIDATE_BOOL);
+
+        return response()->json([
+            'message' => 'Código de verificação gerado.',
+            'dev_code' => $debug ? $code : null
+        ]);
     }
 
     /**
