@@ -9,6 +9,7 @@ use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class AuthenticatedSessionController extends Controller
 {
@@ -16,13 +17,41 @@ class AuthenticatedSessionController extends Controller
     {
         $request->authenticate();
 
-        /** @var \App\Models\User $user */
+        /** @var \App\Models\User|null $user */
         $user = Auth::user();
 
-        $onlineStatus = $user->onlineStatus ?? UserOnlineStatus::firstOrCreate(['user_id' => $user->id]);
-        $onlineStatus->updateOnlineStatus(true);
+        if (! $user) {
+            Log::error('Login authentication succeeded but no user instance found');
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+            return response()->json([
+                'success' => false,
+                'message' => 'Falha ao autenticar. Tente novamente.',
+            ], 401);
+        }
+
+        try {
+            $onlineStatus = $user->onlineStatus ?? UserOnlineStatus::firstOrCreate(['user_id' => $user->id]);
+            $onlineStatus->updateOnlineStatus(true);
+        } catch (\Throwable $e) {
+            Log::error('Failed to update user online status on login', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        try {
+            $token = $user->createToken('auth_token')->plainTextToken;
+        } catch (\Throwable $e) {
+            Log::error('Failed to create auth token on login', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Falha ao criar token de acesso. Tente novamente mais tarde.',
+            ], 422);
+        }
 
         if (! $user->isAdmin()) {
             NotificationService::notifyAdminOfNewLogin($user, [
@@ -52,8 +81,15 @@ class AuthenticatedSessionController extends Controller
         $user = $request->user();
 
         if ($user) {
-            $onlineStatus = $user->onlineStatus ?? UserOnlineStatus::firstOrCreate(['user_id' => $user->id]);
-            $onlineStatus->updateOnlineStatus(false);
+            try {
+                $onlineStatus = $user->onlineStatus ?? UserOnlineStatus::firstOrCreate(['user_id' => $user->id]);
+                $onlineStatus->updateOnlineStatus(false);
+            } catch (\Throwable $e) {
+                Log::error('Failed to update user online status on logout', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             if ($user->currentAccessToken()) {
                 $user->currentAccessToken()->delete();

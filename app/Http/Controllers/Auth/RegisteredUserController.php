@@ -32,7 +32,7 @@ class RegisteredUserController extends Controller
         ]);
 
         $softDeletedUser = null;
-        if (Schema::hasColumn('users', 'deleted_at')) {
+        if ($this->safeHasColumn('users', 'deleted_at')) {
             $softDeletedUser = User::withTrashed()
                 ->where('email', strtolower(trim($request->email)))
                 ->whereNotNull('deleted_at')
@@ -217,7 +217,7 @@ class RegisteredUserController extends Controller
 
         $filtered = [];
         foreach ($attributes as $key => $value) {
-            if (Schema::hasColumn('users', $key)) {
+            if ($this->safeHasColumn('users', $key)) {
                 $filtered[$key] = $value;
             } else {
                 Log::warning('Skipping non-existent users column', ['column' => $key]);
@@ -225,10 +225,10 @@ class RegisteredUserController extends Controller
         }
 
         try {
-            if (Schema::hasColumn('users', 'created_at')) {
+            if ($this->safeHasColumn('users', 'created_at')) {
                 $filtered['created_at'] = now();
             }
-            if (Schema::hasColumn('users', 'updated_at')) {
+            if ($this->safeHasColumn('users', 'updated_at')) {
                 $filtered['updated_at'] = now();
             }
 
@@ -249,11 +249,32 @@ class RegisteredUserController extends Controller
             ], 422);
         }
 
+        if (! isset($user) || ! $user || ! $user->id) {
+            Log::error('User instance not available after creation', ['id' => $id ?? null]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Falha ao criar conta. Tente novamente mais tarde.',
+            ], 422);
+        }
+
         Log::info('User created successfully', ['user_id' => $user->id]);
 
         \App\Services\NotificationService::notifyAdminOfNewRegistration($user);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        try {
+            $token = $user->createToken('auth_token')->plainTextToken;
+        } catch (\Throwable $e) {
+            Log::error('Failed to create auth token', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Falha ao criar token de acesso. Tente novamente mais tarde.',
+            ], 422);
+        }
 
         $frontend = config('app.frontend_url', env('APP_FRONTEND_URL', 'http://localhost:5000'));
         $link = "{$frontend}/{$user->role}?token={$token}";
@@ -416,5 +437,20 @@ class RegisteredUserController extends Controller
         }
 
         return $phone;
+    }
+
+    private function safeHasColumn(string $table, string $column): bool
+    {
+        try {
+            return Schema::hasColumn($table, $column);
+        } catch (\Throwable $e) {
+            Log::error('Schema hasColumn check failed', [
+                'table' => $table,
+                'column' => $column,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
     }
 }

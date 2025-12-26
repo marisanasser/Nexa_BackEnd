@@ -29,6 +29,7 @@ class OtpController extends Controller
         // Store in cache for 10 minutes
         // Key format: otp_{type}_{contact}
         $key = "otp_{$type}_{$contact}";
+
         Cache::put($key, $code, 600);
 
         try {
@@ -45,7 +46,11 @@ class OtpController extends Controller
                 Log::info("WhatsApp OTP for {$contact}: {$code}");
             }
         } catch (\Exception $e) {
-            Log::error("Failed to send OTP: " . $e->getMessage());
+            Log::error('Failed to send OTP', [
+                'contact' => $contact,
+                'type' => $type,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         Log::info("OTP generated for {$type} {$contact}: {$code}");

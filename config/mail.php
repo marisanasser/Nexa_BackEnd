@@ -67,8 +67,8 @@ return [
     ],
 
     'from' => [
-        'address' => 'dove.engineer86@gmail.com',
-        'name' => 'Nexa',
+        'address' => env('MAIL_FROM_ADDRESS', 'noreply@nexacreators.com.br'),
+        'name' => env('MAIL_FROM_NAME', 'Nexa'),
     ],
 
     'markdown' => [

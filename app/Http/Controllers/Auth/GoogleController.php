@@ -10,24 +10,62 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\AbstractProvider as SocialiteAbstractProvider;
+use Laravel\Socialite\Two\GoogleProvider;
 
 class GoogleController extends Controller
 {
     private function googleProvider(): SocialiteAbstractProvider
     {
-        return Socialite::driver('google');
+        $redirectUri = config('services.google.redirect') ?: env('GOOGLE_REDIRECT_URI');
+
+        $config = [
+            'client_id' => config('services.google.client_id') ?: env('GOOGLE_CLIENT_ID'),
+            'client_secret' => config('services.google.client_secret') ?: env('GOOGLE_CLIENT_SECRET'),
+            'redirect' => $redirectUri,
+        ];
+
+        return Socialite::buildProvider(GoogleProvider::class, $config);
     }
 
     public function redirectToGoogle(): JsonResponse
     {
         $provider = $this->googleProvider()->stateless();
-        $clientId = config('services.google.client_id');
+        $clientId = config('services.google.client_id') ?: env('GOOGLE_CLIENT_ID');
+        $redirectUri = config('services.google.redirect') ?: env('GOOGLE_REDIRECT_URI');
         $url = $provider->redirect()->getTargetUrl();
+
+        try {
+            $parsedUrl = parse_url($url);
+            $query = [];
+
+            if (isset($parsedUrl['query'])) {
+                parse_str($parsedUrl['query'], $query);
+            }
+
+            if (! isset($query['redirect_uri']) && $redirectUri) {
+                $query['redirect_uri'] = $redirectUri;
+
+                $scheme = $parsedUrl['scheme'] ?? 'https';
+                $host = $parsedUrl['host'] ?? '';
+                $port = isset($parsedUrl['port']) ? ':'.$parsedUrl['port'] : '';
+                $path = $parsedUrl['path'] ?? '';
+
+                $base = $scheme.'://'.$host.$port.$path;
+                $url = $base.'?'.http_build_query($query);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Failed to enforce redirect_uri on Google OAuth URL', [
+                'error' => $e->getMessage(),
+                'original_url' => $url,
+                'redirect_uri' => $redirectUri,
+            ]);
+        }
 
         return response()->json([
             'success' => true,
             'redirect_url' => $url,
             'debug_client_id' => $clientId,
+            'debug_redirect_uri' => $redirectUri,
         ]);
     }
 

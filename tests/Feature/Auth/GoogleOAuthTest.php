@@ -20,12 +20,24 @@ class GoogleOAuthTest extends TestCase
             ->assertJsonStructure([
                 'success',
                 'redirect_url',
+                'debug_redirect_uri',
             ])
             ->assertJson([
                 'success' => true,
             ]);
 
-        $this->assertNotEmpty($response->json('redirect_url'));
+        $redirectUrl = $response->json('redirect_url');
+        $this->assertNotEmpty($redirectUrl);
+
+        $parsedUrl = parse_url($redirectUrl);
+        $query = [];
+
+        if (isset($parsedUrl['query'])) {
+            parse_str($parsedUrl['query'], $query);
+        }
+
+        $this->assertArrayHasKey('redirect_uri', $query);
+        $this->assertNotEmpty($query['redirect_uri']);
     }
 
     public function test_google_callback_creates_new_user(): void

@@ -25,6 +25,30 @@ class LoginRequest extends FormRequest
         ];
     }
 
+    public function validationData(): array
+    {
+        $data = $this->all();
+
+        if (empty($data)) {
+            $raw = $this->getContent();
+            $json = json_decode($raw, true);
+
+            if (is_array($json) && ! empty($json)) {
+                $this->merge($json);
+                $data = $this->all();
+            }
+        }
+
+        Log::debug('LoginRequest validation data', [
+            'content_type' => $this->header('Content-Type'),
+            'has_email' => array_key_exists('email', $data),
+            'has_password' => array_key_exists('password', $data),
+            'keys' => array_keys($data),
+        ]);
+
+        return $data;
+    }
+
     public function authenticate(): void
     {
         $this->ensureIsNotRateLimited();
