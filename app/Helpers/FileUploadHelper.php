@@ -98,11 +98,11 @@ class FileUploadHelper
             'object_path' => $objectPath,
         ]);
         
+        // Note: Don't use predefinedAcl when bucket has uniform bucket-level access
         $gcsBucket->upload(
             fopen($file->getRealPath(), 'r'),
             [
                 'name' => $objectPath,
-                'predefinedAcl' => 'publicRead',
             ]
         );
         
