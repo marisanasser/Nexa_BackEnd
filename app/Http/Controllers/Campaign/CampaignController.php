@@ -27,13 +27,13 @@ class CampaignController extends Controller
             error_log('Request'.json_encode($request));
 
             if ($user->isCreator() || $user->isStudent()) {
-
+                Log::info('Creator/Student listing campaigns', ['user_id' => $user->id, 'role' => $user->role]);
                 $query->approved()->active();
             } elseif ($user->isBrand()) {
-
+                Log::info('Brand listing campaigns', ['user_id' => $user->id]);
                 $query->where('brand_id', $user->id);
             } elseif ($user->isAdmin()) {
-
+                Log::info('Admin listing campaigns');
             } else {
                 return response()->json(['error' => 'Unauthorized'], 403);
             }

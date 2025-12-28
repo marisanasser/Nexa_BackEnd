@@ -68,6 +68,10 @@ class CampaignApplicationController extends Controller
             return response()->json(['message' => 'Only creators and students can apply to campaigns'], 403);
         }
 
+        if (! $user->hasPremiumAccess()) {
+            return response()->json(['message' => 'Only premium users can send proposals to start a chat with brands.'], 403);
+        }
+
         if (! $campaign->isApproved() || ! $campaign->is_active) {
             return response()->json(['message' => 'Campaign is not available for applications'], 400);
         }
