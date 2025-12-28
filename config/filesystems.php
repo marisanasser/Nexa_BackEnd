@@ -2,7 +2,7 @@
 
 return [
 
-    'default' => env('FILESYSTEM_DISK', 'local'),
+    'default' => env('FILESYSTEM_DISK', 'public'),
 
     'disks' => [
 
@@ -18,6 +18,16 @@ return [
             'url' => env('APP_URL').'/storage',
             'visibility' => 'public',
             'throw' => false,
+        ],
+
+        'gcs' => [
+            'driver' => 'gcs',
+            'project_id' => env('GOOGLE_CLOUD_PROJECT_ID', 'nexa-teste-1'),
+            'key_file' => null, // Uses default credentials in Cloud Run
+            'bucket' => env('GOOGLE_CLOUD_STORAGE_BUCKET', 'nexa-uploads-prod'),
+            'path_prefix' => '',
+            'visibility' => 'public',
+            'url' => 'https://storage.googleapis.com/'.env('GOOGLE_CLOUD_STORAGE_BUCKET', 'nexa-uploads-prod'),
         ],
 
         's3' => [
