@@ -15,16 +15,24 @@ class FileUploadHelper
      */
     public static function upload(UploadedFile $file, string $path = 'uploads'): ?string
     {
+        Log::info('FileUploadHelper::upload called', [
+            'path' => $path,
+            'file' => $file->getClientOriginalName(),
+            'size' => $file->getSize(),
+        ]);
+
         try {
             // In Cloud Run, use GCS directly
             if (self::shouldUseGcs()) {
+                Log::info('Using GCS for upload');
                 return self::uploadToGcs($file, $path);
             }
             
+            Log::info('Using local storage for upload');
             // Fallback to local storage
             return self::uploadToLocal($file, $path);
         } catch (\Throwable $e) {
-            Log::error('File upload failed: ' . $e->getMessage(), [
+            Log::error('File upload failed', [
                 'path' => $path,
                 'file' => $file->getClientOriginalName(),
                 'error' => $e->getMessage(),
@@ -33,6 +41,7 @@ class FileUploadHelper
             
             // Try local as last resort
             try {
+                Log::info('Falling back to local storage after GCS error');
                 return self::uploadToLocal($file, $path);
             } catch (\Throwable $e2) {
                 Log::error('Local upload also failed: ' . $e2->getMessage());
@@ -48,11 +57,12 @@ class FileUploadHelper
     {
         // Use GCS if bucket is configured and class exists
         $bucket = env('GOOGLE_CLOUD_STORAGE_BUCKET');
-        $useGcs = !empty($bucket) && class_exists(StorageClient::class);
+        $classExists = class_exists(StorageClient::class);
+        $useGcs = !empty($bucket) && $classExists;
         
-        Log::debug('FileUploadHelper::shouldUseGcs', [
+        Log::info('FileUploadHelper::shouldUseGcs check', [
             'bucket' => $bucket,
-            'class_exists' => class_exists(StorageClient::class),
+            'class_exists' => $classExists,
             'use_gcs' => $useGcs,
         ]);
         
@@ -67,11 +77,12 @@ class FileUploadHelper
         $bucket = env('GOOGLE_CLOUD_STORAGE_BUCKET', 'nexa-uploads-prod');
         $projectId = env('GOOGLE_CLOUD_PROJECT_ID', 'nexa-teste-1');
         
-        Log::info('Uploading to GCS', [
+        Log::info('uploadToGcs starting', [
             'bucket' => $bucket,
             'project_id' => $projectId,
             'path' => $path,
             'file' => $file->getClientOriginalName(),
+            'file_path' => $file->getRealPath(),
         ]);
         
         $storage = new StorageClient([
@@ -82,6 +93,10 @@ class FileUploadHelper
         
         $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
         $objectPath = trim($path, '/') . '/' . $filename;
+        
+        Log::info('Uploading to GCS bucket', [
+            'object_path' => $objectPath,
+        ]);
         
         $gcsBucket->upload(
             fopen($file->getRealPath(), 'r'),
@@ -106,13 +121,20 @@ class FileUploadHelper
      */
     private static function uploadToLocal(UploadedFile $file, string $path): string
     {
-        Log::info('Uploading to local storage', [
+        Log::info('uploadToLocal starting', [
             'path' => $path,
             'file' => $file->getClientOriginalName(),
         ]);
         
         $storedPath = $file->store($path, 'public');
-        return '/storage/' . $storedPath;
+        $url = '/storage/' . $storedPath;
+        
+        Log::info('File uploaded to local storage', [
+            'stored_path' => $storedPath,
+            'url' => $url,
+        ]);
+        
+        return $url;
     }
 
     /**
