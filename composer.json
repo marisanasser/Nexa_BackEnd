@@ -20,7 +20,6 @@
         "laravel/tinker": "^2.8",
         "predis/predis": "^3.0",
         "pusher/pusher-php-server": "^7.2",
-        "spatie/laravel-google-cloud-storage": "^2.0",
         "stripe/stripe-php": "^18.1"
     },
     "require-dev": {

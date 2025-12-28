@@ -20,16 +20,6 @@ return [
             'throw' => false,
         ],
 
-        'gcs' => [
-            'driver' => 'gcs',
-            'project_id' => env('GOOGLE_CLOUD_PROJECT_ID', 'nexa-teste-1'),
-            'key_file' => env('GOOGLE_APPLICATION_CREDENTIALS'),
-            'bucket' => env('GOOGLE_CLOUD_STORAGE_BUCKET', 'nexa-uploads-prod'),
-            'path_prefix' => env('GOOGLE_CLOUD_STORAGE_PATH_PREFIX', ''),
-            'storage_api_uri' => env('GOOGLE_CLOUD_STORAGE_API_URI', null),
-            'visibility' => 'public',
-        ],
-
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
