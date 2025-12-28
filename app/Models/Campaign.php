@@ -204,6 +204,7 @@ class Campaign extends Model
     {
         $this->update([
             'status' => 'approved',
+            'is_active' => true,
             'approved_at' => now(),
             'approved_by' => $adminId,
             'rejection_reason' => null,
