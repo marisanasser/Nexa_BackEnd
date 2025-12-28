@@ -429,4 +429,28 @@ Route::post('/google/auth', [GoogleController::class, 'handleGoogleWithRole'])
 
 Route::post('/account/checked', [AccountController::class, 'checkAccount']);
 
-Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
+Route::post('/webhook/stripe', [StripeWebhookController::class, 'handleWebhook']);
+
+// Temporary Debug Route
+Route::get('/debug-visibility', function() {
+    $creator = \App\Models\User::where('email', 'creator.premium@nexacreators.com.br')->first();
+    $campaigns = \App\Models\Campaign::all();
+    
+    return response()->json([
+        'creator' => $creator,
+        'campaigns' => $campaigns->map(function($c) {
+            return [
+                'id' => $c->id,
+                'title' => $c->title,
+                'status' => $c->status,
+                'is_active' => $c->is_active,
+                'approved_at' => $c->approved_at,
+                'deadline' => $c->deadline,
+                'target_genders' => $c->target_genders,
+                'target_creator_types' => $c->target_creator_types,
+                'min_age' => $c->min_age,
+                'max_age' => $c->max_age,
+            ];
+        })
+    ]);
+});
