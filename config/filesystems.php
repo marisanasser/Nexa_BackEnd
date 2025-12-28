@@ -20,16 +20,6 @@ return [
             'throw' => false,
         ],
 
-        'gcs' => [
-            'driver' => 'gcs',
-            'project_id' => env('GOOGLE_CLOUD_PROJECT_ID', 'nexa-teste-1'),
-            'key_file' => null, // Uses default credentials in Cloud Run
-            'bucket' => env('GOOGLE_CLOUD_STORAGE_BUCKET', 'nexa-uploads-prod'),
-            'path_prefix' => '',
-            'visibility' => 'public',
-            'url' => 'https://storage.googleapis.com/'.env('GOOGLE_CLOUD_STORAGE_BUCKET', 'nexa-uploads-prod'),
-        ],
-
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

@@ -43,7 +43,8 @@ return [
         App\Providers\BroadcastServiceProvider::class,
         App\Providers\EventServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
-        App\Providers\GoogleCloudStorageServiceProvider::class,
+        // GCS provider removed - causing initialization errors
+        // App\Providers\GoogleCloudStorageServiceProvider::class,
     ])->toArray(),
 
     'aliases' => Facade::defaultAliases()->merge([
