@@ -883,6 +883,10 @@ class CampaignController extends Controller
         try {
             $user = auth()->user();
             assert($user instanceof User);
+
+            // HOTFIX: Ensure all approved campaigns are active (Consistency with index method)
+            Campaign::where('status', 'approved')->where('is_active', false)->update(['is_active' => true]);
+
             $query = Campaign::query();
 
             if ($user->isCreator()) {
