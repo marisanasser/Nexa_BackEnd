@@ -23,8 +23,6 @@ class CampaignController extends Controller
             $user = auth()->user();
             assert($user instanceof User);
 
-            Log::error('CAMPAIGN_DEBUG_ENTRY: User ID: ' . $user->id . ' Role: ' . $user->role);
-            
             // HOTFIX: Ensure all approved campaigns are active
             Campaign::where('status', 'approved')->where('is_active', false)->update(['is_active' => true]);
 
@@ -131,11 +129,7 @@ class CampaignController extends Controller
 
             $perPage = min($request->get('per_page', 15), 100);
 
-            DB::enableQueryLog();
             $campaigns = $query->paginate($perPage);
-            
-            Log::error('CAMPAIGN_DEBUG_QUERY: ' . json_encode(DB::getQueryLog()));
-            Log::error('CAMPAIGN_DEBUG_COUNT: ' . $campaigns->count());
 
             if ($user->isCreator()) {
 
