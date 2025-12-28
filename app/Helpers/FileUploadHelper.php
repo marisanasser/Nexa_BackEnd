@@ -28,6 +28,7 @@ class FileUploadHelper
                 'path' => $path,
                 'file' => $file->getClientOriginalName(),
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
             
             // Try local as last resort
@@ -45,9 +46,17 @@ class FileUploadHelper
      */
     private static function shouldUseGcs(): bool
     {
-        return app()->environment('production') 
-            && env('GOOGLE_CLOUD_STORAGE_BUCKET')
-            && class_exists(StorageClient::class);
+        // Use GCS if bucket is configured and class exists
+        $bucket = env('GOOGLE_CLOUD_STORAGE_BUCKET');
+        $useGcs = !empty($bucket) && class_exists(StorageClient::class);
+        
+        Log::debug('FileUploadHelper::shouldUseGcs', [
+            'bucket' => $bucket,
+            'class_exists' => class_exists(StorageClient::class),
+            'use_gcs' => $useGcs,
+        ]);
+        
+        return $useGcs;
     }
 
     /**
@@ -57,6 +66,13 @@ class FileUploadHelper
     {
         $bucket = env('GOOGLE_CLOUD_STORAGE_BUCKET', 'nexa-uploads-prod');
         $projectId = env('GOOGLE_CLOUD_PROJECT_ID', 'nexa-teste-1');
+        
+        Log::info('Uploading to GCS', [
+            'bucket' => $bucket,
+            'project_id' => $projectId,
+            'path' => $path,
+            'file' => $file->getClientOriginalName(),
+        ]);
         
         $storage = new StorageClient([
             'projectId' => $projectId,
@@ -77,7 +93,7 @@ class FileUploadHelper
         
         $url = "https://storage.googleapis.com/{$bucket}/{$objectPath}";
         
-        Log::info('File uploaded to GCS', [
+        Log::info('File uploaded to GCS successfully', [
             'path' => $objectPath,
             'url' => $url,
         ]);
@@ -90,6 +106,11 @@ class FileUploadHelper
      */
     private static function uploadToLocal(UploadedFile $file, string $path): string
     {
+        Log::info('Uploading to local storage', [
+            'path' => $path,
+            'file' => $file->getClientOriginalName(),
+        ]);
+        
         $storedPath = $file->store($path, 'public');
         return '/storage/' . $storedPath;
     }
