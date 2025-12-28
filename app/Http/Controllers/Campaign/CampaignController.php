@@ -1394,10 +1394,7 @@ class CampaignController extends Controller
 
     private function uploadFile($file, string $path): string
     {
-        $fileName = time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
-        $filePath = $file->storeAs($path, $fileName, 'public');
-
-        return Storage::url($filePath);
+        return \App\Helpers\FileUploadHelper::upload($file, $path) ?? Storage::url($file->store($path, 'public'));
     }
 
     private function deleteFile(?string $fileUrl): void
@@ -1405,15 +1402,7 @@ class CampaignController extends Controller
         if (! $fileUrl) {
             return;
         }
-
-        try {
-            $path = str_replace('/storage/', '', $fileUrl);
-            if (Storage::disk('public')->exists($path)) {
-                Storage::disk('public')->delete($path);
-            }
-        } catch (\Exception $e) {
-            Log::warning('Failed to delete file: '.$fileUrl.' - '.$e->getMessage());
-        }
+        \App\Helpers\FileUploadHelper::delete($fileUrl);
     }
 
     private function parseMultipartData(Request $request): array

@@ -183,19 +183,15 @@ class ProfileController extends Controller
 
             if ($hasAvatarFile && $avatarFile) {
 
-                try {
-                    if ($user->avatar_url) {
-                        $oldPath = str_replace('/storage/', '', $user->avatar_url);
-                        if (Storage::disk('public')->exists($oldPath)) {
-                            Storage::disk('public')->delete($oldPath);
-                        }
-                    }
-                } catch (\Throwable $e) {
-
+                // Delete old avatar
+                if ($user->avatar_url) {
+                    \App\Helpers\FileUploadHelper::delete($user->avatar_url);
                 }
 
-                $avatarPath = $avatarFile->store('avatars', 'public');
-                $data['avatar_url'] = '/storage/'.$avatarPath;
+                $avatarUrl = \App\Helpers\FileUploadHelper::upload($avatarFile, 'avatars');
+                if ($avatarUrl) {
+                    $data['avatar_url'] = $avatarUrl;
+                }
             }
 
             if (array_key_exists('languages', $data)) {
@@ -356,25 +352,22 @@ class ProfileController extends Controller
                 ], 422);
             }
 
-            try {
-                if ($user->avatar_url) {
-                    $oldPath = str_replace('/storage/', '', $user->avatar_url);
-                    if (Storage::disk('public')->exists($oldPath)) {
-                        Storage::disk('public')->delete($oldPath);
-                    }
-                }
-            } catch (\Throwable $e) {
+            // Delete old avatar
+            if ($user->avatar_url) {
+                \App\Helpers\FileUploadHelper::delete($user->avatar_url);
             }
 
             $avatarFile = $request->file('avatar');
-            $avatarPath = $avatarFile->store('avatars', 'public');
-            $user->avatar_url = '/storage/'.$avatarPath;
-            $user->save();
+            $avatarUrl = \App\Helpers\FileUploadHelper::upload($avatarFile, 'avatars');
+            if ($avatarUrl) {
+                $user->avatar_url = $avatarUrl;
+                $user->save();
+            }
 
             // Sync with Portfolio
             try {
                 if ($user->portfolio) {
-                    $user->portfolio->profile_picture = $avatarPath;
+                    $user->portfolio->profile_picture = str_replace('/storage/', '', $avatarUrl ?? '');
                     $user->portfolio->save();
                 }
             } catch (\Throwable $e) {
