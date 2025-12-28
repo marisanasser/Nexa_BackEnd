@@ -38,36 +38,6 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/health', HealthCheckController::class);
 
-// TEMPORARY: Remove after creating admin user
-Route::get('/setup-admin-temp-2025', function () {
-    $secret = request()->query('secret');
-    if ($secret !== 'NexaSetup2025Secret') {
-        return response()->json(['error' => 'Unauthorized'], 401);
-    }
-    
-    $admin = \App\Models\User::updateOrCreate(
-        ['email' => 'admin@nexacreators.com.br'],
-        [
-            'name' => 'Admin Nexa',
-            'password' => \Illuminate\Support\Facades\Hash::make('NexaAdmin@2025'),
-            'role' => 'admin',
-            'email_verified_at' => now(),
-            'has_premium' => true,
-        ]
-    );
-    
-    return response()->json([
-        'success' => true,
-        'message' => 'Admin user created/updated',
-        'user' => [
-            'id' => $admin->id,
-            'email' => $admin->email,
-            'name' => $admin->name,
-            'role' => $admin->role,
-        ]
-    ]);
-});
-
 require __DIR__.'/auth.php';
 
 Route::get('/download/{path}', function ($path) {
