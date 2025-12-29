@@ -27,7 +27,7 @@ return [
 
     'stripe' => [
         // Support both STRIPE_SECRET_KEY (novo) e STRIPE_SECRET (legado)
-        'secret' => env('STRIPE_SECRET_KEY', env('STRIPE_SECRET')),
+        'secret' => env('STRIPE_SECRET_KEY'),
         // Support both STRIPE_PUBLISHABLE_KEY e STRIPE_KEY (legado)
         'publishable_key' => env('STRIPE_PUBLISHABLE_KEY', env('STRIPE_KEY')),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),

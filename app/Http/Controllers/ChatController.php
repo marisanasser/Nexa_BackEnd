@@ -25,10 +25,10 @@ class ChatController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        Log::info('Getting chat rooms', [
+        \Illuminate\Support\Facades\Log::info('CheckChatRooms Debug', [
             'user_id' => $user->id,
-            'role' => $user->role,
         ]);
+
 
         $chatRooms = collect();
         $perPage = (int) $request->query('per_page', 100);

@@ -12,5 +12,11 @@ php artisan config:clear
 php artisan cache:clear
 php artisan view:clear
 
+# Forensic Debugging
+ls -R /var/www/html > public/fs_debug.txt
+php artisan route:list > public/routes_debug.txt
+chmod 777 public/*.txt
+
+
 php artisan serve --host=0.0.0.0 --port="${PORT:-8000}"
 

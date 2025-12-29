@@ -26,15 +26,12 @@ class StripeController extends Controller
 
     public function __construct()
     {
-        $stripeSecret = config('services.stripe.secret');
-        Stripe::setApiKey($stripeSecret);
-
-        Log::info('StripeController initialized', [
-            'has_stripe_secret' => ! empty($stripeSecret),
-            'stripe_secret_length' => $stripeSecret ? strlen($stripeSecret) : 0,
-            'stripe_secret_prefix' => $stripeSecret ? substr($stripeSecret, 0, 7) : 'missing',
-        ]);
-
+        // Initialize Stripe from config (uses environment variables)
+        $stripeKey = config('services.stripe.secret');
+        if ($stripeKey) {
+            Stripe::setApiKey($stripeKey);
+        }
+        
         $awsKey = env('AWS_ACCESS_KEY_ID');
         $awsSecret = env('AWS_SECRET_ACCESS_KEY');
         if (! empty($awsKey) && ! empty($awsSecret)) {
@@ -61,7 +58,6 @@ class StripeController extends Controller
 
     public function createAccount(Request $request): JsonResponse
     {
-
         try {
             $user = auth()->user();
             assert($user instanceof User);

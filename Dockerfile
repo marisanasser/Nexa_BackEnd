@@ -18,15 +18,23 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 COPY . /var/www/html
 
-RUN mkdir -p bootstrap/cache storage/logs \
+RUN mkdir -p bootstrap/cache \
+    storage/logs \
+    storage/framework/cache \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/app \
     && chmod -R 777 bootstrap/cache storage \
-    && chmod +x start.sh
+    && rm -rf bootstrap/cache/*.php \
+    && rm -rf vendor
 
 ARG COMPOSER_FLAGS="--no-interaction --prefer-dist --optimize-autoloader --no-dev"
 RUN composer install $COMPOSER_FLAGS
+
+RUN php artisan storage:link || true
 
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 EXPOSE 8000
 
-ENTRYPOINT ["/var/www/html/start.sh"]
+CMD php -S 0.0.0.0:${PORT:-8000} -t public
