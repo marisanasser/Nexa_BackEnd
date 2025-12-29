@@ -425,14 +425,30 @@ class ChatController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $fileName = time().'_'.$file->getClientOriginalName();
-            $filePath = $file->storeAs('chat-files', $fileName);
+            
+            // Debug: log disk configuration
+            $defaultDisk = config('filesystems.default');
+            Log::info('File upload attempt', [
+                'default_disk' => $defaultDisk,
+                'file_name' => $fileName,
+                'file_size' => $file->getSize(),
+                'file_mime' => $file->getMimeType(),
+            ]);
+            
+            try {
+                $filePath = $file->storeAs('chat-files', $fileName);
+                Log::info('File stored', ['file_path' => $filePath, 'success' => !empty($filePath)]);
+            } catch (\Throwable $e) {
+                Log::error('File storage failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+                $filePath = false;
+            }
 
             if (empty($messageData['message'])) {
                 $messageData['message'] = $file->getClientOriginalName();
             }
 
             $messageData['message_type'] = $this->getFileType($file->getMimeType());
-            $messageData['file_path'] = $filePath;
+            $messageData['file_path'] = $filePath ?: null;
             $messageData['file_name'] = $file->getClientOriginalName();
             $messageData['file_size'] = $file->getSize();
             $messageData['file_type'] = $file->getMimeType();
