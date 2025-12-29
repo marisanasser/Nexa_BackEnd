@@ -47,7 +47,12 @@ class Message extends Model
     public function getFileUrlAttribute(): ?string
     {
         if ($this->file_path) {
-            return \Illuminate\Support\Facades\Storage::url($this->file_path);
+            try {
+                return \Illuminate\Support\Facades\Storage::url($this->file_path);
+            } catch (\Throwable $e) {
+                // Fallback to local URL if storage driver fails
+                return asset('storage/'.$this->file_path);
+            }
         }
 
         return null;
