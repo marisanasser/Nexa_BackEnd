@@ -46,16 +46,21 @@ class Message extends Model
 
     public function getFileUrlAttribute(): ?string
     {
-        if ($this->file_path) {
-            try {
-                return \Illuminate\Support\Facades\Storage::url($this->file_path);
-            } catch (\Throwable $e) {
-                // Fallback to local URL if storage driver fails
-                return asset('storage/'.$this->file_path);
+        if (!$this->file_path) {
+            return null;
+        }
+
+        // Try to use GCS URL directly if configured
+        $disk = config('filesystems.default');
+        if ($disk === 'gcs') {
+            $bucket = config('filesystems.disks.gcs.bucket', env('GOOGLE_CLOUD_STORAGE_BUCKET'));
+            if ($bucket) {
+                return "https://storage.googleapis.com/{$bucket}/{$this->file_path}";
             }
         }
 
-        return null;
+        // Fallback to local URL
+        return asset('storage/'.$this->file_path);
     }
 
     public function getFormattedFileSizeAttribute(): ?string
