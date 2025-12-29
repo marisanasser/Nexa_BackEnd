@@ -59,8 +59,9 @@ class Message extends Model
             }
         }
 
-        // Fallback to local URL
-        return asset('storage/'.$this->file_path);
+        // Fallback to local URL with forced HTTPS
+        $url = asset('storage/'.$this->file_path);
+        return str_replace('http://', 'https://', $url);
     }
 
     public function getFormattedFileSizeAttribute(): ?string
