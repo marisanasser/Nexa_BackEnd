@@ -424,39 +424,39 @@ class ChatController extends Controller
 
         if ($request->hasFile('file')) {
             $file = $request->file('file');
-            $fileName = time().'_'.$file->getClientOriginalName();
-            $filePath = 'chat-files/'.$fileName;
-            
-            // Debug: log to stderr for Cloud Run visibility
-            error_log("=== FILE UPLOAD DEBUG ===");
-            error_log("Default disk: ".config('filesystems.default'));
-            error_log("File name: ".$fileName);
-            error_log("File size: ".$file->getSize());
+            $fileName = time().'_'.preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
+            $gcsBucket = env('GOOGLE_CLOUD_STORAGE_BUCKET', 'nexa-uploads-prod');
+            $gcsPath = 'chat-files/'.$fileName;
+            $filePath = null;
             
             try {
-                // Try GCS disk explicitly
-                $stored = \Illuminate\Support\Facades\Storage::disk('gcs')->put($filePath, file_get_contents($file->getRealPath()));
-                error_log("Storage result: ".($stored ? 'SUCCESS' : 'FAILED'));
-                
-                if (!$stored) {
-                    // Fallback to public disk
-                    error_log("Falling back to public disk");
-                    $filePath = $file->storeAs('chat-files', $fileName, 'public');
-                }
+                // Try direct GCS upload using Google Cloud Storage client
+                $storage = new \Google\Cloud\Storage\StorageClient([
+                    'projectId' => env('GOOGLE_CLOUD_PROJECT_ID', 'nexa-teste-1'),
+                ]);
+                $bucket = $storage->bucket($gcsBucket);
+                $bucket->upload(
+                    fopen($file->getRealPath(), 'r'),
+                    ['name' => $gcsPath]
+                );
+                $filePath = $gcsPath;
+                error_log("GCS UPLOAD SUCCESS: ".$gcsPath);
             } catch (\Throwable $e) {
-                error_log("Storage EXCEPTION: ".$e->getMessage());
-                // Fallback to public disk
-                $filePath = $file->storeAs('chat-files', $fileName, 'public');
+                error_log("GCS UPLOAD ERROR: ".$e->getMessage());
+                // Fallback to local storage
+                $localPath = $file->storeAs('chat-files', $fileName, 'public');
+                if ($localPath) {
+                    $filePath = $localPath;
+                    error_log("LOCAL STORAGE SUCCESS: ".$localPath);
+                }
             }
-            
-            error_log("Final file path: ".($filePath ?: 'NULL'));
 
             if (empty($messageData['message'])) {
                 $messageData['message'] = $file->getClientOriginalName();
             }
 
             $messageData['message_type'] = $this->getFileType($file->getMimeType());
-            $messageData['file_path'] = $filePath ?: null;
+            $messageData['file_path'] = $filePath;
             $messageData['file_name'] = $file->getClientOriginalName();
             $messageData['file_size'] = $file->getSize();
             $messageData['file_type'] = $file->getMimeType();
