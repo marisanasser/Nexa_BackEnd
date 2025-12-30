@@ -38,6 +38,9 @@ class UserOnlineStatus extends Model
             'socket_id' => $socketId,
             'last_seen_at' => now(),
         ]);
+
+        // Broadcast the status update
+        event(new \App\Events\UserStatusUpdated($this->user_id, $isOnline));
     }
 
     public function setTypingInRoom(string $roomId, bool $isTyping): void
