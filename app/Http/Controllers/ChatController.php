@@ -425,24 +425,31 @@ class ChatController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $fileName = time().'_'.$file->getClientOriginalName();
+            $filePath = 'chat-files/'.$fileName;
             
-            // Debug: log disk configuration
-            $defaultDisk = config('filesystems.default');
-            Log::info('File upload attempt', [
-                'default_disk' => $defaultDisk,
-                'file_name' => $fileName,
-                'file_size' => $file->getSize(),
-                'file_mime' => $file->getMimeType(),
-            ]);
+            // Debug: log to stderr for Cloud Run visibility
+            error_log("=== FILE UPLOAD DEBUG ===");
+            error_log("Default disk: ".config('filesystems.default'));
+            error_log("File name: ".$fileName);
+            error_log("File size: ".$file->getSize());
             
             try {
-                // Use default disk (configured as 'gcs' in production)
-                $filePath = $file->storeAs('chat-files', $fileName);
-                Log::info('File stored', ['file_path' => $filePath, 'success' => !empty($filePath)]);
+                // Try GCS disk explicitly
+                $stored = \Illuminate\Support\Facades\Storage::disk('gcs')->put($filePath, file_get_contents($file->getRealPath()));
+                error_log("Storage result: ".($stored ? 'SUCCESS' : 'FAILED'));
+                
+                if (!$stored) {
+                    // Fallback to public disk
+                    error_log("Falling back to public disk");
+                    $filePath = $file->storeAs('chat-files', $fileName, 'public');
+                }
             } catch (\Throwable $e) {
-                Log::error('File storage failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-                $filePath = false;
+                error_log("Storage EXCEPTION: ".$e->getMessage());
+                // Fallback to public disk
+                $filePath = $file->storeAs('chat-files', $fileName, 'public');
             }
+            
+            error_log("Final file path: ".($filePath ?: 'NULL'));
 
             if (empty($messageData['message'])) {
                 $messageData['message'] = $file->getClientOriginalName();
