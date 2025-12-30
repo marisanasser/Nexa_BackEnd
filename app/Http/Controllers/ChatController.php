@@ -436,8 +436,8 @@ class ChatController extends Controller
             ]);
             
             try {
-                // Temporarily use 'public' disk to verify uploads work
-                $filePath = $file->storeAs('chat-files', $fileName, 'public');
+                // Use default disk (configured as 'gcs' in production)
+                $filePath = $file->storeAs('chat-files', $fileName);
                 Log::info('File stored', ['file_path' => $filePath, 'success' => !empty($filePath)]);
             } catch (\Throwable $e) {
                 Log::error('File storage failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
