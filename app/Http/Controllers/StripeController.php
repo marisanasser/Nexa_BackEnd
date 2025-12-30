@@ -29,7 +29,7 @@ class StripeController extends Controller
         // Initialize Stripe from config (uses environment variables)
         $stripeKey = config('services.stripe.secret');
         if ($stripeKey) {
-            Stripe::setApiKey($stripeKey);
+            Stripe::setApiKey(trim($stripeKey));
         }
         
         $awsKey = env('AWS_ACCESS_KEY_ID');
@@ -356,6 +356,38 @@ class StripeController extends Controller
                 'requirements' => $stripeAccount->requirements,
             ]);
 
+        } catch (\Stripe\Exception\InvalidRequestException $e) {
+            $errorMessage = $e->getMessage();
+            
+            // Checks if the error is "No such account"
+            if (stripos($errorMessage, 'No such account') !== false) {
+                Log::warning('Stripe account not found. Resetting user stripe_account_id', [
+                    'user_id' => auth()->id(),
+                    'invalid_id' => $user->stripe_account_id,
+                ]);
+
+                // Clear valid ID from database
+                $user->stripe_account_id = null;
+                $user->stripe_verification_status = 'unverified';
+                $user->save();
+
+                return response()->json([
+                    'success' => true,
+                    'has_account' => false,
+                    'message' => 'Stripe account ID was invalid and has been reset.',
+                ]);
+            }
+
+            Log::error('Stripe invalid request during status check', [
+                'user_id' => auth()->id(),
+                'error' => $errorMessage,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid request: ' . $errorMessage,
+            ], 400);
+
         } catch (\Exception $e) {
             Log::error('Error retrieving Stripe account status', [
                 'user_id' => auth()->id(),
@@ -364,7 +396,7 @@ class StripeController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to retrieve account status',
+                'message' => 'Failed to retrieve account status: ' . $e->getMessage(),
             ], 500);
         }
     }
