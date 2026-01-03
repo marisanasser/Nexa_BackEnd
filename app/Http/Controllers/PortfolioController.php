@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use App\Helpers\FileUploadHelper;
 use Throwable;
 
 class PortfolioController extends Controller
@@ -87,7 +88,7 @@ class PortfolioController extends Controller
                     'id' => $portfolio->id,
                     'title' => $portfolio->title,
                     'bio' => $portfolio->bio,
-                    'profile_picture' => $portfolio->profile_picture ? asset('storage/'.$portfolio->profile_picture) : null,
+                    'profile_picture' => FileUploadHelper::resolveUrl($portfolio->profile_picture),
                     'project_links' => $portfolio->project_links ?? [],
                     'items' => $items->map(function ($item) {
                         return [
@@ -316,17 +317,21 @@ class PortfolioController extends Controller
             if ($request->hasFile('profile_picture')) {
 
                 if ($portfolio->profile_picture) {
-                    Storage::disk('public')->delete($portfolio->profile_picture);
+                    try {
+                        // Use helper and wrap in try-catch to prevent update failure if delete fails
+                        \App\Helpers\FileUploadHelper::delete($portfolio->profile_picture);
+                    } catch (\Throwable $e) {
+                        Log::warning('Failed to delete old portfolio picture: ' . $e->getMessage());
+                    }
                 }
 
                 $file = $request->file('profile_picture');
-                $filePath = $file->store('portfolio/'.$user->id, 'public');
-
-                $data['profile_picture'] = $filePath;
+                $fileUrl = \App\Helpers\FileUploadHelper::upload($file, 'portfolio/'.$user->id);
+                $data['profile_picture'] = $fileUrl;
                 
                 // Sync to User Avatar
                 try {
-                    $user->avatar_url = '/storage/' . $filePath;
+                    $user->avatar_url = $fileUrl;
                     $user->save();
                 } catch (Throwable $e) {
                     Log::error('Failed to sync portfolio picture to user avatar: ' . $e->getMessage());
@@ -428,12 +433,13 @@ class PortfolioController extends Controller
                     'user_id' => $portfolio->user_id,
                     'title' => $portfolio->title,
                     'bio' => $portfolio->bio,
-                    'profile_picture' => $portfolio->profile_picture ? asset('storage/'.$portfolio->profile_picture) : null,
-                    'profile_picture_url' => $portfolio->profile_picture ? asset('storage/'.$portfolio->profile_picture) : null,
+                    'profile_picture' => $portfolio->profile_picture,
+                    'profile_picture_url' => FileUploadHelper::resolveUrl($portfolio->profile_picture),
                     'project_links' => $portfolio->project_links ?? [],
                     'created_at' => $portfolio->created_at,
                     'updated_at' => $portfolio->updated_at,
                 ],
+                'user' => $user->fresh()
             ]);
 
         } catch (\Exception $e) {
@@ -894,13 +900,13 @@ class PortfolioController extends Controller
                         'file_size' => $file->getSize(),
                     ]);
 
-                    $storedPath = $file->storeAs($storagePath, $filename, 'public');
+                    $storedPath = \App\Helpers\FileUploadHelper::upload($file, $storagePath);
 
                     Log::info('File stored successfully', [
                         'user_id' => $user->id,
                         'index' => $index,
                         'stored_path' => $storedPath,
-                        'file_exists' => Storage::disk('public')->exists($storedPath),
+                        'is_url' => true,
                     ]);
                 } catch (\Exception $storageException) {
                     Log::error('File storage failed', [
@@ -960,8 +966,8 @@ class PortfolioController extends Controller
                     ]);
 
                     try {
-                        if (isset($storedPath) && Storage::disk('public')->exists($storedPath)) {
-                            Storage::disk('public')->delete($storedPath);
+                        if (isset($storedPath)) {
+                            \App\Helpers\FileUploadHelper::delete($storedPath);
                             Log::info('Cleaned up stored file after database failure', [
                                 'user_id' => $user->id,
                                 'stored_path' => $storedPath,
@@ -1109,7 +1115,7 @@ class PortfolioController extends Controller
         try {
 
             if ($item->file_path) {
-                Storage::disk('public')->delete($item->file_path);
+                \App\Helpers\FileUploadHelper::delete($item->file_path);
             }
 
             $item->delete();
@@ -1330,7 +1336,7 @@ class PortfolioController extends Controller
                         'id' => $portfolio->id,
                         'title' => $portfolio->title,
                         'bio' => $portfolio->bio,
-                        'profile_picture' => $portfolio->profile_picture ? asset('storage/'.$portfolio->profile_picture) : null,
+                        'profile_picture' => FileUploadHelper::resolveUrl($portfolio->profile_picture),
                         'project_links' => $portfolio->project_links ?? [],
                         'items_count' => $portfolio->items->count(),
                         'images_count' => $portfolio->items->where('media_type', 'image')->count(),

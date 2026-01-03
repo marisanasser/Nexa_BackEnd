@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\FileUploadHelper;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,8 +40,8 @@ class BrandProfileController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'avatar' => $user->avatar_url,
-                    'avatar_url' => $user->avatar_url,
+                    'avatar' => FileUploadHelper::resolveUrl($user->avatar_url),
+                    'avatar_url' => FileUploadHelper::resolveUrl($user->avatar_url),
                     'company_name' => $user->company_name,
                     'whatsapp_number' => $user->whatsapp_number,
                     'gender' => $user->gender,
@@ -147,13 +148,16 @@ class BrandProfileController extends Controller
             }
 
             if ($hasAvatarFile && $avatarFile) {
-                if ($user->avatar_url && Storage::disk('public')->exists(str_replace('/storage/', '', $user->avatar_url))) {
-                    Storage::disk('public')->delete(str_replace('/storage/', '', $user->avatar_url));
+                // Delete old avatar
+                if ($user->avatar_url) {
+                    FileUploadHelper::delete($user->avatar_url);
                 }
 
-                $avatarPath = $avatarFile->store('avatars', 'public');
-                $data['avatar_url'] = '/storage/'.$avatarPath;
-                error_log('Brand Profile - Avatar stored at: '.$data['avatar_url']);
+                $avatarUrl = FileUploadHelper::upload($avatarFile, 'avatars');
+                if ($avatarUrl) {
+                    $data['avatar_url'] = $avatarUrl;
+                    error_log('Brand Profile - Avatar stored at: '.$avatarUrl);
+                }
             }
 
             unset($data['avatar']);
@@ -169,8 +173,8 @@ class BrandProfileController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'avatar' => $user->avatar_url,
-                    'avatar_url' => $user->avatar_url,
+                    'avatar' => FileUploadHelper::resolveUrl($user->avatar_url),
+                    'avatar_url' => FileUploadHelper::resolveUrl($user->avatar_url),
                     'company_name' => $user->company_name,
                     'whatsapp_number' => $user->whatsapp_number,
                     'gender' => $user->gender,
@@ -349,15 +353,15 @@ class BrandProfileController extends Controller
             $avatarUrl = null;
 
             if ($hasAvatarFile && $avatarFile) {
-
-                if ($user->avatar_url && Storage::disk('public')->exists(str_replace('/storage/', '', $user->avatar_url))) {
-                    Storage::disk('public')->delete(str_replace('/storage/', '', $user->avatar_url));
+                // Delete old avatar
+                if ($user->avatar_url) {
+                    FileUploadHelper::delete($user->avatar_url);
                 }
 
-                $avatarPath = $avatarFile->store('avatars', 'public');
-                $avatarUrl = '/storage/'.$avatarPath;
-
-                $user->update(['avatar_url' => $avatarUrl]);
+                $avatarUrl = FileUploadHelper::upload($avatarFile, 'avatars');
+                if ($avatarUrl) {
+                    $user->update(['avatar_url' => $avatarUrl]);
+                }
             } elseif ($hasAvatarBase64 && $avatarBase64) {
 
                 $avatarResult = $this->handleAvatarUpload($avatarBase64, $user);
@@ -371,7 +375,7 @@ class BrandProfileController extends Controller
                 'success' => true,
                 'message' => 'Avatar uploaded successfully',
                 'data' => [
-                    'avatar' => $avatarUrl,
+                    'avatar' => FileUploadHelper::resolveUrl($avatarUrl),
                     'updated_at' => $user->updated_at,
                 ],
             ]);

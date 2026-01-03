@@ -1,0 +1,21 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'build',
+    '--no-cache',
+    '-t', 'gcr.io/nexa-teste-1/nexa-backend:latest',
+    '.'
+  ]
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/nexa-teste-1/nexa-backend:latest']
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: 'gcloud'
+  args: [
+    'run', 'deploy', 'nexa-backend2',
+    '--image', 'gcr.io/nexa-teste-1/nexa-backend:latest',
+    '--region', 'southamerica-east1',
+    '--platform', 'managed',
+    '--allow-unauthenticated'
+  ]
+images:
+- 'gcr.io/nexa-teste-1/nexa-backend:latest'

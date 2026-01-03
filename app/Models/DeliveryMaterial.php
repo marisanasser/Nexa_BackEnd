@@ -63,6 +63,13 @@ class DeliveryMaterial extends Model
 
     public function getFileUrlAttribute(): string
     {
+        $disk = config('filesystems.default');
+        
+        if ($disk === 'gcs') {
+            $bucket = config('filesystems.disks.gcs.bucket');
+            return "https://storage.googleapis.com/{$bucket}/{$this->file_path}";
+        }
+        
         return asset('storage/'.$this->file_path);
     }
 

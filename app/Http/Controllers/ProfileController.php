@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use App\Helpers\FileUploadHelper;
 
 class ProfileController extends Controller
 {
@@ -33,7 +34,7 @@ class ProfileController extends Controller
                     'email' => $user->email,
                     'role' => $user->role,
                     'whatsapp' => $user->whatsapp,
-                    'avatar' => $user->avatar_url,
+                    'avatar' => FileUploadHelper::resolveUrl($user->avatar_url),
                     'bio' => $user->bio,
                     'company_name' => $user->company_name,
                     'profession' => $user->profession,
@@ -185,12 +186,22 @@ class ProfileController extends Controller
 
                 // Delete old avatar
                 if ($user->avatar_url) {
-                    \App\Helpers\FileUploadHelper::delete($user->avatar_url);
+                    FileUploadHelper::delete($user->avatar_url);
                 }
 
-                $avatarUrl = \App\Helpers\FileUploadHelper::upload($avatarFile, 'avatars');
+                $avatarUrl = FileUploadHelper::upload($avatarFile, 'avatars');
                 if ($avatarUrl) {
                     $data['avatar_url'] = $avatarUrl;
+                    
+                    // Sync with Portfolio
+                    try {
+                        if ($user->portfolio) {
+                            $user->portfolio->profile_picture = $avatarUrl;
+                            $user->portfolio->save();
+                        }
+                    } catch (\Throwable $e) {
+                        // Ignore sync errors
+                    }
                 }
             }
 
@@ -298,8 +309,9 @@ class ProfileController extends Controller
 
             if ($user->avatar_url) {
                 $path = str_replace('/storage/', '', $user->avatar_url);
-                if (Storage::disk('public')->exists($path)) {
-                    Storage::disk('public')->delete($path);
+                $disk = config('filesystems.default');
+                if (Storage::disk($disk)->exists($path)) {
+                    Storage::disk($disk)->delete($path);
                 }
                 $user->avatar_url = null;
                 $user->save();
@@ -354,11 +366,11 @@ class ProfileController extends Controller
 
             // Delete old avatar
             if ($user->avatar_url) {
-                \App\Helpers\FileUploadHelper::delete($user->avatar_url);
+                FileUploadHelper::delete($user->avatar_url);
             }
 
             $avatarFile = $request->file('avatar');
-            $avatarUrl = \App\Helpers\FileUploadHelper::upload($avatarFile, 'avatars');
+            $avatarUrl = FileUploadHelper::upload($avatarFile, 'avatars');
             if ($avatarUrl) {
                 $user->avatar_url = $avatarUrl;
                 $user->save();
@@ -367,7 +379,7 @@ class ProfileController extends Controller
             // Sync with Portfolio
             try {
                 if ($user->portfolio) {
-                    $user->portfolio->profile_picture = str_replace('/storage/', '', $avatarUrl ?? '');
+                    $user->portfolio->profile_picture = $avatarUrl;
                     $user->portfolio->save();
                 }
             } catch (\Throwable $e) {
@@ -379,8 +391,8 @@ class ProfileController extends Controller
                 'message' => 'Avatar atualizado com sucesso',
                 'profile' => [
                     'id' => $user->id,
-                    'avatar' => $user->avatar_url,
-                    'avatar_url' => $user->avatar_url,
+                    'avatar' => FileUploadHelper::resolveUrl($user->avatar_url),
+                    'avatar_url' => FileUploadHelper::resolveUrl($user->avatar_url),
                 ],
             ]);
         } catch (\Exception $e) {
@@ -439,8 +451,8 @@ class ProfileController extends Controller
             try {
                 if ($user->avatar_url) {
                     $oldPath = str_replace('/storage/', '', $user->avatar_url);
-                    if (Storage::disk('public')->exists($oldPath)) {
-                        Storage::disk('public')->delete($oldPath);
+                    if (Storage::disk(config('filesystems.default'))->exists($oldPath)) {
+                        Storage::disk(config('filesystems.default'))->delete($oldPath);
                     }
                 }
             } catch (\Throwable $e) {
@@ -448,9 +460,9 @@ class ProfileController extends Controller
 
             $filename = 'avatar_'.$user->id.'_'.time().'.'.$ext;
             $path = 'avatars/'.$filename;
-            Storage::disk('public')->put($path, $binary);
+            Storage::disk(config('filesystems.default'))->put($path, $binary);
 
-            $user->avatar_url = '/storage/'.$path;
+            $user->avatar_url = Storage::url($path);
             $user->save();
 
             return response()->json([

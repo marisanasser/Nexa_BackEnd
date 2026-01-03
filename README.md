@@ -10,7 +10,9 @@ Laravel 10 REST API backend for the Nexa platform, providing authentication, cam
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Database Setup](#database-setup)
-- [Socket.IO Server](#socketio-server)
+- [Database Setup](#database-setup)
+- [Real-time (Laravel Reverb)](#real-time-laravel-reverb)
+- [API Documentation](#api-documentation)
 - [API Documentation](#api-documentation)
 - [Development](#development)
 - [Testing](#testing)
@@ -21,7 +23,7 @@ Laravel 10 REST API backend for the Nexa platform, providing authentication, cam
 The Nexa Backend is built with Laravel 10 and provides a comprehensive REST API for:
 - User authentication and authorization (Laravel Sanctum)
 - Campaign creation and management
-- Real-time chat functionality (Socket.IO)
+- Real-time chat functionality (Laravel Reverb)
 - Payment processing (Stripe integration)
 - Admin dashboard and user management
 - Portfolio management for creators
@@ -46,7 +48,7 @@ The Nexa Backend is built with Laravel 10 and provides a comprehensive REST API 
   - Campaign timeline tracking
 
 - **Real-time Chat**
-  - Socket.IO integration
+  - Reverb integration
   - Message history
   - Typing indicators
   - Read receipts
@@ -81,7 +83,6 @@ The Nexa Backend is built with Laravel 10 and provides a comprehensive REST API 
 - **PHP** >= 8.1 with extensions:
   - BCMath, Ctype, Fileinfo, JSON, Mbstring, OpenSSL, PDO, Tokenizer, XML
 - **Composer** >= 2.0
-- **Node.js** >= 18.x (for Socket.IO server)
 - **MySQL** >= 8.0 or **PostgreSQL** >= 13
 - **Redis** (for caching and queues)
 
@@ -112,10 +113,7 @@ The Nexa Backend is built with Laravel 10 and provides a comprehensive REST API 
    php artisan storage:setup-directories
    ```
 
-6. **Install Node.js dependencies (for Socket.IO):**
-   ```bash
-   npm install
-   ```
+
 
 ## ⚙️ Configuration
 
@@ -194,30 +192,23 @@ SESSION_DOMAIN=localhost
    php artisan db:seed
    ```
 
-## 🔌 Socket.IO Server
+## 🔌 Real-time (Laravel Reverb)
 
-The backend includes a Socket.IO server for real-time chat functionality.
+O Nexa utiliza **Laravel Reverb** para funcionalidades em tempo real (Chat).
 
-### Running the Socket Server
+### Running Reverb
 
 **Development:**
 ```bash
-npm run dev
+php artisan reverb:start --debug
 ```
 
 **Production:**
 ```bash
-npm run start
+php artisan reverb:start
 ```
 
-**With PM2:**
-```bash
-pm2 start socket-server.js --name nexa-socket
-pm2 save
-pm2 startup
-```
-
-The Socket.IO server runs on port `3001` by default. Configure CORS in `socket-server.js` to match your frontend URL.
+Para mais detalhes sobre a configuração, consulte a documentação oficial do Laravel Reverb.
 
 ## 📚 API Documentation
 

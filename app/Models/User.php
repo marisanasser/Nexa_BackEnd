@@ -78,6 +78,10 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    protected $appends = [
+        'avatar',
+    ];
+
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
@@ -90,6 +94,11 @@ class User extends Authenticatable
         'birth_date' => 'date',
         'languages' => 'array',
     ];
+
+    public function getAvatarAttribute(): ?string
+    {
+        return $this->avatar_url;
+    }
 
     public function campaigns(): HasMany
     {

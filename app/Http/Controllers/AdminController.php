@@ -685,7 +685,7 @@ class AdminController extends Controller
     private function uploadFile($file, string $path): string
     {
         $fileName = time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
-        $filePath = $file->storeAs($path, $fileName, 'public');
+        $filePath = $file->storeAs($path, $fileName, config('filesystems.default'));
 
         return \Illuminate\Support\Facades\Storage::url($filePath);
     }
@@ -698,8 +698,8 @@ class AdminController extends Controller
 
         try {
             $path = str_replace('/storage/', '', $fileUrl);
-            if (Storage::disk('public')->exists($path)) {
-                Storage::disk('public')->delete($path);
+            if (Storage::disk(config('filesystems.default'))->exists($path)) {
+                Storage::disk(config('filesystems.default'))->delete($path);
             }
         } catch (\Exception $e) {
             Log::warning('Failed to delete file: '.$fileUrl.' - '.$e->getMessage());
@@ -1437,7 +1437,7 @@ class AdminController extends Controller
                     if (isset($stepData['videoFile']) && $stepData['videoFile'] instanceof \Illuminate\Http\UploadedFile) {
                         $file = $stepData['videoFile'];
                         $filename = Str::uuid()->toString().'.'.$file->getClientOriginalExtension();
-                        $path = $file->storeAs('videos/steps', $filename, 'public');
+                        $path = $file->storeAs('videos/steps', $filename, config('filesystems.default'));
 
                         $stepFields['video_path'] = $path;
                         $stepFields['video_mime'] = $file->getMimeType();
@@ -1448,7 +1448,7 @@ class AdminController extends Controller
                         foreach ($stepData['screenshots'] as $screenshot) {
                             if ($screenshot instanceof \Illuminate\Http\UploadedFile) {
                                 $filename = \Illuminate\Support\Str::uuid()->toString().'.'.$screenshot->getClientOriginalExtension();
-                                $path = $screenshot->storeAs('screenshots/steps', $filename, 'public');
+                                $path = $screenshot->storeAs('screenshots/steps', $filename, config('filesystems.default'));
                                 $screenshotPaths[] = $path;
                             }
                         }

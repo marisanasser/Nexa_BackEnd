@@ -61,7 +61,7 @@ class GuideController extends Controller
                     if (isset($stepData['videoFile']) && $stepData['videoFile'] instanceof \Illuminate\Http\UploadedFile) {
                         $file = $stepData['videoFile'];
                         $filename = Str::uuid()->toString().'.'.$file->getClientOriginalExtension();
-                        $path = $file->storeAs('videos/steps', $filename, 'public');
+                        $path = $file->storeAs('videos/steps', $filename, config('filesystems.default'));
 
                         $stepFields['video_path'] = $path;
                         $stepFields['video_mime'] = $file->getMimeType();
@@ -72,7 +72,7 @@ class GuideController extends Controller
                         foreach ($stepData['screenshots'] as $screenshot) {
                             if ($screenshot instanceof \Illuminate\Http\UploadedFile) {
                                 $filename = Str::uuid()->toString().'.'.$screenshot->getClientOriginalExtension();
-                                $path = $screenshot->storeAs('screenshots/steps', $filename, 'public');
+                                $path = $screenshot->storeAs('screenshots/steps', $filename, config('filesystems.default'));
                                 $screenshotPaths[] = $path;
                             }
                         }
@@ -139,7 +139,7 @@ class GuideController extends Controller
                     if (isset($stepData['videoFile']) && $stepData['videoFile'] instanceof \Illuminate\Http\UploadedFile) {
                         $file = $stepData['videoFile'];
                         $filename = Str::uuid()->toString().'.'.$file->getClientOriginalExtension();
-                        $path = $file->storeAs('videos/steps', $filename, 'public');
+                        $path = $file->storeAs('videos/steps', $filename, config('filesystems.default'));
 
                         $stepFields['video_path'] = $path;
                         $stepFields['video_mime'] = $file->getMimeType();
@@ -150,7 +150,7 @@ class GuideController extends Controller
                         foreach ($stepData['screenshots'] as $screenshot) {
                             if ($screenshot instanceof \Illuminate\Http\UploadedFile) {
                                 $filename = Str::uuid()->toString().'.'.$screenshot->getClientOriginalExtension();
-                                $path = $screenshot->storeAs('screenshots/steps', $filename, 'public');
+                                $path = $screenshot->storeAs('screenshots/steps', $filename, config('filesystems.default'));
                                 $screenshotPaths[] = $path;
                             }
                         }
@@ -186,13 +186,13 @@ class GuideController extends Controller
             DB::beginTransaction();
 
             foreach ($guide->steps as $step) {
-                if ($step->video_path && Storage::disk('public')->exists($step->video_path)) {
-                    Storage::disk('public')->delete($step->video_path);
+                if ($step->video_path && Storage::disk(config('filesystems.default'))->exists($step->video_path)) {
+                    Storage::disk(config('filesystems.default'))->delete($step->video_path);
                 }
             }
 
-            if ($guide->video_path && Storage::disk('public')->exists($guide->video_path)) {
-                Storage::disk('public')->delete($guide->video_path);
+            if ($guide->video_path && Storage::disk(config('filesystems.default'))->exists($guide->video_path)) {
+                Storage::disk(config('filesystems.default'))->delete($guide->video_path);
             }
 
             $guide->steps()->delete();

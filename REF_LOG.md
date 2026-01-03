@@ -22,13 +22,17 @@ Este documento registra as alterações realizadas no projeto, incluindo refator
 
 **Status:** ✅ Concluído e Verificado.
 
-## 2. Migração para Laravel Reverb (Em Andamento)
+## 2. Migração para Laravel Reverb (Concluído - Limpeza)
 
-**Objetivo:** Substituir a implementação atual de WebSocket (Socket.io/Redis) pelo Laravel Reverb, uma solução nativa e escalável para broadcasting em tempo real no Laravel.
+**Objetivo:** Substituir a implementação anterior de WebSocket (Socket.io/Redis) pelo Laravel Reverb.
 
-**Próximos Passos:**
-- [ ] Análise da implementação atual de Socket.io.
-- [ ] Instalação do Laravel Reverb.
-- [ ] Configuração do Broadcasting.
-- [ ] Migração de Eventos e Listeners.
-- [ ] Atualização do Front-end (se necessário) para usar Laravel Echo com Reverb.
+**Alterações Realizadas:**
+- [x] Análise da implementação anterior de Socket.io.
+- [x] Remoção dos artefatos de Node.js no backend (`package.json`, `package-lock.json`, `node_modules`).
+- [x] Instalação do Laravel Reverb via Composer.
+- [x] Configuração inicial do Broadcasting.
+- [ ] Migração final de Listeners (Se necessário).
+- [ ] Atualização completa do Front-end para usar Laravel Echo com Reverb.
+
+**Status:** 🏗️ Em transição final (Artefatos antigos removidos).
+

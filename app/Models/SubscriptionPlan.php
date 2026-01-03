@@ -21,6 +21,11 @@ class SubscriptionPlan extends Model
         'sort_order',
     ];
 
+    protected $appends = [
+        'monthly_price',
+        'savings_percentage',
+    ];
+
     protected $casts = [
         'price' => 'decimal:2',
         'duration_months' => 'integer',
@@ -31,8 +36,7 @@ class SubscriptionPlan extends Model
 
     public function getMonthlyPriceAttribute(): float
     {
-
-        return (float) $this->price;
+        return (float) ($this->price / ($this->duration_months ?: 1));
     }
 
     public function getSavingsPercentageAttribute(): ?float
@@ -41,12 +45,15 @@ class SubscriptionPlan extends Model
             return null;
         }
 
-        $monthlyPlan = static::where('duration_months', 1)->first();
+        $monthlyPlan = static::where('duration_months', 1)->active()->ordered()->first();
         if (! $monthlyPlan) {
             return null;
         }
 
-        $savings = (($monthlyPlan->price - $this->price) / $monthlyPlan->price) * 100;
+        $monthlyBase = (float) $monthlyPlan->price;
+        $thisMonthly = (float) ($this->price / $this->duration_months);
+
+        $savings = (($monthlyBase - $thisMonthly) / $monthlyBase) * 100;
 
         return round($savings, 0);
     }

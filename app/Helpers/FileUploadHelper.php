@@ -159,7 +159,7 @@ class FileUploadHelper
     /**
      * Delete from GCS
      */
-    private static function deleteFromGcs(string $url): bool
+    public static function deleteFromGcs(string $url): bool
     {
         $bucket = env('GOOGLE_CLOUD_STORAGE_BUCKET', 'nexa-uploads-prod');
         $projectId = env('GOOGLE_CLOUD_PROJECT_ID', 'nexa-teste-1');
@@ -180,5 +180,22 @@ class FileUploadHelper
         $object->delete();
         
         return true;
+    }
+
+    /**
+     * Resolve a storage path to a full URL
+     */
+    public static function resolveUrl(?string $path): ?string
+    {
+        if (!$path) return null;
+        if (str_starts_with($path, 'http')) return $path;
+        
+        // If it already starts with /storage/, just prepend the app URL if needed, 
+        // but Laravel's asset() does this correctly.
+        if (str_starts_with($path, '/storage/')) {
+            return asset($path);
+        }
+        
+        return asset('storage/' . $path);
     }
 }

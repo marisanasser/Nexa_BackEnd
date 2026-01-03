@@ -49,11 +49,8 @@ class Portfolio extends Model
 
     public function getProfilePictureUrlAttribute(): ?string
     {
-        if ($this->profile_picture) {
-            return asset('storage/'.$this->profile_picture);
-        }
-
-        return null;
+        // Always use the user avatar as the single source of truth to prevent sync issues
+        return $this->user->avatar_url;
     }
 
     public function getItemsCount(): int

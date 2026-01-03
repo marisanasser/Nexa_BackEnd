@@ -444,7 +444,7 @@ class ChatController extends Controller
             } catch (\Throwable $e) {
                 error_log("GCS UPLOAD ERROR: ".$e->getMessage());
                 // Fallback to local storage
-                $localPath = $file->storeAs('chat-files', $fileName, 'public');
+                $localPath = $file->storeAs('chat-files/' . $user->id, $fileName, config('filesystems.default'));
                 if ($localPath) {
                     $filePath = $localPath;
                     error_log("LOCAL STORAGE SUCCESS: ".$localPath);
@@ -853,6 +853,11 @@ class ChatController extends Controller
 
         $onlineStatus = UserOnlineStatus::firstOrCreate(['user_id' => $user->id]);
         $onlineStatus->setTypingInRoom($request->room_id, $request->is_typing);
+
+        // If user is typing, ensure they are marked as online
+        if ($request->is_typing && !$onlineStatus->is_online) {
+            $onlineStatus->updateOnlineStatus(true);
+        }
 
         // Broadcast the typing event
         try {

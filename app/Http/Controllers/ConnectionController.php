@@ -335,7 +335,7 @@ class ConnectionController extends Controller
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $fileName = time().'_'.$file->getClientOriginalName();
-            $filePath = $file->storeAs('direct-chat-files', $fileName, 'public');
+            $filePath = $file->storeAs('direct-chat-files/' . $user->id, $fileName, config('filesystems.default'));
 
             if (empty($messageData['message'])) {
                 $messageData['message'] = $file->getClientOriginalName();

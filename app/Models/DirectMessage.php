@@ -42,6 +42,13 @@ class DirectMessage extends Model
     public function getFileUrlAttribute(): ?string
     {
         if ($this->file_path) {
+            $disk = config('filesystems.default');
+            
+            if ($disk === 'gcs') {
+                $bucket = config('filesystems.disks.gcs.bucket');
+                return "https://storage.googleapis.com/{$bucket}/{$this->file_path}";
+            }
+            
             return asset('storage/'.$this->file_path);
         }
 

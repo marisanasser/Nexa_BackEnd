@@ -74,7 +74,7 @@ class DeliveryMaterialController extends Controller
         try {
             $file = $request->file('file');
             $fileName = time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
-            $filePath = $file->storeAs('delivery-materials', $fileName, 'public');
+            $filePath = $file->storeAs('delivery-materials/' . $user->id, $fileName, config('filesystems.default'));
 
             $mimeType = $file->getMimeType();
             $mediaType = $this->getMediaType($mimeType);

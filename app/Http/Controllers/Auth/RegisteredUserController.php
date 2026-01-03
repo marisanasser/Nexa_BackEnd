@@ -353,7 +353,7 @@ class RegisteredUserController extends Controller
             $filename = time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
             Log::info('Generated filename: '.$filename);
 
-            $path = $file->storeAs('avatars', $filename, 'public');
+            $path = $file->storeAs('avatars', $filename, config('filesystems.default'));
             Log::info('File stored at path: '.$path);
 
             $url = Storage::url($path);
