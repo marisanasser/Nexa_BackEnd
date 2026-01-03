@@ -10,9 +10,7 @@ Laravel 10 REST API backend for the Nexa platform, providing authentication, cam
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Database Setup](#database-setup)
-- [Database Setup](#database-setup)
 - [Real-time (Laravel Reverb)](#real-time-laravel-reverb)
-- [API Documentation](#api-documentation)
 - [API Documentation](#api-documentation)
 - [Development](#development)
 - [Testing](#testing)
@@ -82,8 +80,7 @@ The Nexa Backend is built with Laravel 10 and provides a comprehensive REST API 
 
 - **PHP** >= 8.1 with extensions:
   - BCMath, Ctype, Fileinfo, JSON, Mbstring, OpenSSL, PDO, Tokenizer, XML
-- **Composer** >= 2.0
-- **MySQL** >= 8.0 or **PostgreSQL** >= 13
+- **PostgreSQL** >= 13 (Supabase recomendado)
 - **Redis** (for caching and queues)
 
 ## 🚀 Installation
@@ -130,13 +127,13 @@ APP_DEBUG=true
 APP_URL=http://localhost:8000
 APP_TIMEZONE=UTC
 
-# Database
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=nexa_db
-DB_USERNAME=root
-DB_PASSWORD=
+# Database (PostgreSQL / Supabase)
+DB_CONNECTION=pgsql
+DB_HOST=your-supabase-host.supabase.co
+DB_PORT=5432
+DB_DATABASE=postgres
+DB_USERNAME=postgres
+DB_PASSWORD=your-password
 
 # Redis
 REDIS_HOST=127.0.0.1
@@ -340,36 +337,21 @@ php artisan test --coverage
    APP_DEBUG=false
    ```
 
-2. **Optimize Application:**
-   ```bash
-   php artisan config:cache
-   php artisan route:cache
-   php artisan view:cache
-   php artisan optimize
-   ```
-
-3. **Set Permissions:**
-   ```bash
-   chmod -R 775 storage bootstrap/cache
-   chown -R www-data:www-data storage bootstrap/cache
-   ```
-
-4. **Run Migrations:**
-   ```bash
-   php artisan migrate --force
-   ```
-
-5. **Start Socket.IO Server:**
-   ```bash
-   pm2 start socket-server.js --name nexa-socket
-   ```
+  2. **Optimize Application:**
+     ```bash
+     php artisan config:cache
+     ...
+     ```
+  3. **Run Migrations:**
+     ```bash
+     php artisan migrate --force
+     ```
 
 ### Server Requirements
 
 - PHP 8.1+ with required extensions
 - Composer
-- Node.js 18+ (for Socket.IO)
-- MySQL 8.0+ or PostgreSQL 13+
+- **PostgreSQL 13+**
 - Redis
 - Web server (Nginx/Apache)
 - SSL certificate (for HTTPS)
@@ -402,4 +384,4 @@ For issues and questions, please open an issue on the repository.
 
 ---
 
-**Note:** Make sure to configure all environment variables before running the application. The Socket.IO server must be running for real-time chat functionality to work.
+**Note:** Certifique-se de configurar todas as variáveis de ambiente no arquivo `.env`. O Laravel Reverb deve estar rodando para as funcionalidades de chat em tempo real funcionarem.
