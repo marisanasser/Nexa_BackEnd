@@ -730,6 +730,109 @@ class ContractPaymentController extends Controller
         }
     }
 
+    public function handleFundingSuccess(Request $request): JsonResponse
+    {
+        try {
+            /** @var \App\Models\User $user */
+            $user = auth()->user();
+
+            if (! $user || ! $user->isBrand()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized or not a brand',
+                ], 403);
+            }
+
+            $sessionId = $request->input('session_id');
+            $contractId = $request->input('contract_id');
+
+            if (! $sessionId || ! $contractId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Session ID and Contract ID are required',
+                ], 400);
+            }
+
+            Log::info('Handling contract funding success manually', [
+                'user_id' => $user->id,
+                'session_id' => $sessionId,
+                'contract_id' => $contractId
+            ]);
+
+            if (! $this->stripeKey) {
+                return response()->json(['success' => false, 'message' => 'Stripe config missing'], 500);
+            }
+
+            \Stripe\Stripe::setApiKey($this->stripeKey);
+            $session = \Stripe\Checkout\Session::retrieve($sessionId, ['expand' => ['payment_intent']]);
+
+            if ($session->payment_status !== 'paid') {
+                return response()->json(['success' => false, 'message' => 'Payment not paid'], 400);
+            }
+
+            // Verify idempotency
+            $existingTransaction = Transaction::where('stripe_payment_intent_id', $session->payment_intent->id ?? 'unknown')->first();
+            if ($existingTransaction) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Transaction already processed',
+                    'data' => ['transaction_id' => $existingTransaction->id]
+                ]);
+            }
+
+            DB::beginTransaction();
+
+            // Create Transaction
+            $contract = Contract::find($contractId);
+            if (!$contract) {
+                throw new \Exception('Contract not found');
+            }
+
+            $transaction = Transaction::create([
+                'user_id' => $user->id,
+                'stripe_payment_intent_id' => $session->payment_intent->id,
+                'status' => 'paid',
+                'amount' => $session->amount_total / 100,
+                'payment_method' => 'stripe',
+                'payment_data' => ['session_id' => $session->id, 'type' => 'contract_funding'],
+                'paid_at' => now(),
+                'contract_id' => $contract->id,
+            ]);
+
+            // Create/Update JobPayment
+            $jobPayment = \App\Models\JobPayment::updateOrCreate(
+                ['contract_id' => $contract->id],
+                [
+                    'brand_id' => $contract->brand_id,
+                    'creator_id' => $contract->creator_id,
+                    'total_amount' => $contract->budget,
+                    'platform_fee' => $contract->budget * 0.05,
+                    'creator_amount' => $contract->budget * 0.95,
+                    'payment_method' => 'stripe_escrow',
+                    'status' => 'paid', // Or 'completed' depending on logic
+                    'transaction_id' => $transaction->id,
+                ]
+            );
+
+            // Update Contract Status if needed
+            // (Usually Approval flow does this, but if funding was the blocker, we might need to ensure it's unblocked)
+            // But Approval checks needsFunding(). If JobPayment is paid, needsFunding() returns false.
+            
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Contract funding processed successfully',
+                'data' => ['transaction_id' => $transaction->id]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Manual funding handling failed', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
     public function getTransactionHistory(Request $request): JsonResponse
     {
         try {

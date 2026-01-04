@@ -285,6 +285,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/methods', [ContractPaymentController::class, 'getAvailablePaymentMethods']);
         Route::post('/retry', [ContractPaymentController::class, 'retryPayment']);
         Route::post('/checkout-session', [ContractPaymentController::class, 'createContractCheckoutSession']);
+        Route::post('/handle-funding-success', [ContractPaymentController::class, 'handleFundingSuccess']);
     });
 
     Route::prefix('offers')->group(function () {
