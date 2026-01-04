@@ -27,7 +27,7 @@ class E2ETestUsersSeeder extends Seeder
                 'password' => Hash::make('Test@123456'),
                 'role' => 'brand',
                 'email_verified_at' => now(),
-                'is_active' => true,
+                'email_verified_at' => now(),
             ]
         );
 
@@ -39,7 +39,7 @@ class E2ETestUsersSeeder extends Seeder
                 'password' => Hash::make('Test@123456'),
                 'role' => 'creator',
                 'email_verified_at' => now(),
-                'is_active' => true,
+                'email_verified_at' => now(),
             ]
         );
 
@@ -51,7 +51,6 @@ class E2ETestUsersSeeder extends Seeder
                 'password' => Hash::make('Admin@123456'),
                 'role' => 'admin',
                 'email_verified_at' => now(),
-                'is_active' => true,
             ]
         );
 
