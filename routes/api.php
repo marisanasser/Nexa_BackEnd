@@ -74,8 +74,6 @@ Route::middleware(['auth:sanctum', 'user.status'])->prefix('student')->group(fun
 });
 
 
-Route::post('/register/student', [AuthController::class, 'registerStudent']);
-
 Route::middleware(['auth:sanctum', 'user.status'])->group(function () {
 
     Route::prefix('profile')->group(function () {

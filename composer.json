@@ -13,6 +13,7 @@
         "doctrine/dbal": "^3.10",
         "google/cloud-storage": "^1.30",
         "guzzlehttp/guzzle": "^7.2",
+        "inertiajs/inertia-laravel": "^2.0",
         "intervention/image": "^3.11",
         "laravel/framework": "^10.10",
         "laravel/reverb": "^1.6",
