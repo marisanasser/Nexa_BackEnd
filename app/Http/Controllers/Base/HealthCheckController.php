@@ -1,0 +1,81 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers\Base;
+
+use Exception;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+
+class HealthCheckController extends Controller
+{
+    /**
+     * Check the health of the application and its dependencies.
+     *
+     * @return JsonResponse
+     */
+    public function __invoke()
+    {
+        $status = [
+            'status' => 'ok',
+            'timestamp' => now()->toIso8601String(),
+            'services' => [
+                'database' => $this->checkDatabase(),
+                'cache' => $this->checkCache(),
+            ],
+        ];
+
+        // Determine overall status
+        if ('ok' !== $status['services']['database']['status']
+            || 'ok' !== $status['services']['cache']['status']) {
+            $status['status'] = 'error';
+
+            return response()->json($status, 503);
+        }
+
+        return response()->json($status);
+    }
+
+    private function checkDatabase()
+    {
+        try {
+            $startTime = microtime(true);
+            DB::connection()->getPdo();
+            $latency = round((microtime(true) - $startTime) * 1000, 2);
+
+            return [
+                'status' => 'ok',
+                'latency_ms' => $latency,
+            ];
+        } catch (Exception $e) {
+            return [
+                'status' => 'error',
+                'message' => 'Could not connect to the database',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ];
+        }
+    }
+
+    private function checkCache()
+    {
+        try {
+            $startTime = microtime(true);
+            Cache::store()->get('health_check'); // Simple read operation
+            $latency = round((microtime(true) - $startTime) * 1000, 2);
+
+            return [
+                'status' => 'ok',
+                'driver' => config('cache.default'),
+                'latency_ms' => $latency,
+            ];
+        } catch (Exception $e) {
+            return [
+                'status' => 'error',
+                'message' => 'Could not connect to cache',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ];
+        }
+    }
+}

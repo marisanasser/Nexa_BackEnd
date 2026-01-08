@@ -1,10 +1,24 @@
 <?php
 
+declare(strict_types=1);
+
+use App\Domain\Campaign\Providers\CampaignServiceProvider;
+use App\Domain\Chat\Providers\ChatServiceProvider;
+use App\Domain\Contract\Providers\ContractServiceProvider;
+use App\Domain\Payment\Providers\PaymentServiceProvider;
+use App\Domain\User\Providers\UserServiceProvider;
+use App\Providers\AppServiceProvider;
+use App\Providers\AuthServiceProvider;
+use App\Providers\BroadcastServiceProvider;
+use App\Providers\DomainServiceProvider;
+use App\Providers\EventServiceProvider;
+use App\Providers\RouteServiceProvider;
 use Illuminate\Support\Facades\Facade;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Socialite\Facades\Socialite;
+use Laravel\Socialite\SocialiteServiceProvider;
 
 return [
-
     'name' => env('APP_NAME', 'Laravel'),
 
     'env' => env('APP_ENV', 'production'),
@@ -31,25 +45,30 @@ return [
 
     'maintenance' => [
         'driver' => 'file',
-
     ],
 
     'providers' => ServiceProvider::defaultProviders()->merge([
+        SocialiteServiceProvider::class,
 
-        Laravel\Socialite\SocialiteServiceProvider::class,
+        AppServiceProvider::class,
+        AuthServiceProvider::class,
+        BroadcastServiceProvider::class,
+        EventServiceProvider::class,
+        RouteServiceProvider::class,
 
-        App\Providers\AppServiceProvider::class,
-        App\Providers\AuthServiceProvider::class,
-        App\Providers\BroadcastServiceProvider::class,
-        App\Providers\EventServiceProvider::class,
-        App\Providers\RouteServiceProvider::class,
+        // Domain Service Providers
+        DomainServiceProvider::class,
+        CampaignServiceProvider::class,
+        ChatServiceProvider::class,
+        ContractServiceProvider::class,
+        PaymentServiceProvider::class,
+        UserServiceProvider::class,
+
         // GCS provider removed - causing initialization errors
         // App\Providers\GoogleCloudStorageServiceProvider::class,
     ])->toArray(),
 
     'aliases' => Facade::defaultAliases()->merge([
-
-        'Socialite' => Laravel\Socialite\Facades\Socialite::class,
+        'Socialite' => Socialite::class,
     ])->toArray(),
-
 ];

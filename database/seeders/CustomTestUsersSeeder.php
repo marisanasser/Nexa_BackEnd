@@ -1,8 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
-use App\Models\User;
+use App\Models\User\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -11,7 +13,7 @@ class CustomTestUsersSeeder extends Seeder
     public function run(): void
     {
         $brand = User::firstOrCreate(
-            ['email' => 'brand_test@nexa.com'],
+            ['email' => 'brand.test@nexacreators.com.br'],
             [
                 'name' => 'Brand Test',
                 'password' => Hash::make('password'),
@@ -21,7 +23,7 @@ class CustomTestUsersSeeder extends Seeder
         );
 
         $creator = User::firstOrCreate(
-            ['email' => 'creator_test@nexa.com'],
+            ['email' => 'creator.teste@nexacreators.com.br'],
             [
                 'name' => 'Creator Test',
                 'password' => Hash::make('password'),

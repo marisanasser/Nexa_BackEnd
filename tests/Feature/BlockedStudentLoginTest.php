@@ -1,18 +1,24 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature;
 
-use App\Models\User;
+use App\Models\User\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
+/**
+ * @internal
+ *
+ * @coversNothing
+ */
 class BlockedStudentLoginTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_blocked_student_cannot_login()
+    public function testBlockedStudentCannotLogin(): void
     {
-
         $user = User::factory()->create([
             'role' => 'student',
             'student_verified' => true,
@@ -33,9 +39,8 @@ class BlockedStudentLoginTest extends TestCase
         ]);
     }
 
-    public function test_removed_student_cannot_login()
+    public function testRemovedStudentCannotLogin(): void
     {
-
         $user = User::factory()->create([
             'role' => 'student',
             'student_verified' => true,
@@ -58,9 +63,8 @@ class BlockedStudentLoginTest extends TestCase
         ]);
     }
 
-    public function test_active_student_can_login()
+    public function testActiveStudentCanLogin(): void
     {
-
         $user = User::factory()->create([
             'role' => 'student',
             'student_verified' => true,
@@ -81,9 +85,8 @@ class BlockedStudentLoginTest extends TestCase
         ]);
     }
 
-    public function test_blocked_student_cannot_access_protected_routes()
+    public function testBlockedStudentCannotAccessProtectedRoutes(): void
     {
-
         $user = User::factory()->create([
             'role' => 'student',
             'student_verified' => true,
@@ -103,9 +106,8 @@ class BlockedStudentLoginTest extends TestCase
         ]);
     }
 
-    public function test_removed_student_cannot_access_protected_routes()
+    public function testRemovedStudentCannotAccessProtectedRoutes(): void
     {
-
         $user = User::factory()->create([
             'role' => 'student',
             'student_verified' => true,

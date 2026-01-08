@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests\Campaign;
 
 use Illuminate\Foundation\Http\FormRequest;
@@ -89,10 +91,9 @@ class StoreCampaignRequest extends FormRequest
         ];
     }
 
-    public function withValidator($validator)
+    public function withValidator($validator): void
     {
-        $validator->after(function ($validator) {
-
+        $validator->after(function ($validator): void {
             if ($this->filled('image_url') && $this->hasFile('image')) {
                 $validator->errors()->add('image', 'Please provide either an image URL or upload an image file, not both.');
             }

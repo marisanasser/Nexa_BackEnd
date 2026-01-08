@@ -1,15 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     public function up(): void
     {
-        Schema::table('campaign_applications', function (Blueprint $table) {
-
+        Schema::table('campaign_applications', function (Blueprint $table): void {
             $table->enum('workflow_status', [
                 'first_contact_pending',
                 'agreement_in_progress',
@@ -24,7 +24,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('campaign_applications', function (Blueprint $table) {
+        Schema::table('campaign_applications', function (Blueprint $table): void {
             $table->dropColumn(['workflow_status', 'first_contact_at', 'agreement_finalized_at']);
         });
     }

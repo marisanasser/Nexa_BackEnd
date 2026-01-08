@@ -1,17 +1,28 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Unit\Services;
 
-use App\Models\BrandPaymentMethod;
-use App\Models\User;
-use App\Repositories\PaymentRepository;
-use App\Services\PaymentService;
+use App\Models\Payment\BrandPaymentMethod;
+use App\Models\User\User;
+use App\Domain\Payment\Repositories\PaymentMethodRepository as PaymentRepository;
+use App\Domain\Payment\Services\PaymentMethodService as PaymentService;
+use App\Domain\Payment\Services\StripeCustomerService;
+
 use App\Wrappers\StripeWrapper;
+use Exception;
 use Illuminate\Support\Facades\Config;
 use Mockery;
+use Stripe\Checkout\Session;
 use Stripe\Customer;
 use Tests\TestCase;
 
+/**
+ * @internal
+ *
+ * @coversNothing
+ */
 class PaymentServiceTest extends TestCase
 {
     protected $paymentService;
@@ -19,6 +30,8 @@ class PaymentServiceTest extends TestCase
     protected $paymentRepository;
 
     protected $stripeWrapper;
+
+    protected $customerService;
 
     protected $user;
 
@@ -34,14 +47,18 @@ class PaymentServiceTest extends TestCase
         // Mock setApiKey to avoid real Stripe calls
         $this->stripeWrapper->shouldReceive('setApiKey')->with('sk_test_mock_key');
 
-        $this->paymentService = new PaymentService($this->paymentRepository, $this->stripeWrapper);
+        $this->customerService = Mockery::mock(StripeCustomerService::class);
+        $this->paymentService = new PaymentService($this->stripeWrapper, $this->customerService);
 
-        // Mock User
-        $this->user = Mockery::mock(User::class)->makePartial();
-        $this->user->id = 1;
-        $this->user->shouldReceive('getAttribute')->with('id')->andReturn(1);
-        $this->user->shouldReceive('getAttribute')->with('email')->andReturn('test@example.com');
-        $this->user->shouldReceive('getAttribute')->with('name')->andReturn('Test User');
+        // Real User instance to satisfy type hints
+        $this->user = new User();
+        $this->user->forceFill([
+            'id' => 1,
+            'role' => 'brand',
+            'email' => 'test@example.com',
+            'name' => 'Test User',
+        ]);
+        $this->user->wasRecentlyCreated = false;
     }
 
     protected function tearDown(): void
@@ -50,7 +67,7 @@ class PaymentServiceTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_save_brand_payment_method_creates_record_via_repository()
+    public function testSaveBrandPaymentMethodCreatesRecordViaRepository(): void
     {
         $data = [
             'card_holder_name' => 'John Doe',
@@ -66,101 +83,67 @@ class PaymentServiceTest extends TestCase
         $this->paymentRepository->shouldReceive('findBrandPaymentMethodByCardHash')
             ->once()
             ->with(1, 'hash_ending_1234')
-            ->andReturnNull();
+            ->andReturnNull()
+        ;
 
         // Expect repository create
         $this->paymentRepository->shouldReceive('createBrandPaymentMethod')
             ->once()
-            ->with(Mockery::on(function ($arg) {
-                return $arg['card_holder_name'] === 'John Doe' &&
-                       $arg['user_id'] === 1 &&
-                       $arg['card_last4'] === '1234';
-            }))
-            ->andReturn($mockPaymentMethod);
+            ->with(Mockery::on(fn ($arg) => 'John Doe' === $arg['card_holder_name']
+                       && 1 === $arg['user_id']
+                       && '1234' === $arg['card_last4']))
+            ->andReturn($mockPaymentMethod)
+        ;
 
         // Expect setAsDefault calls
         $this->paymentRepository->shouldReceive('unsetDefaultPaymentMethods')
             ->once()
-            ->with(1, 10);
+            ->with(1, 10)
+        ;
 
         $this->paymentRepository->shouldReceive('setPaymentMethodAsDefault')
             ->once()
-            ->with($mockPaymentMethod);
+            ->with($mockPaymentMethod)
+        ;
 
         $this->paymentRepository->shouldReceive('updateUserDefaultPaymentMethod')
             ->once()
-            ->with($this->user, 'pm_123');
+            ->with($this->user, 'pm_123')
+        ;
 
         $result = $this->paymentService->saveBrandPaymentMethod($this->user, $data);
 
         $this->assertSame($mockPaymentMethod, $result);
     }
 
-    public function test_ensure_stripe_customer_creates_new_customer_if_none_exists()
-    {
-        $this->user->shouldReceive('getAttribute')->with('stripe_customer_id')->andReturn(null);
+    // Removed obsolete ensureStripeCustomer tests; logic moved to StripeCustomerService
 
-        // Real Stripe Customer object
-        $customer = new Customer(['id' => 'cus_new123']);
-
-        // Mock Stripe Wrapper create
-        $this->stripeWrapper->shouldReceive('createCustomer')
-            ->once()
-            ->andReturn($customer);
-
-        // Expect repository update
-        $this->paymentRepository->shouldReceive('updateUserStripeId')
-            ->once()
-            ->with($this->user, 'cus_new123');
-
-        $customerId = $this->paymentService->ensureStripeCustomer($this->user);
-
-        $this->assertEquals('cus_new123', $customerId);
-    }
-
-    public function test_ensure_stripe_customer_returns_existing_id()
-    {
-        $this->user->shouldReceive('getAttribute')->with('stripe_customer_id')->andReturn('cus_existing');
-
-        // Real Stripe Customer object
-        $customer = new Customer(['id' => 'cus_existing']);
-
-        // Mock Stripe Wrapper retrieve
-        $this->stripeWrapper->shouldReceive('retrieveCustomer')
-            ->once()
-            ->with('cus_existing')
-            ->andReturn($customer);
-
-        $customerId = $this->paymentService->ensureStripeCustomer($this->user);
-
-        $this->assertEquals('cus_existing', $customerId);
-    }
-
-    public function test_create_setup_checkout_session()
+    public function testCreateSetupCheckoutSession(): void
     {
         $this->user->shouldReceive('getAttribute')->with('stripe_customer_id')->andReturn('cus_123');
         $this->user->shouldReceive('getAttribute')->with('id')->andReturn(1);
 
-        // Mock ensureStripeCustomer internal logic (retrieve)
-        $this->stripeWrapper->shouldReceive('retrieveCustomer')
+        // Mock ensureStripeCustomer via StripeCustomerService
+        $this->customerService->shouldReceive('ensureStripeCustomer')
             ->once()
-            ->with('cus_123')
-            ->andReturn(new Customer(['id' => 'cus_123']));
+            ->with($this->user)
+            ->andReturn('cus_123');
 
         $this->stripeWrapper->shouldReceive('createCheckoutSession')
             ->once()
-            ->with(Mockery::on(function ($args) {
-                return $args['customer'] === 'cus_123' &&
-                       $args['mode'] === 'setup';
-            }))
-            ->andReturn(new \Stripe\Checkout\Session(['id' => 'cs_test_123']));
+            ->with(Mockery::on(fn ($args) => 'cus_123' === $args['customer']
+                       && 'setup' === $args['mode']
+                       && isset($args['success_url'])
+                       && isset($args['cancel_url'])))
+            ->andReturn(new Session(['id' => 'cs_test_123']))
+        ;
 
-        $session = $this->paymentService->createSetupCheckoutSession($this->user);
+        $session = $this->paymentService->createSetupCheckoutSession($this->user, 'http://success', 'http://cancel');
 
         $this->assertEquals('cs_test_123', $session->id);
     }
 
-    public function test_delete_brand_payment_method_success()
+    public function testDeleteBrandPaymentMethodSuccess(): void
     {
         $paymentMethodId = 10;
         $stripePaymentMethodId = 'pm_123';
@@ -176,23 +159,26 @@ class PaymentServiceTest extends TestCase
         $this->paymentRepository->shouldReceive('findBrandPaymentMethod')
             ->once()
             ->with(1, $paymentMethodId)
-            ->andReturn($mockPaymentMethod);
+            ->andReturn($mockPaymentMethod)
+        ;
 
         $this->paymentRepository->shouldReceive('countActiveBrandPaymentMethods')
             ->once()
             ->with(1)
-            ->andReturn(2);
+            ->andReturn(2)
+        ;
 
         $this->paymentRepository->shouldReceive('deactivatePaymentMethod')
             ->once()
-            ->with($mockPaymentMethod);
+            ->with($mockPaymentMethod)
+        ;
 
         $this->paymentService->deleteBrandPaymentMethod($this->user, $paymentMethodId);
 
         $this->assertTrue(true);
     }
 
-    public function test_get_brand_payment_method_success()
+    public function testGetBrandPaymentMethodSuccess(): void
     {
         $paymentMethodId = 10;
         $mockPaymentMethod = new BrandPaymentMethod(['id' => $paymentMethodId]);
@@ -200,59 +186,64 @@ class PaymentServiceTest extends TestCase
         $this->paymentRepository->shouldReceive('findBrandPaymentMethod')
             ->once()
             ->with(1, $paymentMethodId)
-            ->andReturn($mockPaymentMethod);
+            ->andReturn($mockPaymentMethod)
+        ;
 
         $result = $this->paymentService->getBrandPaymentMethod($this->user, $paymentMethodId);
 
         $this->assertEquals($mockPaymentMethod, $result);
     }
 
-    public function test_get_brand_payment_method_throws_exception_if_not_found()
+    public function testGetBrandPaymentMethodThrowsExceptionIfNotFound(): void
     {
-        $this->expectException(\Exception::class);
+        $this->expectException(Exception::class);
         $this->expectExceptionMessage('Payment method not found');
 
         $this->paymentRepository->shouldReceive('findBrandPaymentMethod')
             ->once()
             ->with(1, 999)
-            ->andReturn(null);
+            ->andReturn(null)
+        ;
 
         $this->paymentService->getBrandPaymentMethod($this->user, 999);
     }
 
-    public function test_delete_brand_payment_method_throws_exception_if_not_found()
+    public function testDeleteBrandPaymentMethodThrowsExceptionIfNotFound(): void
     {
-        $this->expectException(\Exception::class);
+        $this->expectException(Exception::class);
         $this->expectExceptionMessage('Payment method not found');
 
         $this->paymentRepository->shouldReceive('findBrandPaymentMethod')
             ->once()
             ->with(1, 999)
-            ->andReturn(null);
+            ->andReturn(null)
+        ;
 
         $this->paymentService->deleteBrandPaymentMethod($this->user, 999);
     }
 
-    public function test_delete_brand_payment_method_throws_exception_if_only_one_left()
+    public function testDeleteBrandPaymentMethodThrowsExceptionIfOnlyOneLeft(): void
     {
-        $this->expectException(\Exception::class);
+        $this->expectException(Exception::class);
         $this->expectExceptionMessage('Cannot delete the only payment method');
 
         $mockPaymentMethod = Mockery::mock(BrandPaymentMethod::class);
 
         $this->paymentRepository->shouldReceive('findBrandPaymentMethod')
             ->once()
-            ->andReturn($mockPaymentMethod);
+            ->andReturn($mockPaymentMethod)
+        ;
 
         $this->paymentRepository->shouldReceive('countActiveBrandPaymentMethods')
             ->once()
             ->with(1)
-            ->andReturn(1);
+            ->andReturn(1)
+        ;
 
         $this->paymentService->deleteBrandPaymentMethod($this->user, 10);
     }
 
-    public function test_handle_setup_session_success_creates_payment_method()
+    public function testHandleSetupSessionSuccessCreatesPaymentMethod(): void
     {
         $sessionId = 'cs_test_success';
         $stripeCustomerId = 'cus_123';
@@ -260,7 +251,7 @@ class PaymentServiceTest extends TestCase
         $setupIntentId = 'seti_123';
 
         // Mock Stripe Objects using constructFrom to ensure proper structure
-        $mockSession = \Stripe\Checkout\Session::constructFrom([
+        $mockSession = Session::constructFrom([
             'id' => $sessionId,
             'metadata' => ['user_id' => 1],
             'customer' => ['id' => $stripeCustomerId],
@@ -277,17 +268,20 @@ class PaymentServiceTest extends TestCase
         $this->stripeWrapper->shouldReceive('retrieveCheckoutSession')
             ->once()
             ->with($sessionId, ['expand' => ['setup_intent.payment_method']])
-            ->andReturn($mockSession);
+            ->andReturn($mockSession)
+        ;
 
         $this->paymentRepository->shouldReceive('findBrandPaymentMethodByStripeId')
             ->once()
             ->with(1, $stripePaymentMethodId)
-            ->andReturn(null);
+            ->andReturn(null)
+        ;
 
         $this->paymentRepository->shouldReceive('countActiveBrandPaymentMethods')
             ->once()
             ->with(1)
-            ->andReturn(0); // No active methods, so this will be default
+            ->andReturn(0) // No active methods, so this will be default
+        ;
 
         $mockCreatedPaymentMethod = Mockery::mock(BrandPaymentMethod::class);
         $mockCreatedPaymentMethod->shouldReceive('getAttribute')->with('id')->andReturn(100);
@@ -295,12 +289,11 @@ class PaymentServiceTest extends TestCase
 
         $this->paymentRepository->shouldReceive('createBrandPaymentMethod')
             ->once()
-            ->with(Mockery::on(function ($data) use ($stripePaymentMethodId, $stripeCustomerId) {
-                return $data['stripe_payment_method_id'] === $stripePaymentMethodId &&
-                       $data['stripe_customer_id'] === $stripeCustomerId &&
-                       $data['is_default'] === true;
-            }))
-            ->andReturn($mockCreatedPaymentMethod);
+            ->with(Mockery::on(fn ($data) => $data['stripe_payment_method_id'] === $stripePaymentMethodId
+                       && $data['stripe_customer_id'] === $stripeCustomerId
+                       && true === $data['is_default']))
+            ->andReturn($mockCreatedPaymentMethod)
+        ;
 
         // Expect setting as default
         $this->paymentRepository->shouldReceive('unsetDefaultPaymentMethods');

@@ -105,7 +105,7 @@
 
         <div class="content">
             <h2>Olá, {{ $brand->name }}! 👋</h2>
-            
+
             <p>Obrigado por criar sua campanha na plataforma Nexa! Sua campanha "<strong>{{ $campaign->title }}</strong>" foi recebida com sucesso e está aguardando aprovação da nossa equipe.</p>
 
             <div class="campaign-details">

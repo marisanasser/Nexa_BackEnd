@@ -1,27 +1,26 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
-return new class extends Migration
-{
+return new class extends Migration {
     public function up(): void
     {
-
         $offerMessages = DB::table('messages')
             ->where('message_type', 'offer')
             ->whereNotNull('offer_data')
-            ->get();
+            ->get()
+        ;
 
         foreach ($offerMessages as $message) {
             $offerData = json_decode($message->offer_data, true);
 
             if (isset($offerData['offer_id'])) {
-
                 $offer = DB::table('offers')->where('id', $offerData['offer_id'])->first();
 
                 if ($offer) {
-
                     $updatedOfferData = [
                         'offer_id' => $offer->id,
                         'title' => $offer->title ?? 'Oferta de Projeto',
@@ -43,7 +42,8 @@ return new class extends Migration
                         ->where('id', $message->id)
                         ->update([
                             'offer_data' => json_encode($updatedOfferData),
-                        ]);
+                        ])
+                    ;
                 }
             }
         }

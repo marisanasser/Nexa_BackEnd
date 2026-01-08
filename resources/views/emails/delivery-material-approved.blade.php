@@ -79,7 +79,7 @@
 
         <div class="content">
             <h2>Parabéns, {{ $creator->name }}! 🎉</h2>
-            
+
             <p>Seu material foi <strong>aprovado</strong> pela marca!</p>
 
             <div class="info-box">
@@ -88,7 +88,7 @@
                 <p><strong>Contrato:</strong> {{ $contract->title }}</p>
                 <p><strong>Marca:</strong> {{ $brand->name }}</p>
                 <p><strong>Data de Aprovação:</strong> {{ $material->reviewed_at->format('d/m/Y H:i') }}</p>
-                
+
                 @if($material->comment)
                 <p><strong>Comentário da Marca:</strong></p>
                 <p style="font-style: italic; color: #666;">"{{ $material->comment }}"</p>
@@ -108,4 +108,4 @@
         </div>
     </div>
 </body>
-</html> 
+</html>

@@ -1,13 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
-return new class extends Migration
-{
+return new class extends Migration {
     public function up(): void
     {
-
         DB::table('subscription_plans')->where('name', 'Plano Mensal')->update([
             'name' => 'Plano Mensal',
             'description' => 'Assinatura de 1 mês do Nexa Premium',
@@ -41,7 +41,6 @@ return new class extends Migration
 
     public function down(): void
     {
-
         DB::table('subscription_plans')->where('name', 'Plano Mensal')->update([
             'price' => 39.90,
             'updated_at' => now(),

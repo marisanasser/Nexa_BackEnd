@@ -1,9 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Auth;
 
-use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Http\Controllers\Base\Controller;
+use App\Models\User\User;
+use Exception;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,7 +28,7 @@ class NewPasswordController extends Controller
 
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
-            function ($user) use ($request) {
+            function ($user) use ($request): void {
                 $user->forceFill([
                     'password' => Hash::make($request->password),
                     'remember_token' => Str::random(60),
@@ -35,7 +38,7 @@ class NewPasswordController extends Controller
             }
         );
 
-        if ($status != Password::PASSWORD_RESET) {
+        if (Password::PASSWORD_RESET != $status) {
             throw ValidationException::withMessages([
                 'email' => [__($status)],
             ]);
@@ -53,8 +56,7 @@ class NewPasswordController extends Controller
                 'required',
                 'min:8',
                 'different:current_password',
-                function ($attribute, $value, $fail) {
-
+                function ($attribute, $value, $fail): void {
                     if (preg_match_all('/[0-9]/', $value) < 1) {
                         $fail('The password must contain at least 1 number.');
                     }
@@ -77,7 +79,7 @@ class NewPasswordController extends Controller
         try {
             $user = User::findOrFail($request->user_id);
 
-            if (! Hash::check($request->current_password, $user->password)) {
+            if (!Hash::check($request->current_password, $user->password)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Current password is incorrect',
@@ -95,7 +97,7 @@ class NewPasswordController extends Controller
                 'success' => true,
                 'message' => 'Password updated successfully',
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update password: '.$e->getMessage(),

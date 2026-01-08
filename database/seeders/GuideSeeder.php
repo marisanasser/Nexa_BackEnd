@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Models\Guide;
-use App\Models\Step;
+use App\Models\Common\Guide;
+use App\Models\Common\Step;
 use Illuminate\Database\Seeder;
 
 class GuideSeeder extends Seeder

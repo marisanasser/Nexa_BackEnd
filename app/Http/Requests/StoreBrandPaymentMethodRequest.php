@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\Validator;
@@ -20,21 +22,6 @@ class StoreBrandPaymentMethodRequest extends FormRequest
     }
 
     /**
-     * Handle a failed authorization attempt.
-     *
-     * @return void
-     *
-     * @throws \Illuminate\Http\Exceptions\HttpResponseException
-     */
-    protected function failedAuthorization()
-    {
-        throw new HttpResponseException(response()->json([
-            'success' => false,
-            'message' => 'Only brands can save payment methods',
-        ], 403));
-    }
-
-    /**
      * Get the validation rules that apply to the request.
      *
      * @return array<string, mixed>
@@ -49,22 +36,6 @@ class StoreBrandPaymentMethodRequest extends FormRequest
     }
 
     /**
-     * Handle a failed validation attempt.
-     *
-     * @return void
-     *
-     * @throws \Illuminate\Http\Exceptions\HttpResponseException
-     */
-    protected function failedValidation(Validator $validator)
-    {
-        throw new HttpResponseException(response()->json([
-            'success' => false,
-            'message' => 'Validation failed',
-            'errors' => $validator->errors(),
-        ], 422));
-    }
-
-    /**
      * Get custom messages for validator errors.
      *
      * @return array
@@ -74,5 +45,32 @@ class StoreBrandPaymentMethodRequest extends FormRequest
         return [
             'cnpj.regex' => 'The CNPJ format is invalid. Use XX.XXX.XXX/XXXX-XX',
         ];
+    }
+
+    /**
+     * Handle a failed authorization attempt.
+     *
+     * @throws HttpResponseException
+     */
+    protected function failedAuthorization(): void
+    {
+        throw new HttpResponseException(response()->json([
+            'success' => false,
+            'message' => 'Only brands can save payment methods',
+        ], 403));
+    }
+
+    /**
+     * Handle a failed validation attempt.
+     *
+     * @throws HttpResponseException
+     */
+    protected function failedValidation(Validator $validator): void
+    {
+        throw new HttpResponseException(response()->json([
+            'success' => false,
+            'message' => 'Validation failed',
+            'errors' => $validator->errors(),
+        ], 422));
     }
 }

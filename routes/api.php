@@ -1,39 +1,40 @@
 <?php
 
-use App\Http\Controllers\AccountController;
+use App\Http\Controllers\Auth\AccountController;
 use App\Http\Controllers\Admin\BrandRankingController;
-use App\Http\Controllers\AdminController;
-use App\Http\Controllers\AdminPayoutController;
+use App\Http\Controllers\Admin\AdminPayoutController;
 use App\Http\Controllers\Auth\GoogleController;
-use App\Http\Controllers\BrandPaymentController;
-use App\Http\Controllers\BrandProfileController;
+use App\Http\Controllers\Base\HealthCheckController;
 use App\Http\Controllers\Campaign\BidController;
+use App\Http\Controllers\Campaign\CampaignApplicationController;
 use App\Http\Controllers\Campaign\CampaignController;
-use App\Http\Controllers\CampaignApplicationController;
-use App\Http\Controllers\CampaignTimelineController;
-use App\Http\Controllers\ChatController;
-use App\Http\Controllers\ConnectionController;
-use App\Http\Controllers\ContractController;
-use App\Http\Controllers\ContractPaymentController;
-use App\Http\Controllers\CreatorBalanceController;
-use App\Http\Controllers\DeliveryMaterialController;
-use App\Http\Controllers\GuideController;
-use App\Http\Controllers\HealthCheckController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\OfferController;
-use App\Http\Controllers\PaymentController;
-use App\Http\Controllers\PortfolioController;
-use App\Http\Controllers\PostContractWorkflowController;
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\ReviewController;
-use App\Http\Controllers\StripeBillingController;
-use App\Http\Controllers\StripeController;
-use App\Http\Controllers\StripeWebhookController;
-use App\Http\Controllers\StudentController;
-use App\Http\Controllers\SubscriptionController;
-use App\Http\Controllers\WithdrawalController;
+use App\Http\Controllers\Campaign\CampaignTimelineController;
+use App\Http\Controllers\Campaign\DeliveryMaterialController;
+use App\Http\Controllers\Chat\ChatController;
+use App\Http\Controllers\Chat\ConnectionController;
+use App\Http\Controllers\Contract\ContractController;
+use App\Http\Controllers\Contract\ContractPaymentController;
+use App\Http\Controllers\Contract\OfferController;
+use App\Http\Controllers\Contract\PostContractWorkflowController;
+use App\Http\Controllers\Contract\ReviewController;
+use App\Http\Controllers\Common\GuideController;
+use App\Http\Controllers\Common\NotificationController;
+use App\Http\Controllers\Payment\BrandPaymentController;
+use App\Http\Controllers\Payment\CreatorBalanceController;
+use App\Http\Controllers\Payment\PaymentController;
+use App\Http\Controllers\Payment\StripeBillingController;
+use App\Http\Controllers\Payment\StripeController;
+use App\Http\Controllers\Payment\StripeWebhookController;
+use App\Http\Controllers\Payment\WithdrawalController;
+use App\Http\Controllers\Profile\BrandProfileController;
+use App\Http\Controllers\Profile\PortfolioController;
+use App\Http\Controllers\Profile\ProfileController;
+use App\Http\Controllers\User\StudentController;
+use App\Http\Controllers\Payment\SubscriptionController;
+use App\Models\Campaign\Campaign;
+use App\Models\Common\Guide;
+use App\Models\User\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', HealthCheckController::class);
@@ -72,7 +73,6 @@ Route::middleware(['auth:sanctum', 'user.status'])->prefix('student')->group(fun
     Route::post('/verify', [StudentController::class, 'verifyStudent']);
     Route::get('/status', [StudentController::class, 'getStudentStatus']);
 });
-
 
 Route::middleware(['auth:sanctum', 'user.status'])->group(function () {
 
@@ -209,11 +209,6 @@ Route::get('/subscription/plans', [SubscriptionController::class, 'getPlans']);
 Route::post('/payment/create-subscription-from-checkout-public', [StripeBillingController::class, 'createSubscriptionFromCheckoutPublic'])->middleware(['throttle:payment']);
 
 Route::middleware(['auth:sanctum'])->group(function () {
-    // Route::get('/payment/methods', [PaymentController::class, 'getPaymentMethods'])->middleware(['throttle:dashboard']);
-    // Route::post('/payment/methods', [PaymentController::class, 'createPaymentMethod']);
-    // Route::delete('/payment/methods/{cardId}', [PaymentController::class, 'deletePaymentMethod']);
-    // Route::post('/payment/process', [PaymentController::class, 'processPayment']);
-    // Route::get('/payment/history', [PaymentController::class, 'getPaymentHistory'])->middleware(['throttle:dashboard']);
 
     Route::middleware(['throttle:payment'])->group(function () {
         Route::post('/payment/subscription', [StripeBillingController::class, 'createSubscription']);
@@ -221,18 +216,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/payment/checkout-url', [StripeBillingController::class, 'getCheckoutUrl']);
         Route::post('/payment/create-subscription-from-checkout', [StripeBillingController::class, 'createSubscriptionFromCheckout']);
     });
-
-    // Route::post('/payment/debug', [PaymentController::class, 'debugPayment']);
-    // Route::post('/payment/test', function(Request $request) {
-    //     return response()->json([
-    //         'success' => true,
-    //         'message' => 'Test endpoint working',
-    //         'data' => $request->all(),
-    //         'headers' => $request->headers->all(),
-    //         'auth' => auth()->check(),
-    //         'user' => auth()->user()
-    //     ]);
-    // });
 
     Route::get('/subscription/history', [SubscriptionController::class, 'getSubscriptionHistory'])->middleware(['throttle:dashboard']);
     Route::post('/subscription/cancel', [SubscriptionController::class, 'cancelSubscription']);
@@ -251,7 +234,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/withdrawals', [WithdrawalController::class, 'index']);
         Route::post('/withdrawals', [WithdrawalController::class, 'store']);
 
-        // Route::get('/earnings', [PaymentController::class, 'getEarnings']);
         Route::get('/withdrawal-methods', [CreatorBalanceController::class, 'withdrawalMethods']);
         Route::post('/stripe-payment-method-checkout', [CreatorBalanceController::class, 'createStripePaymentMethodCheckout']);
         Route::post('/stripe-payment-method-checkout-success', [CreatorBalanceController::class, 'handleCheckoutSuccess']);
@@ -367,52 +349,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 });
 
 Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
-
-    Route::get('/dashboard-metrics', [AdminController::class, 'getDashboardMetrics']);
-    Route::get('/pending-campaigns', [AdminController::class, 'getPendingCampaigns']);
-    Route::get('/recent-users', [AdminController::class, 'getRecentUsers']);
-
-    Route::get('/campaigns', [AdminController::class, 'getCampaigns']);
-    Route::patch('/campaigns/{id}/approve', [AdminController::class, 'approveCampaign'])->where('id', '[0-9]+');
-    Route::patch('/campaigns/{id}/reject', [AdminController::class, 'rejectCampaign'])->where('id', '[0-9]+');
-    Route::get('/campaigns/{id}', [AdminController::class, 'getCampaign'])->where('id', '[0-9]+');
-    Route::patch('/campaigns/{id}', [AdminController::class, 'updateCampaign'])->where('id', '[0-9]+');
-    Route::delete('/campaigns/{id}', [AdminController::class, 'deleteCampaign'])->where('id', '[0-9]+');
-
-    Route::get('/users', [AdminController::class, 'getUsers']);
-    Route::get('/users/creators', [AdminController::class, 'getCreators']);
-    Route::get('/users/brands', [AdminController::class, 'getBrands']);
-    Route::get('/users/statistics', [AdminController::class, 'getUserStatistics']);
-    Route::patch('/users/{user}/status', [AdminController::class, 'updateUserStatus'])->where('user', '[0-9]+');
-
-    Route::get('/students', [AdminController::class, 'getStudents']);
-    Route::patch('/students/{student}/trial', [AdminController::class, 'updateStudentTrial'])->where('student', '[0-9]+');
-    Route::patch('/students/{student}/status', [AdminController::class, 'updateStudentStatus'])->where('student', '[0-9]+');
-
-    Route::get('/student-requests', [AdminController::class, 'getStudentVerificationRequests']);
-    Route::patch('/student-requests/{id}/approve', [AdminController::class, 'approveStudentVerification'])->where('id', '[0-9]+');
-    Route::patch('/student-requests/{id}/reject', [AdminController::class, 'rejectStudentVerification'])->where('id', '[0-9]+');
-
-    Route::apiResource('withdrawal-methods', \App\Http\Controllers\Admin\WithdrawalMethodController::class);
-    Route::put('/withdrawal-methods/{id}/toggle-active', [\App\Http\Controllers\Admin\WithdrawalMethodController::class, 'toggleActive'])->where('id', '[0-9]+');
-
-    Route::get('/payouts/pending', [AdminPayoutController::class, 'getPendingWithdrawals']);
-    Route::post('/payouts/{id}/process', [AdminPayoutController::class, 'processWithdrawal'])->where('id', '[0-9]+');
-    Route::get('/payouts/verification-report', [AdminPayoutController::class, 'getWithdrawalVerificationReport']);
-    Route::get('/payouts/{id}/verify', [AdminPayoutController::class, 'verifyWithdrawal'])->where('id', '[0-9]+');
-
-    Route::get('/guides', [AdminController::class, 'getGuides']);
-    Route::get('/guides/{id}', [AdminController::class, 'getGuide'])->where('id', '[0-9]+');
-    Route::post('/guides', [GuideController::class, 'store']);
-    Route::put('/guides/{id}', [AdminController::class, 'updateGuide'])->where('id', '[0-9]+');
-    Route::delete('/guides/{id}', function ($id) {
-        $guide = \App\Models\Guide::findOrFail($id);
-
-        return app(\App\Http\Controllers\GuideController::class)->destroy($guide);
-    })->where('id', '[0-9]+');
-
-    Route::get('/brand-rankings', [BrandRankingController::class, 'getBrandRankings']);
-    Route::get('/brand-rankings/comprehensive', [BrandRankingController::class, 'getComprehensiveRankings']);
+    require __DIR__.'/api/admin.php';
 });
 
 Route::middleware(['auth:sanctum'])->group(function () {
@@ -434,13 +371,13 @@ Route::post('/account/checked', [AccountController::class, 'checkAccount']);
 Route::post('/webhook/stripe', [StripeWebhookController::class, 'handleWebhook']);
 
 // Temporary Debug Route
-Route::get('/debug-visibility', function() {
-    $creator = \App\Models\User::where('email', 'creator.premium@nexacreators.com.br')->first();
-    $campaigns = \App\Models\Campaign::all();
-    
+Route::get('/debug-visibility', function () {
+    $creator = User::where('email', 'creator.premium@nexacreators.com.br')->first();
+    $campaigns = Campaign::all();
+
     return response()->json([
         'creator' => $creator,
-        'campaigns' => $campaigns->map(function($c) {
+        'campaigns' => $campaigns->map(function ($c) {
             return [
                 'id' => $c->id,
                 'title' => $c->title,
@@ -453,6 +390,6 @@ Route::get('/debug-visibility', function() {
                 'min_age' => $c->min_age,
                 'max_age' => $c->max_age,
             ];
-        })
+        }),
     ]);
 });

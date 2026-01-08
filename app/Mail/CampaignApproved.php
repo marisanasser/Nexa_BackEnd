@@ -1,8 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Mail;
 
-use App\Models\Campaign;
+use App\Models\Campaign\Campaign;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -11,7 +13,8 @@ use Illuminate\Queue\SerializesModels;
 
 class CampaignApproved extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable;
+    use SerializesModels;
 
     public $campaign;
 

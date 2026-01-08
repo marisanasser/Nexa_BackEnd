@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Campaign;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\Campaign\StoreBidRequest;
-use App\Models\Bid;
-use App\Models\Campaign;
+use App\Domain\Notification\Services\AdminNotificationService;
+use App\Http\Controllers\Base\Controller;
+use App\Http\Requests\Campaign\StoreCampaignRequest;
+use App\Models\Campaign\Bid;
+use App\Models\Campaign\Campaign;
+use App\Models\User\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -13,7 +15,7 @@ class BidController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $user = auth()->user();
+        $user = $this->getAuthenticatedUser();
         $query = Bid::with(['campaign', 'user']);
 
         if ($user->isCreator()) {
@@ -61,7 +63,7 @@ class BidController extends Controller
 
     public function create() {}
 
-    public function store(StoreBidRequest $request, Campaign $campaign): JsonResponse
+    public function store(StoreCampaignRequest $request, Campaign $campaign): JsonResponse
     {
         $validated = $request->validated();
         $validated['campaign_id'] = $campaign->id;
@@ -69,7 +71,7 @@ class BidController extends Controller
 
         $bid = Bid::create($validated);
 
-        \App\Services\NotificationService::notifyAdminOfNewBid($bid);
+        AdminNotificationService::notifyAdminOfNewBid($bid);
 
         return response()->json([
             'success' => true,
@@ -80,7 +82,7 @@ class BidController extends Controller
 
     public function show(Bid $bid): JsonResponse
     {
-        $user = auth()->user();
+        $user = $this->getAuthenticatedUser();
 
         if ($user->isCreator() && $bid->user_id !== $user->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
@@ -103,7 +105,7 @@ class BidController extends Controller
 
     public function update(Request $request, Bid $bid): JsonResponse
     {
-        $user = auth()->user();
+        $user = $this->getAuthenticatedUser();
 
         if (! $user->isCreator() || $bid->user_id !== $user->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
@@ -135,7 +137,7 @@ class BidController extends Controller
 
     public function destroy(Bid $bid): JsonResponse
     {
-        $user = auth()->user();
+        $user = $this->getAuthenticatedUser();
 
         if (! $user->isCreator() || $bid->user_id !== $user->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
@@ -155,7 +157,7 @@ class BidController extends Controller
 
     public function accept(Bid $bid): JsonResponse
     {
-        $user = auth()->user();
+        $user = $this->getAuthenticatedUser();
 
         if (! $user->isBrand() || $bid->campaign->brand_id !== $user->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
@@ -171,7 +173,7 @@ class BidController extends Controller
 
         $bid->accept();
 
-        \App\Services\NotificationService::notifyAdminOfSystemActivity('bid_accepted', [
+        AdminNotificationService::notifyAdminOfSystemActivity('bid_accepted', [
             'bid_id' => $bid->id,
             'campaign_id' => $bid->campaign_id,
             'campaign_title' => $bid->campaign->title,
@@ -190,7 +192,7 @@ class BidController extends Controller
 
     public function reject(Request $request, Bid $bid): JsonResponse
     {
-        $user = auth()->user();
+        $user = $this->getAuthenticatedUser();
 
         if (! $user->isBrand() || $bid->campaign->brand_id !== $user->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
@@ -206,7 +208,7 @@ class BidController extends Controller
 
         $bid->reject($validated['reason'] ?? null);
 
-        \App\Services\NotificationService::notifyAdminOfSystemActivity('bid_rejected', [
+        AdminNotificationService::notifyAdminOfSystemActivity('bid_rejected', [
             'bid_id' => $bid->id,
             'campaign_id' => $bid->campaign_id,
             'campaign_title' => $bid->campaign->title,
@@ -226,7 +228,7 @@ class BidController extends Controller
 
     public function withdraw(Bid $bid): JsonResponse
     {
-        $user = auth()->user();
+        $user = $this->getAuthenticatedUser();
 
         if (! $user->isCreator() || $bid->user_id !== $user->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
@@ -238,7 +240,7 @@ class BidController extends Controller
 
         $bid->withdraw();
 
-        \App\Services\NotificationService::notifyAdminOfSystemActivity('bid_withdrawn', [
+        AdminNotificationService::notifyAdminOfSystemActivity('bid_withdrawn', [
             'bid_id' => $bid->id,
             'campaign_id' => $bid->campaign_id,
             'campaign_title' => $bid->campaign->title,
@@ -257,7 +259,7 @@ class BidController extends Controller
 
     public function campaignBids(Request $request, Campaign $campaign): JsonResponse
     {
-        $user = auth()->user();
+        $user = $this->getAuthenticatedUser();
 
         if ($user->isBrand() && $campaign->brand_id !== $user->id) {
             return response()->json(['error' => 'Unauthorized'], 403);

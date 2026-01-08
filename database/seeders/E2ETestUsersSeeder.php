@@ -1,14 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
-use App\Models\User;
+use App\Models\User\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
 /**
- * Seeder for creating E2E test users
- * 
+ * Seeder for creating E2E test users.
+ *
  * These users are specifically for Playwright E2E tests.
  * Run with: php artisan db:seed --class=E2ETestUsersSeeder
  */

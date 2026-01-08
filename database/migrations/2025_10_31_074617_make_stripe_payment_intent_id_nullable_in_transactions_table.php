@@ -1,31 +1,29 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
-return new class extends Migration
-{
+return new class extends Migration {
     public function up(): void
     {
-
         DB::statement('DROP INDEX IF EXISTS transactions_stripe_payment_intent_id_unique');
 
-        if (DB::getDriverName() !== 'sqlite') {
-
+        if ('sqlite' !== DB::getDriverName()) {
             DB::statement('ALTER TABLE transactions ALTER COLUMN stripe_payment_intent_id DROP NOT NULL');
         }
     }
 
     public function down(): void
     {
-        if (DB::getDriverName() !== 'sqlite') {
-
+        if ('sqlite' !== DB::getDriverName()) {
             DB::statement('ALTER TABLE transactions ALTER COLUMN stripe_payment_intent_id SET NOT NULL');
         }
 
         DB::statement('
-            CREATE UNIQUE INDEX transactions_stripe_payment_intent_id_unique 
-            ON transactions(stripe_payment_intent_id) 
+            CREATE UNIQUE INDEX transactions_stripe_payment_intent_id_unique
+            ON transactions(stripe_payment_intent_id)
             WHERE stripe_payment_intent_id IS NOT NULL
         ');
     }

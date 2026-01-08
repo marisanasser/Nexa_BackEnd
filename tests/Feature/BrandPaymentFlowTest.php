@@ -1,15 +1,24 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature;
 
 use App\Models\BrandPaymentMethod;
-use App\Models\User;
+use App\Models\User\User;
 use App\Repositories\PaymentRepository;
 use App\Wrappers\StripeWrapper;
 use Mockery;
+use stdClass;
 use Stripe\Checkout\Session;
+use Stripe\Customer;
 use Tests\TestCase;
 
+/**
+ * @internal
+ *
+ * @coversNothing
+ */
 class BrandPaymentFlowTest extends TestCase
 {
     // use RefreshDatabase; // Cannot use DB due to missing driver
@@ -25,7 +34,7 @@ class BrandPaymentFlowTest extends TestCase
         parent::setUp();
 
         // Create a Brand User instance (not persisted)
-        $this->user = new User;
+        $this->user = new User();
         $this->user->forceFill([
             'id' => 1,
             'role' => 'brand',
@@ -52,7 +61,7 @@ class BrandPaymentFlowTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_brand_can_create_checkout_session()
+    public function testBrandCanCreateCheckoutSession(): void
     {
         // Expect Repository calls
         // ensureStripeCustomer calls
@@ -60,27 +69,32 @@ class BrandPaymentFlowTest extends TestCase
         // Then repo->updateUserStripeId
 
         $this->stripeWrapper->shouldReceive('createCustomer')
-            ->andReturn(new \Stripe\Customer('cus_test'));
+            ->andReturn(new Customer('cus_test'))
+        ;
 
         $this->paymentRepository->shouldReceive('updateUserStripeId')
-            ->once();
+            ->once()
+        ;
 
         $this->stripeWrapper->shouldReceive('createCheckoutSession')
             ->once()
-            ->andReturn(Session::constructFrom(['id' => 'cs_test_123', 'url' => 'http://test.url', 'customer' => 'cus_test']));
+            ->andReturn(Session::constructFrom(['id' => 'cs_test_123', 'url' => 'http://test.url', 'customer' => 'cus_test']))
+        ;
 
         $response = $this->actingAs($this->user)
-            ->postJson('/api/brand-payment/create-checkout-session');
+            ->postJson('/api/brand-payment/create-checkout-session')
+        ;
 
         $response->assertStatus(200)
             ->assertJson([
                 'success' => true,
                 'session_id' => 'cs_test_123',
                 'url' => 'http://test.url',
-            ]);
+            ])
+        ;
     }
 
-    public function test_brand_can_save_payment_method_manually()
+    public function testBrandCanSavePaymentMethodManually(): void
     {
         $this->withoutExceptionHandling();
 
@@ -93,9 +107,10 @@ class BrandPaymentFlowTest extends TestCase
         // Mock Repository checks
         $this->paymentRepository->shouldReceive('findBrandPaymentMethodByCardHash')
             ->with($this->user->id, 'hash_ending_4242')
-            ->andReturnNull(); // No duplicate
+            ->andReturnNull() // No duplicate
+        ;
 
-        $mockMethod = new BrandPaymentMethod;
+        $mockMethod = new BrandPaymentMethod();
         $mockMethod->forceFill([
             'id' => 10,
             'user_id' => $this->user->id,
@@ -106,20 +121,23 @@ class BrandPaymentFlowTest extends TestCase
 
         $this->paymentRepository->shouldReceive('createBrandPaymentMethod')
             ->once()
-            ->andReturn($mockMethod);
+            ->andReturn($mockMethod)
+        ;
 
         $this->paymentRepository->shouldReceive('unsetDefaultPaymentMethods')->once();
         $this->paymentRepository->shouldReceive('setPaymentMethodAsDefault')->once();
         $this->paymentRepository->shouldReceive('updateUserDefaultPaymentMethod')->never(); // No stripe id
 
         $response = $this->actingAs($this->user)
-            ->postJson('/api/brand-payment/save-method', $data);
+            ->postJson('/api/brand-payment/save-method', $data)
+        ;
 
         $response->assertStatus(200)
-            ->assertJson(['success' => true]);
+            ->assertJson(['success' => true])
+        ;
     }
 
-    public function test_brand_cannot_add_duplicate_payment_method()
+    public function testBrandCannotAddDuplicatePaymentMethod(): void
     {
         // $this->withoutExceptionHandling(); // Expecting 500, so handle exceptions
 
@@ -134,18 +152,20 @@ class BrandPaymentFlowTest extends TestCase
 
         $this->paymentRepository->shouldReceive('findBrandPaymentMethodByCardHash')
             ->with($this->user->id, 'hash_ending_4242')
-            ->andReturn($existingMethod);
+            ->andReturn($existingMethod)
+        ;
 
         $response = $this->actingAs($this->user)
-            ->postJson('/api/brand-payment/save-method', $data);
+            ->postJson('/api/brand-payment/save-method', $data)
+        ;
 
         $response->assertStatus(500);
         $response->assertJsonFragment(['error' => 'This payment method already exists']);
     }
 
-    public function test_brand_can_delete_payment_method()
+    public function testBrandCanDeletePaymentMethod(): void
     {
-        $mockMethod = new BrandPaymentMethod;
+        $mockMethod = new BrandPaymentMethod();
         $mockMethod->forceFill([
             'id' => 10,
             'user_id' => $this->user->id,
@@ -156,26 +176,31 @@ class BrandPaymentFlowTest extends TestCase
 
         $this->paymentRepository->shouldReceive('findBrandPaymentMethod')
             ->with($this->user->id, 10)
-            ->andReturn($mockMethod);
+            ->andReturn($mockMethod)
+        ;
 
         $this->paymentRepository->shouldReceive('countActiveBrandPaymentMethods')
             ->with($this->user->id)
-            ->andReturn(2); // Must be > 1
+            ->andReturn(2) // Must be > 1
+        ;
 
         $this->paymentRepository->shouldReceive('deactivatePaymentMethod')
             ->once()
-            ->with($mockMethod);
+            ->with($mockMethod)
+        ;
 
         // Not default, so no further calls expected for default reassignment
 
         $response = $this->actingAs($this->user)
-            ->deleteJson('/api/brand-payment/methods', ['payment_method_id' => 10]);
+            ->deleteJson('/api/brand-payment/methods', ['payment_method_id' => 10])
+        ;
 
         $response->assertStatus(200)
-            ->assertJson(['success' => true]);
+            ->assertJson(['success' => true])
+        ;
     }
 
-    public function test_brand_can_handle_checkout_success()
+    public function testBrandCanHandleCheckoutSuccess(): void
     {
         $sessionId = 'cs_test_success_123';
         $setupIntentId = 'seti_123';
@@ -186,19 +211,19 @@ class BrandPaymentFlowTest extends TestCase
         $this->user->stripe_customer_id = $customerId;
 
         // Construct complex Stripe objects structure
-        $card = new \stdClass;
+        $card = new stdClass();
         $card->brand = 'visa';
         $card->last4 = '4242';
 
-        $billingDetails = new \stdClass;
+        $billingDetails = new stdClass();
         $billingDetails->name = 'Test Holder';
 
-        $paymentMethodStripe = new \stdClass;
+        $paymentMethodStripe = new stdClass();
         $paymentMethodStripe->id = $paymentMethodId;
         $paymentMethodStripe->card = $card;
         $paymentMethodStripe->billing_details = $billingDetails;
 
-        $setupIntent = new \stdClass;
+        $setupIntent = new stdClass();
         $setupIntent->id = $setupIntentId;
         $setupIntent->payment_method = $paymentMethodStripe;
 
@@ -215,18 +240,21 @@ class BrandPaymentFlowTest extends TestCase
         $this->stripeWrapper->shouldReceive('retrieveCheckoutSession')
             ->once()
             ->with($sessionId, ['expand' => ['setup_intent.payment_method']])
-            ->andReturn($session);
+            ->andReturn($session)
+        ;
 
         // Repo interactions
         $this->paymentRepository->shouldReceive('findBrandPaymentMethodByStripeId')
             ->with($this->user->id, $paymentMethodId)
-            ->andReturnNull();
+            ->andReturnNull()
+        ;
 
         $this->paymentRepository->shouldReceive('countActiveBrandPaymentMethods')
             ->with($this->user->id)
-            ->andReturn(0); // First method, so it becomes default
+            ->andReturn(0) // First method, so it becomes default
+        ;
 
-        $mockMethod = new BrandPaymentMethod;
+        $mockMethod = new BrandPaymentMethod();
         $mockMethod->forceFill([
             'id' => 11,
             'user_id' => $this->user->id,
@@ -238,7 +266,8 @@ class BrandPaymentFlowTest extends TestCase
 
         $this->paymentRepository->shouldReceive('createBrandPaymentMethod')
             ->once()
-            ->andReturn($mockMethod);
+            ->andReturn($mockMethod)
+        ;
 
         // Expect default setting logic
         $this->paymentRepository->shouldReceive('unsetDefaultPaymentMethods')->once();
@@ -246,7 +275,8 @@ class BrandPaymentFlowTest extends TestCase
         $this->paymentRepository->shouldReceive('updateUserDefaultPaymentMethod')->once();
 
         $response = $this->actingAs($this->user)
-            ->postJson('/api/brand-payment/handle-checkout-success', ['session_id' => $sessionId]);
+            ->postJson('/api/brand-payment/handle-checkout-success', ['session_id' => $sessionId])
+        ;
 
         $response->assertStatus(200)
             ->assertJson([
@@ -255,6 +285,7 @@ class BrandPaymentFlowTest extends TestCase
                     'id' => 11,
                     'card_last4' => '4242',
                 ],
-            ]);
+            ])
+        ;
     }
 }

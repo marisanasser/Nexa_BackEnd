@@ -79,7 +79,7 @@
 
         <div class="content">
             <h2>Olá, {{ $brand->name }}!</h2>
-            
+
             <p>Infelizmente, sua campanha foi <strong>rejeitada</strong>.</p>
 
             <div class="info-box">
@@ -89,7 +89,7 @@
                 <p><strong>Categoria:</strong> {{ $campaign->category }}</p>
                 <p><strong>Tipo:</strong> {{ $campaign->campaign_type }}</p>
                 <p><strong>Data de Rejeição:</strong> {{ $campaign->updated_at ? (is_string($campaign->updated_at) ? $campaign->updated_at : $campaign->updated_at->format('d/m/Y H:i')) : 'N/A' }}</p>
-                
+
                 @if($campaign->rejection_reason)
                 <p><strong>Motivo da Rejeição:</strong></p>
                 <p style="font-style: italic; color: #666;">"{{ $campaign->rejection_reason }}"</p>

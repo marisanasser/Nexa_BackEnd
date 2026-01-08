@@ -118,7 +118,7 @@
 
         <div class="content">
             <h2>Olá, {{ $brand->name }}! 👋</h2>
-            
+
             <p>Você recebeu uma nova candidatura para sua campanha "<strong>{{ $campaign->title }}</strong>"</p>
 
             <div class="creator-info">
@@ -131,12 +131,12 @@
 
             <div class="application-details">
                 <h3>📋 Detalhes da Candidatura</h3>
-                
+
                 <div class="detail-row">
                     <span class="detail-label">Campanha:</span>
                     <span class="detail-value">{{ $campaign->title }}</span>
                 </div>
-                
+
                 <div class="detail-row">
                     <span class="detail-label">Status:</span>
                     <span class="detail-value" style="color: #FF9800; font-weight: bold;">Pendente de Revisão</span>

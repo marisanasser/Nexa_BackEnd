@@ -1,57 +1,65 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\OtpController;
-use App\Http\Controllers\Auth\PagarMeAuthController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [RegisteredUserController::class, 'store'])
     ->middleware('throttle:new-user-flow')
-    ->name('register');
+    ->name('register')
+;
 
 Route::post('/login', [AuthenticatedSessionController::class, 'store'])
     ->middleware('throttle:auth')
-    ->name('login');
+    ->name('login')
+;
 
 Route::post('/forgot-password', [PasswordResetLinkController::class, 'store'])
     ->middleware('throttle:password-reset')
-    ->name('password.email');
+    ->name('password.email')
+;
 
 Route::post('/reset-password', [NewPasswordController::class, 'store'])
     ->middleware('throttle:password-reset')
-    ->name('password.store');
+    ->name('password.store')
+;
 
 Route::put('/update-password', [NewPasswordController::class, 'update'])
     ->middleware('auth:sanctum')
-    ->name('password.update');
+    ->name('password.update')
+;
 
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
     ->middleware('auth:sanctum')
-    ->name('logout');
+    ->name('logout')
+;
 
 Route::get('/google/redirect', [GoogleController::class, 'redirectToGoogle'])
-    ->name('google.redirect');
+    ->name('google.redirect')
+;
 
 Route::get('/google/callback', [GoogleController::class, 'handleGoogleCallback'])
-    ->name('google.callback');
+    ->name('google.callback')
+;
 
 Route::post('/google/auth', [GoogleController::class, 'handleGoogleWithRole'])
     ->middleware('throttle:auth')
-    ->name('google.auth');
+    ->name('google.auth')
+;
 
 // OTP Routes
 Route::post('/otp/send', [OtpController::class, 'send'])
     ->middleware('throttle:6,1') // Limit to 6 requests per minute
-    ->name('otp.send');
+    ->name('otp.send')
+;
 
 Route::post('/otp/verify', [OtpController::class, 'verify'])
     ->middleware('throttle:10,1')
-    ->name('otp.verify');
-
-// Route::post('/pagarme/auth', [PagarMeAuthController::class, 'authenticate'])
-//    ->middleware('throttle:auth')
-//    ->name('pagarme.auth');
+    ->name('otp.verify')
+;

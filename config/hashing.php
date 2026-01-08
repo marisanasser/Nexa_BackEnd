@@ -1,7 +1,8 @@
 <?php
 
-return [
+declare(strict_types=1);
 
+return [
     'driver' => 'bcrypt',
 
     'bcrypt' => [
@@ -15,5 +16,4 @@ return [
         'time' => 4,
         'verify' => true,
     ],
-
 ];

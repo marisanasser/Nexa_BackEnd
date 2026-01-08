@@ -153,7 +153,7 @@
 
         <div class="content">
             <p>Olá <strong>{{ $creator->name }}</strong>,</p>
-            
+
             <div class="urgent">
                 <div class="urgent-title">🚨 ATENÇÃO URGENTE!</div>
                 <p>O milestone <strong>"{{ $milestone->title }}"</strong> do seu contrato está <strong>ATRASADO</strong>.</p>
@@ -244,4 +244,4 @@
         </div>
     </div>
 </body>
-</html> 
+</html>

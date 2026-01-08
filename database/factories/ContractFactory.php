@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
-use App\Models\Contract;
-use App\Models\Offer;
-use App\Models\User;
+use App\Models\Contract\Contract;
+use App\Models\Contract\Offer;
+use App\Models\User\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class ContractFactory extends Factory

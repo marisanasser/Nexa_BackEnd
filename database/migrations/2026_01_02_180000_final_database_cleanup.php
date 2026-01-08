@@ -1,12 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 
-return new class extends Migration
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
@@ -18,7 +17,7 @@ return new class extends Migration
 
         // 2. Fix Subscription Plans to original prices
         DB::table('subscription_plans')->truncate();
-        
+
         $plans = [
             [
                 'name' => 'Plano Mensal',
@@ -26,14 +25,14 @@ return new class extends Migration
                 'price' => 39.90,
                 'duration_months' => 1,
                 'features' => json_encode([
-                    "Acesso a todas as campanhas",
-                    "Portfólio profissional integrado",
-                    "Pagamentos seguros e rápidos"
+                    'Acesso a todas as campanhas',
+                    'Portfólio profissional integrado',
+                    'Pagamentos seguros e rápidos',
                 ]),
                 'sort_order' => 1,
                 'created_at' => now(), 'updated_at' => now(),
                 'is_active' => true,
-                'stripe_price_id' => null, 'stripe_product_id' => null
+                'stripe_price_id' => null, 'stripe_product_id' => null,
             ],
             [
                 'name' => 'Plano Semestral',
@@ -41,15 +40,15 @@ return new class extends Migration
                 'price' => 29.90 * 6, // 179.40
                 'duration_months' => 6,
                 'features' => json_encode([
-                    "Acesso a todas as campanhas", 
-                    "Portfólio profissional integrado", 
-                    "Pagamentos seguros e rápidos", 
-                    "Suporte prioritário via WhatsApp"
+                    'Acesso a todas as campanhas',
+                    'Portfólio profissional integrado',
+                    'Pagamentos seguros e rápidos',
+                    'Suporte prioritário via WhatsApp',
                 ]),
                 'sort_order' => 2,
                 'created_at' => now(), 'updated_at' => now(),
                 'is_active' => true,
-                'stripe_price_id' => null, 'stripe_product_id' => null
+                'stripe_price_id' => null, 'stripe_product_id' => null,
             ],
             [
                 'name' => 'Plano Anual',
@@ -57,16 +56,16 @@ return new class extends Migration
                 'price' => 19.90 * 12, // 238.80
                 'duration_months' => 12,
                 'features' => json_encode([
-                    "Acesso a todas as campanhas", 
-                    "Portfólio profissional integrado", 
-                    "Pagamentos seguros e rápidos", 
-                    "Suporte prioritário via WhatsApp", 
-                    "Materiais educativos exclusivos"
+                    'Acesso a todas as campanhas',
+                    'Portfólio profissional integrado',
+                    'Pagamentos seguros e rápidos',
+                    'Suporte prioritário via WhatsApp',
+                    'Materiais educativos exclusivos',
                 ]),
                 'sort_order' => 3,
                 'created_at' => now(), 'updated_at' => now(),
                 'is_active' => true,
-                'stripe_price_id' => null, 'stripe_product_id' => null
+                'stripe_price_id' => null, 'stripe_product_id' => null,
             ],
         ];
 

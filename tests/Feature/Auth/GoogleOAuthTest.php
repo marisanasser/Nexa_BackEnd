@@ -1,18 +1,25 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Auth;
 
-use App\Models\User;
+use App\Models\User\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\User as SocialiteUser;
 use Tests\TestCase;
 
+/**
+ * @internal
+ *
+ * @coversNothing
+ */
 class GoogleOAuthTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_google_redirect_returns_url(): void
+    public function testGoogleRedirectReturnsUrl(): void
     {
         $response = $this->getJson('/api/google/redirect');
 
@@ -24,7 +31,8 @@ class GoogleOAuthTest extends TestCase
             ])
             ->assertJson([
                 'success' => true,
-            ]);
+            ])
+        ;
 
         $redirectUrl = $response->json('redirect_url');
         $this->assertNotEmpty($redirectUrl);
@@ -40,10 +48,9 @@ class GoogleOAuthTest extends TestCase
         $this->assertNotEmpty($query['redirect_uri']);
     }
 
-    public function test_google_callback_creates_new_user(): void
+    public function testGoogleCallbackCreatesNewUser(): void
     {
-
-        $socialiteUser = new SocialiteUser;
+        $socialiteUser = new SocialiteUser();
         $socialiteUser->id = '123456789';
         $socialiteUser->name = 'John Doe';
         $socialiteUser->email = 'john@example.com';
@@ -53,7 +60,8 @@ class GoogleOAuthTest extends TestCase
 
         Socialite::shouldReceive('driver->stateless->user')
             ->once()
-            ->andReturn($socialiteUser);
+            ->andReturn($socialiteUser)
+        ;
 
         $response = $this->getJson('/api/google/callback');
 
@@ -77,7 +85,8 @@ class GoogleOAuthTest extends TestCase
                 'success' => true,
                 'token_type' => 'Bearer',
                 'message' => 'Registration successful',
-            ]);
+            ])
+        ;
 
         $this->assertDatabaseHas('users', [
             'name' => 'John Doe',
@@ -87,15 +96,14 @@ class GoogleOAuthTest extends TestCase
         ]);
     }
 
-    public function test_google_callback_logs_in_existing_user(): void
+    public function testGoogleCallbackLogsInExistingUser(): void
     {
-
         $user = User::factory()->create([
             'email' => 'john@example.com',
             'google_id' => '123456789',
         ]);
 
-        $socialiteUser = new SocialiteUser;
+        $socialiteUser = new SocialiteUser();
         $socialiteUser->id = '123456789';
         $socialiteUser->name = 'John Doe';
         $socialiteUser->email = 'john@example.com';
@@ -105,7 +113,8 @@ class GoogleOAuthTest extends TestCase
 
         Socialite::shouldReceive('driver->stateless->user')
             ->once()
-            ->andReturn($socialiteUser);
+            ->andReturn($socialiteUser)
+        ;
 
         $response = $this->getJson('/api/google/callback');
 
@@ -129,13 +138,13 @@ class GoogleOAuthTest extends TestCase
                 'success' => true,
                 'token_type' => 'Bearer',
                 'message' => 'Login successful',
-            ]);
+            ])
+        ;
     }
 
-    public function test_google_auth_with_role_creates_user_with_specified_role(): void
+    public function testGoogleAuthWithRoleCreatesUserWithSpecifiedRole(): void
     {
-
-        $socialiteUser = new SocialiteUser;
+        $socialiteUser = new SocialiteUser();
         $socialiteUser->id = '123456789';
         $socialiteUser->name = 'Jane Doe';
         $socialiteUser->email = 'jane@example.com';
@@ -145,7 +154,8 @@ class GoogleOAuthTest extends TestCase
 
         Socialite::shouldReceive('driver->stateless->user')
             ->once()
-            ->andReturn($socialiteUser);
+            ->andReturn($socialiteUser)
+        ;
 
         $response = $this->postJson('/api/google/auth', [
             'role' => 'brand',
@@ -171,7 +181,8 @@ class GoogleOAuthTest extends TestCase
                 'success' => true,
                 'token_type' => 'Bearer',
                 'message' => 'Registration successful',
-            ]);
+            ])
+        ;
 
         $this->assertDatabaseHas('users', [
             'name' => 'Jane Doe',
@@ -181,7 +192,7 @@ class GoogleOAuthTest extends TestCase
         ]);
     }
 
-    public function test_google_auth_validates_role(): void
+    public function testGoogleAuthValidatesRole(): void
     {
         $response = $this->postJson('/api/google/auth', [
             'role' => 'invalid_role',
@@ -190,10 +201,9 @@ class GoogleOAuthTest extends TestCase
         $response->assertStatus(422);
     }
 
-    public function test_google_callback_with_role_creates_user_with_specified_role(): void
+    public function testGoogleCallbackWithRoleCreatesUserWithSpecifiedRole(): void
     {
-
-        $socialiteUser = new SocialiteUser;
+        $socialiteUser = new SocialiteUser();
         $socialiteUser->id = '123456789';
         $socialiteUser->name = 'Brand User';
         $socialiteUser->email = 'brand@example.com';
@@ -203,7 +213,8 @@ class GoogleOAuthTest extends TestCase
 
         Socialite::shouldReceive('driver->stateless->user')
             ->once()
-            ->andReturn($socialiteUser);
+            ->andReturn($socialiteUser)
+        ;
 
         $response = $this->getJson('/api/google/callback?role=brand');
 
@@ -227,7 +238,8 @@ class GoogleOAuthTest extends TestCase
                 'success' => true,
                 'token_type' => 'Bearer',
                 'message' => 'Registration successful',
-            ]);
+            ])
+        ;
 
         $this->assertDatabaseHas('users', [
             'name' => 'Brand User',
@@ -237,10 +249,9 @@ class GoogleOAuthTest extends TestCase
         ]);
     }
 
-    public function test_google_callback_with_invalid_role_defaults_to_creator(): void
+    public function testGoogleCallbackWithInvalidRoleDefaultsToCreator(): void
     {
-
-        $socialiteUser = new SocialiteUser;
+        $socialiteUser = new SocialiteUser();
         $socialiteUser->id = '123456789';
         $socialiteUser->name = 'Test User';
         $socialiteUser->email = 'test@example.com';
@@ -250,7 +261,8 @@ class GoogleOAuthTest extends TestCase
 
         Socialite::shouldReceive('driver->stateless->user')
             ->once()
-            ->andReturn($socialiteUser);
+            ->andReturn($socialiteUser)
+        ;
 
         $response = $this->getJson('/api/google/callback?role=invalid_role');
 
@@ -274,7 +286,8 @@ class GoogleOAuthTest extends TestCase
                 'success' => true,
                 'token_type' => 'Bearer',
                 'message' => 'Registration successful',
-            ]);
+            ])
+        ;
 
         $this->assertDatabaseHas('users', [
             'name' => 'Test User',

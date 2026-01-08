@@ -86,7 +86,7 @@
 
         <div class="content">
             <h2>Olá, {{ $creator->name }}</h2>
-            
+
             <p>Infelizmente, seu material foi <strong>rejeitado</strong> pela marca.</p>
 
             <div class="info-box">
@@ -100,7 +100,7 @@
             <div class="rejection-reason">
                 <h4>🔍 Motivo da Rejeição:</h4>
                 <p><strong>{{ $material->rejection_reason }}</strong></p>
-                
+
                 @if($material->comment)
                 <p style="margin-top: 10px;"><strong>Comentário Adicional:</strong></p>
                 <p style="font-style: italic; color: #666;">"{{ $material->comment }}"</p>
@@ -128,4 +128,4 @@
         </div>
     </div>
 </body>
-</html> 
+</html>

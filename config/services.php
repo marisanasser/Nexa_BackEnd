@@ -1,7 +1,8 @@
 <?php
 
-return [
+declare(strict_types=1);
 
+return [
     'mailgun' => [
         'domain' => env('MAILGUN_DOMAIN'),
         'secret' => env('MAILGUN_SECRET'),
@@ -32,5 +33,4 @@ return [
         'publishable_key' => env('STRIPE_PUBLISHABLE_KEY', env('STRIPE_KEY')),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
-
 ];

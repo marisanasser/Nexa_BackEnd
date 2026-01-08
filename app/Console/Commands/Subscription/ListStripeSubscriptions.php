@@ -1,0 +1,120 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Console\Commands\Subscription;
+
+use App\Models\Payment\Subscription;
+use App\Models\User\User;
+
+use function count;
+
+use Exception;
+use Illuminate\Console\Command;
+use Stripe\Customer;
+use Stripe\Stripe;
+use Stripe\Subscription as StripeSubscription;
+
+class ListStripeSubscriptions extends Command
+{
+    protected $signature = 'stripe:list-subscriptions {--email= : Filter by customer email} {--limit=10 : Number of subscriptions to list}';
+
+    protected $description = 'List recent Stripe subscriptions';
+
+    public function handle()
+    {
+        Stripe::setApiKey(config('services.stripe.secret'));
+
+        $email = $this->option('email');
+        $limit = (int) $this->option('limit');
+
+        try {
+            if ($email) {
+                $customers = Customer::all([
+                    'email' => $email,
+                    'limit' => 10,
+                ]);
+
+                if (empty($customers->data)) {
+                    $this->warn("No customer found with email: {$email}");
+
+                    return 1;
+                }
+
+                $this->info('Found '.count($customers->data)." customer(s) with email: {$email}");
+
+                foreach ($customers->data as $customer) {
+                    $this->info("\nCustomer: {$customer->id} ({$customer->email})");
+
+                    $subscriptions = StripeSubscription::all([
+                        'customer' => $customer->id,
+                        'limit' => $limit,
+                    ]);
+
+                    if (empty($subscriptions->data)) {
+                        $this->warn('  No subscriptions found');
+
+                        continue;
+                    }
+
+                    foreach ($subscriptions->data as $sub) {
+                        $this->displaySubscriptionInfo($sub);
+                    }
+                }
+            } else {
+                $subscriptions = StripeSubscription::all([
+                    'limit' => $limit,
+                    'status' => 'all',
+                ]);
+
+                $this->info('Recent Stripe subscriptions:');
+
+                foreach ($subscriptions->data as $sub) {
+                    $this->displayRecentSubscriptionInfo($sub);
+                }
+            }
+
+            return 0;
+        } catch (Exception $e) {
+            $this->error('Error: '.$e->getMessage());
+
+            return 1;
+        }
+    }
+
+    private function displaySubscriptionInfo(StripeSubscription $sub): void
+    {
+        $this->line("  Subscription: {$sub->id}");
+        $this->line("    Status: {$sub->status}");
+        $this->line('    Created: '.date('Y-m-d H:i:s', $sub->created));
+        $this->line('    Current period: '.date('Y-m-d', $sub['current_period_start']).' to '.date('Y-m-d', $sub['current_period_end']));
+
+        $localSub = Subscription::where('stripe_subscription_id', $sub->id)->first();
+        if ($localSub) {
+            $this->info("    ✅ Exists in local DB (ID: {$localSub->getKey()})");
+        } else {
+            $this->warn('    ❌ NOT in local DB');
+        }
+    }
+
+    private function displayRecentSubscriptionInfo(StripeSubscription $sub): void
+    {
+        $customer = Customer::retrieve($sub->customer);
+        $this->line("\nSubscription: {$sub->id}");
+        $this->line("  Customer: {$customer->email} ({$sub->customer})");
+        $this->line("  Status: {$sub->status}");
+        $this->line('  Created: '.date('Y-m-d H:i:s', $sub->created));
+
+        $localSub = Subscription::where('stripe_subscription_id', $sub->id)->first();
+        if ($localSub) {
+            $this->info("  ✅ Exists in local DB (ID: {$localSub->getKey()})");
+        } else {
+            $this->warn('  ❌ NOT in local DB');
+
+            $user = User::where('email', $customer->email)->first();
+            if ($user) {
+                $this->info("  User found: ID {$user->id} ({$user->email})"); // ID is safe here, User has properties now
+            }
+        }
+    }
+}

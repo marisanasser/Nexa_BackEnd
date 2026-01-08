@@ -1,16 +1,23 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature;
 
 use App\Models\Campaign;
 use App\Models\Contract;
 use App\Models\DeliveryMaterial;
-use App\Models\User;
+use App\Models\User\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
+/**
+ * @internal
+ *
+ * @coversNothing
+ */
 class DeliveryMaterialTest extends TestCase
 {
     use RefreshDatabase;
@@ -22,9 +29,8 @@ class DeliveryMaterialTest extends TestCase
         Mail::fake();
     }
 
-    public function test_brand_can_approve_delivery_material()
+    public function testBrandCanApproveDeliveryMaterial(): void
     {
-
         $brand = User::factory()->create(['role' => 'brand']);
         $creator = User::factory()->create(['role' => 'creator']);
 
@@ -46,7 +52,8 @@ class DeliveryMaterialTest extends TestCase
         $response = $this->actingAs($brand)
             ->postJson("/api/delivery-materials/{$material->id}/approve", [
                 'comment' => 'Great work!',
-            ]);
+            ])
+        ;
 
         $response->assertStatus(200);
         $response->assertJson(['success' => true]);
@@ -57,9 +64,8 @@ class DeliveryMaterialTest extends TestCase
         ]);
     }
 
-    public function test_brand_can_reject_delivery_material()
+    public function testBrandCanRejectDeliveryMaterial(): void
     {
-
         $brand = User::factory()->create(['role' => 'brand']);
         $creator = User::factory()->create(['role' => 'creator']);
 
@@ -82,7 +88,8 @@ class DeliveryMaterialTest extends TestCase
             ->postJson("/api/delivery-materials/{$material->id}/reject", [
                 'rejection_reason' => 'Quality not meeting standards',
                 'comment' => 'Please improve the content',
-            ]);
+            ])
+        ;
 
         $response->assertStatus(200);
         $response->assertJson(['success' => true]);
@@ -94,9 +101,8 @@ class DeliveryMaterialTest extends TestCase
         ]);
     }
 
-    public function test_milestone_title_is_correct()
+    public function testMilestoneTitleIsCorrect(): void
     {
-
         $brand = User::factory()->create(['role' => 'brand']);
         $creator = User::factory()->create(['role' => 'creator']);
 
@@ -111,7 +117,8 @@ class DeliveryMaterialTest extends TestCase
         $response = $this->actingAs($brand)
             ->postJson('/api/campaign-timeline/create-milestones', [
                 'contract_id' => $contract->id,
-            ]);
+            ])
+        ;
 
         $response->assertStatus(200);
 

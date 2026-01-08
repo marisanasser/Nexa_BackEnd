@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests\Auth;
 
+use App\Models\User\User;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -9,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use function is_array;
 
 class LoginRequest extends FormRequest
 {
@@ -33,7 +37,7 @@ class LoginRequest extends FormRequest
             $raw = $this->getContent();
             $json = json_decode($raw, true);
 
-            if (is_array($json) && ! empty($json)) {
+            if (is_array($json) && !empty($json)) {
                 $this->merge($json);
                 $data = $this->all();
             }
@@ -53,10 +57,11 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        $user = \App\Models\User::withTrashed()->where('email', $this->input('email'))->first();
+        $user = User::withTrashed()->where('email', $this->input('email'))->first();
 
-        if (! $user) {
+        if (!$user) {
             RateLimiter::hit($this->throttleKey());
+
             throw ValidationException::withMessages([
                 'email' => 'E-mail não registrado. Por favor, registre-se novamente.',
             ]);
@@ -72,22 +77,32 @@ class LoginRequest extends FormRequest
                     'removed_at' => $user->deleted_at->toISOString(),
                     'days_since_deletion' => $daysSinceDeletion,
                 ]);
-            } else {
-                throw ValidationException::withMessages([
-                    'email' => 'Sua conta foi removida há mais de 30 dias e não pode ser restaurada automaticamente. Entre em contato com o suporte.',
-                ]);
             }
+
+            throw ValidationException::withMessages([
+                'email' => 'Sua conta foi removida há mais de 30 dias e não pode ser restaurada automaticamente. Entre em contato com o suporte.',
+            ]);
         }
 
-        if (! $user->email_verified_at) {
+        if (!$user instanceof User) {
             RateLimiter::hit($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'email' => 'E-mail não registrado. Por favor, registre-se novamente.',
+            ]);
+        }
+
+        if (!$user->email_verified_at) {
+            RateLimiter::hit($this->throttleKey());
+
             throw ValidationException::withMessages([
                 'email' => 'Sua conta foi bloqueada. Entre em contato com o suporte para mais informações.',
             ]);
         }
 
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+        if (!Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
+
             throw ValidationException::withMessages([
                 'password' => 'Senha incorreta. Por favor, verifique sua senha.',
             ]);
@@ -98,8 +113,7 @@ class LoginRequest extends FormRequest
 
     public function ensureIsNotRateLimited(): void
     {
-
-        if (! RateLimiter::tooManyAttempts($this->throttleKey(), 10)) {
+        if (!RateLimiter::tooManyAttempts($this->throttleKey(), 10)) {
             return;
         }
 

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
@@ -10,7 +12,8 @@ use Illuminate\Queue\SerializesModels;
 
 class PasswordReset extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable;
+    use SerializesModels;
 
     public $token;
 
@@ -31,7 +34,6 @@ class PasswordReset extends Mailable
 
     public function content(): Content
     {
-
         $resetUrl = config('app.frontend_url').'/reset-password?token='.urlencode($this->token).'&email='.urlencode($this->email);
 
         return new Content(

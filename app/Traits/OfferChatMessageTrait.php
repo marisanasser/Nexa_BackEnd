@@ -1,10 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Traits;
 
-use App\Models\ChatRoom;
-use App\Models\Message;
-use Illuminate\Support\Facades\Log;
+use App\Models\Chat\ChatRoom;
+use App\Models\Chat\Message;
+use Exception;
+use Illuminate\Support\Facades\Http;
+use Log;
 
 trait OfferChatMessageTrait
 {
@@ -31,7 +35,7 @@ trait OfferChatMessageTrait
                 'message' => $message->message,
                 'senderId' => $message->sender_id,
                 'senderName' => $message->sender ? $message->sender->name : 'System',
-                'senderAvatar' => $message->sender ? $message->sender->avatar_url : null,
+                'senderAvatar' => $message->sender?->avatar,
                 'messageType' => $message->message_type,
                 'fileData' => null,
                 'offerData' => $data['offer_data'] ?? null,
@@ -42,8 +46,7 @@ trait OfferChatMessageTrait
             $this->emitSocketEvent('new_message', $socketData);
 
             return $message;
-
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('Failed to create offer chat message', [
                 'chat_room_id' => $chatRoom->id,
                 'message_type' => $messageType,
@@ -86,8 +89,7 @@ trait OfferChatMessageTrait
             $this->emitSocketEvent('new_message', $socketData);
 
             return $systemMessage;
-
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('Failed to create system message', [
                 'chat_room_id' => $chatRoom->id,
                 'message' => $message,
@@ -101,14 +103,13 @@ trait OfferChatMessageTrait
     private function emitSocketEvent(string $event, array $data): void
     {
         try {
-
-            \Illuminate\Support\Facades\Http::post('http://localhost:3000/emit', [
+            Http::post('http://localhost:3000/emit', [
                 'event' => $event,
                 'data' => $data,
             ]);
 
             Log::info("Socket event emitted via HTTP: {$event}", $data);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('Failed to emit socket event via HTTP', [
                 'event' => $event,
                 'error' => $e->getMessage(),

@@ -1,15 +1,23 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature;
 
-use App\Models\User;
+use App\Models\User\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\WithFaker;
 use Tests\TestCase;
 
+/**
+ * @internal
+ *
+ * @coversNothing
+ */
 class BrandProfileTest extends TestCase
 {
-    use RefreshDatabase, WithFaker;
+    use RefreshDatabase;
+    use WithFaker;
 
     protected $user;
 
@@ -24,10 +32,11 @@ class BrandProfileTest extends TestCase
         ]);
     }
 
-    public function it_can_fetch_brand_profile()
+    public function it_can_fetch_brand_profile(): void
     {
         $response = $this->actingAs($this->user)
-            ->getJson('/api/brand-profile');
+            ->getJson('/api/brand-profile')
+        ;
 
         $response->assertStatus(200)
             ->assertJsonStructure([
@@ -45,10 +54,11 @@ class BrandProfileTest extends TestCase
                     'created_at',
                     'updated_at',
                 ],
-            ]);
+            ])
+        ;
     }
 
-    public function it_can_update_brand_profile()
+    public function it_can_update_brand_profile(): void
     {
         $updateData = [
             'username' => 'Updated Brand Name',
@@ -60,13 +70,15 @@ class BrandProfileTest extends TestCase
         ];
 
         $response = $this->actingAs($this->user)
-            ->putJson('/api/brand-profile', $updateData);
+            ->putJson('/api/brand-profile', $updateData)
+        ;
 
         $response->assertStatus(200)
             ->assertJson([
                 'success' => true,
                 'message' => 'Profile updated successfully',
-            ]);
+            ])
+        ;
 
         $this->user->refresh();
         $this->assertEquals('Updated Brand Name', $this->user->name);
@@ -77,7 +89,7 @@ class BrandProfileTest extends TestCase
         $this->assertEquals('California', $this->user->state);
     }
 
-    public function it_can_change_password()
+    public function it_can_change_password(): void
     {
         $passwordData = [
             'old_password' => 'password',
@@ -86,55 +98,61 @@ class BrandProfileTest extends TestCase
         ];
 
         $response = $this->actingAs($this->user)
-            ->postJson('/api/brand-profile/change-password', $passwordData);
+            ->postJson('/api/brand-profile/change-password', $passwordData)
+        ;
 
         $response->assertStatus(200)
             ->assertJson([
                 'success' => true,
                 'message' => 'Password changed successfully',
-            ]);
+            ])
+        ;
     }
 
-    public function it_validates_required_fields_on_update()
+    public function it_validates_required_fields_on_update(): void
     {
         $response = $this->actingAs($this->user)
             ->putJson('/api/brand-profile', [
                 'email' => 'invalid-email',
                 'gender' => 'invalid-gender',
-            ]);
+            ])
+        ;
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['email', 'gender']);
+            ->assertJsonValidationErrors(['email', 'gender'])
+        ;
     }
 
-    public function it_validates_password_change()
+    public function it_validates_password_change(): void
     {
         $response = $this->actingAs($this->user)
             ->postJson('/api/brand-profile/change-password', [
                 'old_password' => 'wrong-password',
                 'new_password' => 'newpassword123',
                 'new_password_confirmation' => 'newpassword123',
-            ]);
+            ])
+        ;
 
         $response->assertStatus(400)
             ->assertJson([
                 'success' => false,
                 'message' => 'Current password is incorrect',
-            ]);
+            ])
+        ;
     }
 
-    public function it_can_upload_avatar()
+    public function it_can_upload_avatar(): void
     {
-
         $imageData = base64_encode(file_get_contents(__DIR__.'/../../public/placeholder.svg'));
         $base64Image = 'data:image/svg+xml;base64,'.$imageData;
 
         $response = $this->actingAs($this->user)
             ->postJson('/api/brand-profile/avatar', [
                 'avatar' => $base64Image,
-            ]);
+            ])
+        ;
 
-        if ($response->status() !== 200) {
+        if (200 !== $response->status()) {
             dump($response->content());
         }
 
@@ -150,52 +168,57 @@ class BrandProfileTest extends TestCase
                     'avatar',
                     'updated_at',
                 ],
-            ]);
+            ])
+        ;
 
         $this->user->refresh();
         $this->assertNotNull($this->user->avatar_url);
         $this->assertStringContainsString('/storage/avatars/', $this->user->avatar_url);
     }
 
-    public function it_validates_avatar_format()
+    public function it_validates_avatar_format(): void
     {
         $response = $this->actingAs($this->user)
             ->postJson('/api/brand-profile/avatar', [
                 'avatar' => 'invalid-base64-data',
-            ]);
+            ])
+        ;
 
         $response->assertStatus(400)
             ->assertJson([
                 'success' => false,
                 'message' => 'Invalid image format. Please provide a valid base64 encoded image.',
-            ]);
+            ])
+        ;
     }
 
-    public function it_can_delete_avatar()
+    public function it_can_delete_avatar(): void
     {
-
         $imageData = base64_encode(file_get_contents(__DIR__.'/../../public/placeholder.svg'));
         $base64Image = 'data:image/svg+xml;base64,'.$imageData;
 
         $this->actingAs($this->user)
             ->postJson('/api/brand-profile/avatar', [
                 'avatar' => $base64Image,
-            ]);
+            ])
+        ;
 
         $response = $this->actingAs($this->user)
-            ->deleteJson('/api/brand-profile/avatar');
+            ->deleteJson('/api/brand-profile/avatar')
+        ;
 
         $response->assertStatus(200)
             ->assertJson([
                 'success' => true,
                 'message' => 'Avatar deleted successfully',
-            ]);
+            ])
+        ;
 
         $this->user->refresh();
         $this->assertNull($this->user->avatar_url);
     }
 
-    public function it_can_update_profile_with_avatar()
+    public function it_can_update_profile_with_avatar(): void
     {
         $imageData = base64_encode(file_get_contents(__DIR__.'/../../public/placeholder.svg'));
         $base64Image = 'data:image/svg+xml;base64,'.$imageData;
@@ -207,13 +230,15 @@ class BrandProfileTest extends TestCase
         ];
 
         $response = $this->actingAs($this->user)
-            ->putJson('/api/brand-profile', $updateData);
+            ->putJson('/api/brand-profile', $updateData)
+        ;
 
         $response->assertStatus(200)
             ->assertJson([
                 'success' => true,
                 'message' => 'Profile updated successfully',
-            ]);
+            ])
+        ;
 
         $this->user->refresh();
         $this->assertEquals('Updated Brand Name', $this->user->name);

@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
-use App\Models\Campaign;
-use App\Models\ChatRoom;
-use App\Models\User;
+use App\Models\Campaign\Campaign;
+use App\Models\Chat\ChatRoom;
+use App\Models\User\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class ChatRoomFactory extends Factory

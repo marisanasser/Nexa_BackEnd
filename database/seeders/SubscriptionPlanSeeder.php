@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
@@ -10,7 +12,7 @@ class SubscriptionPlanSeeder extends Seeder
     public function run(): void
     {
         DB::table('subscription_plans')->truncate();
-        
+
         $plans = [
             [
                 'name' => 'Plano Mensal',
@@ -19,9 +21,9 @@ class SubscriptionPlanSeeder extends Seeder
                 'duration_months' => 1,
                 'is_active' => true,
                 'features' => json_encode([
-                    "Acesso a todas as campanhas",
-                    "Portfólio profissional integrado",
-                    "Pagamentos seguros e rápidos"
+                    'Acesso a todas as campanhas',
+                    'Portfólio profissional integrado',
+                    'Pagamentos seguros e rápidos',
                 ]),
                 'sort_order' => 1,
                 'created_at' => now(),
@@ -36,10 +38,10 @@ class SubscriptionPlanSeeder extends Seeder
                 'duration_months' => 6,
                 'is_active' => true,
                 'features' => json_encode([
-                    "Acesso a todas as campanhas", 
-                    "Portfólio profissional integrado", 
-                    "Pagamentos seguros e rápidos", 
-                    "Suporte prioritário via WhatsApp"
+                    'Acesso a todas as campanhas',
+                    'Portfólio profissional integrado',
+                    'Pagamentos seguros e rápidos',
+                    'Suporte prioritário via WhatsApp',
                 ]),
                 'sort_order' => 2,
                 'created_at' => now(),
@@ -54,11 +56,11 @@ class SubscriptionPlanSeeder extends Seeder
                 'duration_months' => 12,
                 'is_active' => true,
                 'features' => json_encode([
-                    "Acesso a todas as campanhas", 
-                    "Portfólio profissional integrado", 
-                    "Pagamentos seguros e rápidos", 
-                    "Suporte prioritário via WhatsApp", 
-                    "Materiais educativos exclusivos"
+                    'Acesso a todas as campanhas',
+                    'Portfólio profissional integrado',
+                    'Pagamentos seguros e rápidos',
+                    'Suporte prioritário via WhatsApp',
+                    'Materiais educativos exclusivos',
                 ]),
                 'sort_order' => 3,
                 'created_at' => now(),

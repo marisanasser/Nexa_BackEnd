@@ -1,7 +1,10 @@
 <?php
 
-return [
+declare(strict_types=1);
 
+use App\Models\User\User;
+
+return [
     'defaults' => [
         'guard' => 'web',
         'passwords' => 'users',
@@ -22,9 +25,8 @@ return [
     'providers' => [
         'users' => [
             'driver' => 'eloquent',
-            'model' => App\Models\User::class,
+            'model' => User::class,
         ],
-
     ],
 
     'passwords' => [
@@ -37,5 +39,4 @@ return [
     ],
 
     'password_timeout' => 10800,
-
 ];

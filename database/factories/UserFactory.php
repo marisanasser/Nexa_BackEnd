@@ -8,6 +8,8 @@ use Illuminate\Support\Str;
 
 class UserFactory extends Factory
 {
+    protected $model = \App\Models\User\User::class;
+
     protected static ?string $password;
 
     public function definition(): array
@@ -20,7 +22,9 @@ class UserFactory extends Factory
             'remember_token' => Str::random(10),
             'role' => fake()->randomElement(['creator', 'brand']),
             'whatsapp' => fake()->optional()->numerify('+############'),
-            'avatar_url' => fake()->optional()->imageUrl(200, 200),
+            'avatar_url' => function (array $attributes) {
+                return 'https://ui-avatars.com/api/?name=' . urlencode($attributes['name']) . '&color=7F9CF5&background=EBF4FF';
+            },
             'bio' => fake()->optional()->paragraph(3),
             'company_name' => fake()->optional()->company(),
             'student_verified' => false,

@@ -1,14 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
-return new class extends Migration
-{
+return new class extends Migration {
     public function up(): void
     {
-        if (DB::getDriverName() !== 'sqlite') {
-
+        if ('sqlite' !== DB::getDriverName()) {
             DB::statement('ALTER TABLE users ALTER COLUMN birth_date DROP NOT NULL');
 
             DB::statement("UPDATE users SET birth_date = NULL WHERE birth_date = '1990-01-01'");

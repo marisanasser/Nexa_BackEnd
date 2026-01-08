@@ -1,12 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Auth;
 
-use App\Http\Controllers\Controller;
+use Exception;
+use Illuminate\Support\Facades\Log;
+
+use App\Http\Controllers\Base\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Log;
 
 class OtpController extends Controller
 {
@@ -22,10 +26,10 @@ class OtpController extends Controller
 
         $contact = $request->contact;
         $type = $request->type;
-        
+
         // Generate a 6-digit code
-        $code = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
-        
+        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
         // Store in cache for 10 minutes
         // Key format: otp_{type}_{contact}
         $key = "otp_{$type}_{$contact}";
@@ -33,19 +37,19 @@ class OtpController extends Controller
         Cache::put($key, $code, 600);
 
         try {
-            if ($type === 'email') {
+            if ('email' === $type) {
                 Mail::raw(
                     "Seu código de verificação Nexa é: {$code}. Ele expira em 10 minutos.",
-                    function ($message) use ($contact) {
+                    function ($message) use ($contact): void {
                         $message->to($contact)->subject('Código de verificação Nexa');
                     }
                 );
 
                 Log::info("OTP email sent to {$contact}: {$code}");
-            } else if ($type === 'whatsapp') {
+            } elseif ('whatsapp' === $type) {
                 Log::info("WhatsApp OTP for {$contact}: {$code}");
             }
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('Failed to send OTP', [
                 'contact' => $contact,
                 'type' => $type,
@@ -59,7 +63,7 @@ class OtpController extends Controller
 
         return response()->json([
             'message' => 'Código de verificação gerado.',
-            'dev_code' => $debug ? $code : null
+            'dev_code' => $debug ? $code : null,
         ]);
     }
 
@@ -84,8 +88,8 @@ class OtpController extends Controller
         if ($cachedCode && $cachedCode === $code) {
             // OTP is valid
             // Optionally clear the code to prevent reuse
-            // Cache::forget($key); 
-            
+            // Cache::forget($key);
+
             return response()->json(['message' => 'Código verificado com sucesso.', 'verified' => true]);
         }
 

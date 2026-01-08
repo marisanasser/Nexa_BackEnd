@@ -1,21 +1,27 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature;
 
 use App\Models\CreatorBalance;
-use App\Models\User;
+use App\Models\User\User;
 use App\Models\Withdrawal;
 use App\Models\WithdrawalMethod;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
+/**
+ * @internal
+ *
+ * @coversNothing
+ */
 class WithdrawalFeeTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_withdrawal_platform_fee_is_set_correctly()
+    public function testWithdrawalPlatformFeeIsSetCorrectly(): void
     {
-
         $withdrawalMethod = WithdrawalMethod::create([
             'code' => 'test_method',
             'name' => 'Test Method',
@@ -66,9 +72,8 @@ class WithdrawalFeeTest extends TestCase
         $this->assertEquals(80.00, $withdrawal->net_amount);
     }
 
-    public function test_withdrawal_formatted_fees_are_correct()
+    public function testWithdrawalFormattedFeesAreCorrect(): void
     {
-
         $withdrawalMethod = WithdrawalMethod::create([
             'code' => 'test_method_2',
             'name' => 'Test Method 2',

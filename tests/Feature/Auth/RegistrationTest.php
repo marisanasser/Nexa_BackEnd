@@ -1,13 +1,20 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Auth;
 
-use App\Models\User;
+use App\Models\User\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
+/**
+ * @internal
+ *
+ * @coversNothing
+ */
 class RegistrationTest extends TestCase
 {
     use RefreshDatabase;
@@ -18,7 +25,7 @@ class RegistrationTest extends TestCase
         Storage::fake('public');
     }
 
-    public function test_new_users_can_register_with_basic_fields(): void
+    public function testNewUsersCanRegisterWithBasicFields(): void
     {
         $response = $this->postJson('/api/register', [
             'name' => 'Test User',
@@ -52,7 +59,8 @@ class RegistrationTest extends TestCase
                     'premium_expires_at',
                     'free_trial_expires_at',
                 ],
-            ]);
+            ])
+        ;
 
         $this->assertDatabaseHas('users', [
             'name' => 'Test User',
@@ -63,7 +71,7 @@ class RegistrationTest extends TestCase
         ]);
     }
 
-    public function test_new_users_can_register_with_all_fields(): void
+    public function testNewUsersCanRegisterWithAllFields(): void
     {
         $avatarFile = UploadedFile::fake()->image('avatar.jpg', 200, 200);
 
@@ -102,7 +110,7 @@ class RegistrationTest extends TestCase
         Storage::disk('public')->assertExists(str_replace('/storage/', '', $user->avatar_url));
     }
 
-    public function test_registration_requires_valid_email(): void
+    public function testRegistrationRequiresValidEmail(): void
     {
         $response = $this->postJson('/api/register', [
             'name' => 'Test User',
@@ -112,10 +120,11 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['email']);
+            ->assertJsonValidationErrors(['email'])
+        ;
     }
 
-    public function test_registration_requires_strong_password(): void
+    public function testRegistrationRequiresStrongPassword(): void
     {
         $response = $this->postJson('/api/register', [
             'name' => 'Test User',
@@ -125,10 +134,11 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['password']);
+            ->assertJsonValidationErrors(['password'])
+        ;
     }
 
-    public function test_registration_validates_role(): void
+    public function testRegistrationValidatesRole(): void
     {
         $response = $this->postJson('/api/register', [
             'name' => 'Test User',
@@ -139,10 +149,11 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['role']);
+            ->assertJsonValidationErrors(['role'])
+        ;
     }
 
-    public function test_registration_validates_gender(): void
+    public function testRegistrationValidatesGender(): void
     {
         $response = $this->postJson('/api/register', [
             'name' => 'Test User',
@@ -153,10 +164,11 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['gender']);
+            ->assertJsonValidationErrors(['gender'])
+        ;
     }
 
-    public function test_registration_validates_language(): void
+    public function testRegistrationValidatesLanguage(): void
     {
         $response = $this->postJson('/api/register', [
             'name' => 'Test User',
@@ -167,10 +179,11 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['language']);
+            ->assertJsonValidationErrors(['language'])
+        ;
     }
 
-    public function test_registration_validates_has_premium(): void
+    public function testRegistrationValidatesHasPremium(): void
     {
         $response = $this->postJson('/api/register', [
             'name' => 'Test User',
@@ -181,10 +194,11 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['has_premium']);
+            ->assertJsonValidationErrors(['has_premium'])
+        ;
     }
 
-    public function test_registration_validates_phone_number(): void
+    public function testRegistrationValidatesPhoneNumber(): void
     {
         $response = $this->postJson('/api/register', [
             'name' => 'Test User',
@@ -195,10 +209,11 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['whatsapp']);
+            ->assertJsonValidationErrors(['whatsapp'])
+        ;
     }
 
-    public function test_registration_validates_avatar_file_type(): void
+    public function testRegistrationValidatesAvatarFileType(): void
     {
         $invalidFile = UploadedFile::fake()->create('document.pdf', 1000);
 
@@ -211,10 +226,11 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['avatar_url']);
+            ->assertJsonValidationErrors(['avatar_url'])
+        ;
     }
 
-    public function test_email_must_be_unique(): void
+    public function testEmailMustBeUnique(): void
     {
         User::factory()->create(['email' => 'test@example.com']);
 
@@ -226,10 +242,11 @@ class RegistrationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['email']);
+            ->assertJsonValidationErrors(['email'])
+        ;
     }
 
-    public function test_registration_sets_default_values(): void
+    public function testRegistrationSetsDefaultValues(): void
     {
         $response = $this->postJson('/api/register', [
             'name' => 'Test User',

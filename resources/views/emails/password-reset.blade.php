@@ -31,7 +31,7 @@
                             <p style="margin: 0 0 20px; color: #333333; font-size: 16px; line-height: 1.6;">
                                 Clique no botão abaixo para criar uma nova senha:
                             </p>
-                            
+
                             <!-- CTA Button -->
                             <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
                                 <tr>
@@ -53,7 +53,7 @@
                             <p style="margin: 30px 0 0; color: #666666; font-size: 14px; line-height: 1.6;">
                                 <strong>Atenção:</strong> Este link expira em 60 minutos por motivos de segurança.
                             </p>
-                            
+
                             <p style="margin: 20px 0 0; color: #666666; font-size: 14px; line-height: 1.6;">
                                 Se você não solicitou a redefinição de senha, apenas ignore este email. Sua senha atual permanecerá inalterada.
                             </p>

@@ -1,7 +1,8 @@
 <?php
 
-return [
+declare(strict_types=1);
 
+return [
     'default' => env('MAIL_MAILER', 'failover'),
 
     'mailers' => [
@@ -26,12 +27,10 @@ return [
 
         'postmark' => [
             'transport' => 'postmark',
-
         ],
 
         'mailgun' => [
             'transport' => 'mailgun',
-
         ],
 
         'sendmail' => [
@@ -78,5 +77,4 @@ return [
             resource_path('views/vendor/mail'),
         ],
     ],
-
 ];

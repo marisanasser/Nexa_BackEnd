@@ -289,17 +289,26 @@ php artisan ide-helper:meta
 
 ### Code Structure
 
+The backend follows a **Simplified Domain-Driven Design (DDD)** architecture.
+For a detailed guide, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ```
 app/
+├── Domain/                # Core Business Logic (DDD)
+│   ├── Campaign/          # Campaign Domain (Services, Actions)
+│   ├── Payment/           # Payment Domain
+│   ├── Contract/          # Contract Domain
+│   └── Notification/      # Notification Domain
 ├── Http/
-│   ├── Controllers/       # API controllers
-│   ├── Middleware/        # Custom middleware
-│   ├── Requests/          # Form request validation
-│   └── Resources/         # API resources
-├── Models/                # Eloquent models
-├── Services/              # Business logic services
-└── Traits/                # Reusable traits
-
+│   ├── Controllers/       # API Controllers (grouped by Domain)
+│   │   ├── Auth/
+│   │   ├── Campaign/
+│   │   └── Payment/
+├── Models/                # Eloquent Models (grouped by Domain)
+│   ├── User/
+│   ├── Campaign/
+│   └── Payment/
+```
 database/
 ├── migrations/            # Database migrations
 ├── seeders/               # Database seeders

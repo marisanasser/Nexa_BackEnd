@@ -1,9 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Support\Str;
 
 return [
-
     'driver' => env('SESSION_DRIVER', 'file'),
 
     'lifetime' => env('SESSION_LIFETIME', 120),
@@ -38,5 +39,4 @@ return [
     'same_site' => 'lax',
 
     'partitioned' => false,
-
 ];

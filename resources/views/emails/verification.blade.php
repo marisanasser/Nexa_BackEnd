@@ -133,21 +133,21 @@
             <img src="{{ asset('assets/light-logo.png') }}" alt="Nexa Logo" class="logo">
             <h1 class="brand-name">Nexa</h1>
         </div>
-        
+
         <div class="content">
             <h2 class="greeting">Hello {{ $user->name }}!</h2>
-            
+
             <p class="message">
-                Welcome to Nexa! 🎉 We're thrilled to have you join our vibrant community of creators and brands. 
+                Welcome to Nexa! 🎉 We're thrilled to have you join our vibrant community of creators and brands.
                 To unlock all the amazing features and start your journey, please verify your email address below.
             </p>
-            
+
             <div class="button-container">
                 <a href="{{ $verificationUrl }}" class="verify-button">
                     Verify Email Address
                 </a>
             </div>
-            
+
             <div class="info">
                 <h3 class="info-title">🚀 What happens next?</h3>
                 <p class="info-text">
@@ -158,16 +158,16 @@
                     <br>• Access exclusive features and premium content
                 </p>
             </div>
-            
+
             <p class="message">
-                If you didn't create an account with Nexa, you can safely ignore this email. 
+                If you didn't create an account with Nexa, you can safely ignore this email.
                 No action is required on your part.
             </p>
         </div>
-        
+
         <div class="footer">
             <p class="footer-text">
-                <strong>🔒 Security Note:</strong> This verification link will expire in 
+                <strong>🔒 Security Note:</strong> This verification link will expire in
                 <span class="expiry">60 minutes</span> for your protection.
             </p>
             <p class="footer-text">
@@ -180,4 +180,4 @@
         </div>
     </div>
 </body>
-</html> 
+</html>

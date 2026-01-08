@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use App\Models\Campaign;
 use App\Models\ChatRoom;
 use App\Models\Message;
 use App\Models\Offer;
-use App\Models\User;
+use App\Models\User\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -217,9 +219,10 @@ class TestChatDataSeeder extends Seeder
                     return is_array($data)
                         && isset($data['offer_id'])
                         && (int) $data['offer_id'] === (int) $offer->id;
-                });
+                })
+            ;
 
-            if (! $existingOfferMessage) {
+            if (!$existingOfferMessage) {
                 $offerData = [
                     'offer_id' => $offer->id,
                     'title' => $offer->title,
@@ -264,20 +267,20 @@ class TestChatDataSeeder extends Seeder
             $index = 1;
 
             foreach ($extraCreatorsForBrandTest as $extraCreator) {
-                if (! $extraCreator) {
+                if (!$extraCreator) {
                     continue;
                 }
 
                 $campaignExtra = Campaign::firstOrCreate(
                     [
                         'brand_id' => $brandTest->id,
-                        'title' => 'Campaign Extra ' . $index . ' for Brand Test',
+                        'title' => 'Campaign Extra '.$index.' for Brand Test',
                     ],
                     [
-                        'description' => 'Campanha extra de teste ' . $index . ' para Brand Test',
+                        'description' => 'Campanha extra de teste '.$index.' para Brand Test',
                         'budget' => 1000 + ($index * 100),
                         'location' => 'São Paulo',
-                        'requirements' => 'Requisitos extras de teste ' . $index,
+                        'requirements' => 'Requisitos extras de teste '.$index,
                         'target_states' => ['SP'],
                         'category' => 'teste',
                         'campaign_type' => 'instagram',
@@ -297,18 +300,18 @@ class TestChatDataSeeder extends Seeder
                 Message::create([
                     'chat_room_id' => $chatRoomExtra->id,
                     'sender_id' => $brandTest->id,
-                    'message' => 'Olá ' . $extraCreator->name . ', esta é uma conversa extra de teste ' . $index . '.',
+                    'message' => 'Olá '.$extraCreator->name.', esta é uma conversa extra de teste '.$index.'.',
                     'message_type' => 'text',
                 ]);
 
                 Message::create([
                     'chat_room_id' => $chatRoomExtra->id,
                     'sender_id' => $extraCreator->id,
-                    'message' => 'Olá ' . $brandTest->name . ', mensagem recebida na conversa extra de teste ' . $index . '.',
+                    'message' => 'Olá '.$brandTest->name.', mensagem recebida na conversa extra de teste '.$index.'.',
                     'message_type' => 'text',
                 ]);
 
-                $index++;
+                ++$index;
             }
         }
 
@@ -322,20 +325,20 @@ class TestChatDataSeeder extends Seeder
             $index = 1;
 
             foreach ($extraBrandsForCreatorTest as $extraBrand) {
-                if (! $extraBrand) {
+                if (!$extraBrand) {
                     continue;
                 }
 
                 $campaignForCreatorTest = Campaign::firstOrCreate(
                     [
                         'brand_id' => $extraBrand->id,
-                        'title' => 'Creator Test Extra Campaign ' . $index,
+                        'title' => 'Creator Test Extra Campaign '.$index,
                     ],
                     [
-                        'description' => 'Campanha extra de teste ' . $index . ' para Creator Test',
+                        'description' => 'Campanha extra de teste '.$index.' para Creator Test',
                         'budget' => 1200 + ($index * 100),
                         'location' => 'São Paulo',
-                        'requirements' => 'Requisitos para Creator Test extra ' . $index,
+                        'requirements' => 'Requisitos para Creator Test extra '.$index,
                         'target_states' => ['SP'],
                         'category' => 'teste',
                         'campaign_type' => 'instagram',
@@ -355,18 +358,18 @@ class TestChatDataSeeder extends Seeder
                 Message::create([
                     'chat_room_id' => $chatRoomForCreatorTest->id,
                     'sender_id' => $extraBrand->id,
-                    'message' => 'Olá Creator Test, esta é uma conversa extra de teste ' . $index . ' com ' . $extraBrand->name . '.',
+                    'message' => 'Olá Creator Test, esta é uma conversa extra de teste '.$index.' com '.$extraBrand->name.'.',
                     'message_type' => 'text',
                 ]);
 
                 Message::create([
                     'chat_room_id' => $chatRoomForCreatorTest->id,
                     'sender_id' => $creatorTest->id,
-                    'message' => 'Olá ' . $extraBrand->name . ', Creator Test respondendo na conversa extra ' . $index . '.',
+                    'message' => 'Olá '.$extraBrand->name.', Creator Test respondendo na conversa extra '.$index.'.',
                     'message_type' => 'text',
                 ]);
 
-                $index++;
+                ++$index;
             }
         }
 

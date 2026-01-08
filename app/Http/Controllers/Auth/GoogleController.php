@@ -1,32 +1,25 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Auth;
 
-use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Domain\Notification\Services\AdminNotificationService;
+use Exception;
+use Illuminate\Support\Facades\Log;
+
+use App\Http\Controllers\Base\Controller;
+use App\Models\User\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\AbstractProvider as SocialiteAbstractProvider;
 use Laravel\Socialite\Two\GoogleProvider;
+use Throwable;
 
 class GoogleController extends Controller
 {
-    private function googleProvider(): SocialiteAbstractProvider
-    {
-        $redirectUri = config('services.google.redirect') ?: env('GOOGLE_REDIRECT_URI');
-
-        $config = [
-            'client_id' => config('services.google.client_id') ?: env('GOOGLE_CLIENT_ID'),
-            'client_secret' => config('services.google.client_secret') ?: env('GOOGLE_CLIENT_SECRET'),
-            'redirect' => $redirectUri,
-        ];
-
-        return Socialite::buildProvider(GoogleProvider::class, $config);
-    }
-
     public function redirectToGoogle(): JsonResponse
     {
         $provider = $this->googleProvider()->stateless();
@@ -42,7 +35,7 @@ class GoogleController extends Controller
                 parse_str($parsedUrl['query'], $query);
             }
 
-            if (! isset($query['redirect_uri']) && $redirectUri) {
+            if (!isset($query['redirect_uri']) && $redirectUri) {
                 $query['redirect_uri'] = $redirectUri;
 
                 $scheme = $parsedUrl['scheme'] ?? 'https';
@@ -53,7 +46,7 @@ class GoogleController extends Controller
                 $base = $scheme.'://'.$host.$port.$path;
                 $url = $base.'?'.http_build_query($query);
             }
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             Log::error('Failed to enforce redirect_uri on Google OAuth URL', [
                 'error' => $e->getMessage(),
                 'original_url' => $url,
@@ -72,7 +65,6 @@ class GoogleController extends Controller
     public function handleGoogleCallback(Request $request): JsonResponse
     {
         try {
-
             Log::info('Google OAuth callback received', [
                 'query_params' => $request->query(),
                 'has_code' => $request->has('code'),
@@ -87,7 +79,7 @@ class GoogleController extends Controller
             $role = $request->input('role', 'creator');
             $isStudent = $request->boolean('is_student', false);
 
-            if (! in_array($role, ['creator', 'brand', 'student'])) {
+            if (!in_array($role, ['creator', 'brand', 'student'])) {
                 $role = 'creator';
             }
 
@@ -98,10 +90,10 @@ class GoogleController extends Controller
             $user = User::withTrashed()
                 ->where('google_id', $googleUser->getId())
                 ->orWhere('email', $googleUser->getEmail())
-                ->first();
+                ->first()
+            ;
 
             if ($user) {
-
                 if ($user->trashed()) {
                     return response()->json([
                         'success' => false,
@@ -109,7 +101,7 @@ class GoogleController extends Controller
                     ], 403);
                 }
 
-                if (! $user->email_verified_at) {
+                if (!$user->email_verified_at) {
                     return response()->json([
                         'success' => false,
                         'message' => 'Sua conta foi bloqueada. Entre em contato com o suporte para mais informações.',
@@ -118,21 +110,20 @@ class GoogleController extends Controller
 
                 $updateData = [];
 
-                if (! $user->google_id) {
+                if (!$user->google_id) {
                     $updateData = array_merge($updateData, [
                         'google_id' => $googleUser->getId(),
-                        'google_token' => $googleUser->token,
-                        'google_refresh_token' => $googleUser->refreshToken,
+                        'google_token' => $googleUser->token ?? null,
+                        'google_refresh_token' => $googleUser->refreshToken ?? null,
                         'avatar_url' => $googleUser->getAvatar() ?: $user->avatar_url,
                     ]);
                 }
 
-                if ($isStudent && ! $user->student_verified) {
+                if ($isStudent && !$user->student_verified) {
                     $updateData['free_trial_expires_at'] = now()->addMonth();
-
                 }
 
-                if (! empty($updateData)) {
+                if (!empty($updateData)) {
                     $user->update($updateData);
                 }
 
@@ -159,58 +150,55 @@ class GoogleController extends Controller
                     ],
                     'message' => 'Login successful',
                 ], 200);
-            } else {
-
-                $userData = [
-                    'name' => $googleUser->getName(),
-                    'email' => $googleUser->getEmail(),
-                    'password' => Hash::make('12345678'),
-                    'role' => $role,
-                    'avatar_url' => $googleUser->getAvatar(),
-                    'google_id' => $googleUser->getId(),
-                    'google_token' => $googleUser->token,
-                    'google_refresh_token' => $googleUser->refreshToken,
-                    'email_verified_at' => now(),
-                    'birth_date' => '1990-01-01',
-                    'gender' => 'other',
-                ];
-
-                if ($isStudent) {
-                    $userData['free_trial_expires_at'] = now()->addMonth();
-
-                }
-
-                $user = User::create($userData);
-
-                \App\Services\NotificationService::notifyAdminOfNewRegistration($user);
-
-                $token = $user->createToken('auth_token')->plainTextToken;
-
-                Log::info('Google OAuth registration successful', [
-                    'user_id' => $user->id,
-                    'email' => $user->email,
-                    'role' => $user->role,
-                    'selected_role' => $role,
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'token' => $token,
-                    'token_type' => 'Bearer',
-                    'user' => [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'email' => $user->email,
-                        'role' => $user->role,
-                        'avatar_url' => $user->avatar_url,
-                        'student_verified' => $user->student_verified,
-                        'has_premium' => $user->has_premium,
-                    ],
-                    'message' => 'Registration successful',
-                ], 201);
             }
 
-        } catch (\Exception $e) {
+            $userData = [
+                'name' => $googleUser->getName(),
+                'email' => $googleUser->getEmail(),
+                'password' => Hash::make('12345678'),
+                'role' => $role,
+                'avatar_url' => $googleUser->getAvatar(),
+                'google_id' => $googleUser->getId(),
+                'google_token' => $googleUser->token ?? null,
+                'google_refresh_token' => $googleUser->refreshToken ?? null,
+                'email_verified_at' => now(),
+                'birth_date' => '1990-01-01',
+                'gender' => 'other',
+            ];
+
+            if ($isStudent) {
+                $userData['free_trial_expires_at'] = now()->addMonth();
+            }
+
+            $user = User::create($userData);
+
+            AdminNotificationService::notifyAdminOfNewRegistration($user);
+
+            $token = $user->createToken('auth_token')->plainTextToken;
+
+            Log::info('Google OAuth registration successful', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'role' => $user->role,
+                'selected_role' => $role,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'token' => $token,
+                'token_type' => 'Bearer',
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $user->role,
+                    'avatar_url' => $user->avatar_url,
+                    'student_verified' => $user->student_verified,
+                    'has_premium' => $user->has_premium,
+                ],
+                'message' => 'Registration successful',
+            ], 201);
+        } catch (Exception $e) {
             Log::error('Google OAuth callback failed', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -235,17 +223,17 @@ class GoogleController extends Controller
 
             $user = User::where('google_id', $googleUser->getId())
                 ->orWhere('email', $googleUser->getEmail())
-                ->first();
+                ->first()
+            ;
 
             if ($user) {
-
                 $updateData = ['role' => $request->role];
 
-                if (! $user->google_id) {
+                if (!$user->google_id) {
                     $updateData = array_merge($updateData, [
                         'google_id' => $googleUser->getId(),
-                        'google_token' => $googleUser->token,
-                        'google_refresh_token' => $googleUser->refreshToken,
+                        'google_token' => $googleUser->token ?? null,
+                        'google_refresh_token' => $googleUser->refreshToken ?? null,
                         'avatar_url' => $googleUser->getAvatar() ?: $user->avatar_url,
                     ]);
                 }
@@ -269,46 +257,57 @@ class GoogleController extends Controller
                     ],
                     'message' => 'Login successful',
                 ], 200);
-            } else {
-
-                $user = User::create([
-                    'name' => $googleUser->getName(),
-                    'email' => $googleUser->getEmail(),
-                    'password' => Hash::make('12345678'),
-                    'role' => $request->role,
-                    'avatar_url' => $googleUser->getAvatar(),
-                    'google_id' => $googleUser->getId(),
-                    'google_token' => $googleUser->token,
-                    'google_refresh_token' => $googleUser->refreshToken,
-                    'email_verified_at' => now(),
-                ]);
-
-                \App\Services\NotificationService::notifyAdminOfNewRegistration($user);
-
-                $token = $user->createToken('auth_token')->plainTextToken;
-
-                return response()->json([
-                    'success' => true,
-                    'token' => $token,
-                    'token_type' => 'Bearer',
-                    'user' => [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'email' => $user->email,
-                        'role' => $user->role,
-                        'avatar_url' => $user->avatar_url,
-                        'student_verified' => $user->student_verified,
-                        'has_premium' => $user->has_premium,
-                    ],
-                    'message' => 'Registration successful',
-                ], 201);
             }
 
-        } catch (\Exception $e) {
+            $user = User::create([
+                'name' => $googleUser->getName(),
+                'email' => $googleUser->getEmail(),
+                'password' => Hash::make('12345678'),
+                'role' => $request->role,
+                'avatar_url' => $googleUser->getAvatar(),
+                'google_id' => $googleUser->getId(),
+                'google_token' => $googleUser->token ?? null,
+                'google_refresh_token' => $googleUser->refreshToken ?? null,
+                'email_verified_at' => now(),
+            ]);
+
+            AdminNotificationService::notifyAdminOfNewRegistration($user);
+
+            $token = $user->createToken('auth_token')->plainTextToken;
+
+            return response()->json([
+                'success' => true,
+                'token' => $token,
+                'token_type' => 'Bearer',
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $user->role,
+                    'avatar_url' => $user->avatar_url,
+                    'student_verified' => $user->student_verified,
+                    'has_premium' => $user->has_premium,
+                ],
+                'message' => 'Registration successful',
+            ], 201);
+        } catch (Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Google authentication failed: '.$e->getMessage(),
             ], 422);
         }
+    }
+
+    private function googleProvider(): SocialiteAbstractProvider
+    {
+        $redirectUri = config('services.google.redirect') ?: env('GOOGLE_REDIRECT_URI');
+
+        $config = [
+            'client_id' => config('services.google.client_id') ?: env('GOOGLE_CLIENT_ID'),
+            'client_secret' => config('services.google.client_secret') ?: env('GOOGLE_CLIENT_SECRET'),
+            'redirect' => $redirectUri,
+        ];
+
+        return Socialite::buildProvider(GoogleProvider::class, $config);
     }
 }

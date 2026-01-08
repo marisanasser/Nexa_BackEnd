@@ -79,7 +79,7 @@
 
         <div class="content">
             <h2>Parabéns, {{ $brand->name }}! 🎉</h2>
-            
+
             <p> <strong>Parabéns!</strong> Sua campanha foi aprovada na Nexa!</p>
 
             <p>Agora é hora de dar início a uma parceria estratégica com criadores de alto nível para a sua marca. Acesse o site e confira sua campanha ativa.</p>

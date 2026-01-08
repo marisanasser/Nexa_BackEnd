@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Mail;
 
 use Illuminate\Mail\Mailable;
@@ -29,6 +31,7 @@ class SignupMail extends Mailable
         ";
 
         return $this->subject('Sign in Nexa')
-            ->html($html);
+            ->html($html)
+        ;
     }
 }

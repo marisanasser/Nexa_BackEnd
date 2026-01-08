@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use App\Models\Guide;
@@ -10,7 +12,6 @@ class ComprehensiveGuideSeeder extends Seeder
 {
     public function run(): void
     {
-
         Step::truncate();
         Guide::truncate();
 

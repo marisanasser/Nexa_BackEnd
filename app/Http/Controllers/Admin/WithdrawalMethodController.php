@@ -1,26 +1,38 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Controller;
-use App\Models\WithdrawalMethod;
+use Exception;
+use Illuminate\Support\Facades\Log;
+
+use App\Domain\Payment\Services\WithdrawalMethodService;
+use App\Http\Controllers\Base\Controller;
+use App\Models\Payment\WithdrawalMethod;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class WithdrawalMethodController extends Controller
 {
+    protected WithdrawalMethodService $service;
+
+    public function __construct(WithdrawalMethodService $service)
+    {
+        $this->service = $service;
+    }
+
     public function index(): JsonResponse
     {
         try {
-            $methods = WithdrawalMethod::orderBy('sort_order')->get();
+            $methods = $this->service->getAll();
 
             return response()->json([
                 'success' => true,
                 'data' => $methods,
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('Error fetching withdrawal methods', [
                 'error' => $e->getMessage(),
             ]);
@@ -57,14 +69,14 @@ class WithdrawalMethodController extends Controller
         }
 
         try {
-            $method = WithdrawalMethod::create($request->all());
+            $method = $this->service->create($request->all());
 
             return response()->json([
                 'success' => true,
                 'message' => 'Withdrawal method created successfully',
                 'data' => $method,
             ], 201);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('Error creating withdrawal method', [
                 'error' => $e->getMessage(),
             ]);
@@ -80,7 +92,7 @@ class WithdrawalMethodController extends Controller
     {
         $method = WithdrawalMethod::find($id);
 
-        if (! $method) {
+        if (!$method) {
             return response()->json([
                 'success' => false,
                 'message' => 'Withdrawal method not found',
@@ -110,14 +122,14 @@ class WithdrawalMethodController extends Controller
         }
 
         try {
-            $method->update($request->all());
+            $updatedMethod = $this->service->update($method, $request->all());
 
             return response()->json([
                 'success' => true,
                 'message' => 'Withdrawal method updated successfully',
-                'data' => $method,
+                'data' => $updatedMethod,
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('Error updating withdrawal method', [
                 'id' => $id,
                 'error' => $e->getMessage(),
@@ -134,7 +146,7 @@ class WithdrawalMethodController extends Controller
     {
         $method = WithdrawalMethod::find($id);
 
-        if (! $method) {
+        if (!$method) {
             return response()->json([
                 'success' => false,
                 'message' => 'Withdrawal method not found',
@@ -142,13 +154,13 @@ class WithdrawalMethodController extends Controller
         }
 
         try {
-            $method->delete();
+            $this->service->delete($method);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Withdrawal method deleted successfully',
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('Error deleting withdrawal method', [
                 'id' => $id,
                 'error' => $e->getMessage(),
@@ -165,7 +177,7 @@ class WithdrawalMethodController extends Controller
     {
         $method = WithdrawalMethod::find($id);
 
-        if (! $method) {
+        if (!$method) {
             return response()->json([
                 'success' => false,
                 'message' => 'Withdrawal method not found',
@@ -173,14 +185,14 @@ class WithdrawalMethodController extends Controller
         }
 
         try {
-            $method->update(['is_active' => ! $method->is_active]);
+            $updatedMethod = $this->service->toggleActive($method);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Withdrawal method status updated successfully',
-                'data' => $method,
+                'data' => $updatedMethod,
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('Error toggling withdrawal method status', [
                 'id' => $id,
                 'error' => $e->getMessage(),

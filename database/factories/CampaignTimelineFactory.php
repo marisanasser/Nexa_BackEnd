@@ -1,9 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
-use App\Models\CampaignTimeline;
-use App\Models\Contract;
+use App\Models\Campaign\CampaignTimeline;
+use App\Models\Contract\Contract;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class CampaignTimelineFactory extends Factory

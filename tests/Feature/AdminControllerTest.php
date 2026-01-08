@@ -2,14 +2,20 @@
 
 namespace Tests\Feature;
 
-use App\Models\Campaign;
-use App\Models\User;
+use App\Models\Campaign\Campaign;
+use App\Models\User\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class AdminControllerTest extends TestCase
 {
     use RefreshDatabase;
+
+    private User $admin;
+
+    private User $creator;
+
+    private User $brand;
 
     protected function setUp(): void
     {

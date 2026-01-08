@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Exceptions;
 
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Log;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -18,7 +20,7 @@ class Handler extends ExceptionHandler
 
     public function register(): void
     {
-        $this->reportable(function (Throwable $e) {});
+        $this->reportable(function (Throwable $e): void {});
 
         $this->renderable(function (ValidationException $e, $request) {
             if ($request->expectsJson()) {

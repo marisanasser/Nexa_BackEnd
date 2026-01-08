@@ -1,12 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
 
 return [
-
     'default' => env('LOG_CHANNEL', 'stderr'),
 
     'deprecations' => [
@@ -90,5 +91,4 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
     ],
-
 ];

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
@@ -54,7 +56,7 @@ class WithdrawalMethodSeeder extends Seeder
         ];
 
         foreach ($methods as $method) {
-            if (! DB::table('withdrawal_methods')->where('code', 'pagame_bank_transfer')->exists()) {
+            if (!DB::table('withdrawal_methods')->where('code', 'pagame_bank_transfer')->exists()) {
                 DB::table('withdrawal_methods')->insert($method);
             }
         }

@@ -1,14 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
-use App\Models\User;
+use App\Models\User\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
 /**
  * Seeder para criar usuários de teste em produção
- * Execute: php artisan db:seed --class=ProductionTestUsersSeeder
+ * Execute: php artisan db:seed --class=ProductionTestUsersSeeder.
  */
 class ProductionTestUsersSeeder extends Seeder
 {
@@ -69,7 +71,7 @@ class ProductionTestUsersSeeder extends Seeder
         $this->command->info("Creator Free user: {$creatorFree->email}");
 
         $this->command->newLine();
-        $this->command->info("=== Production Test Users Created ===");
+        $this->command->info('=== Production Test Users Created ===');
         $this->command->table(
             ['Role', 'Email', 'Password', 'Premium'],
             [

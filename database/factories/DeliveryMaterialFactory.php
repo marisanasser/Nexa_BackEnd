@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
-use App\Models\CampaignTimeline;
-use App\Models\Contract;
-use App\Models\DeliveryMaterial;
-use App\Models\User;
+
+use App\Models\Campaign\CampaignTimeline;
+use App\Models\Contract\Contract;
+use App\Models\User\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class DeliveryMaterialFactory extends Factory

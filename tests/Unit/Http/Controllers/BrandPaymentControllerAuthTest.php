@@ -1,16 +1,24 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Unit\Http\Controllers;
 
-use App\Http\Controllers\BrandPaymentController;
-use App\Models\User;
-use App\Services\PaymentService;
+use App\Domain\Payment\Services\PaymentMethodService;
+use App\Http\Controllers\Payment\BrandPaymentController;
+use App\Models\User\User;
+use Log;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tests\TestCase;
+use Tests\Unit\Services\PaymentServiceTest;
 
+/**
+ * @internal
+ *
+ * @coversNothing
+ */
 class BrandPaymentControllerAuthTest extends TestCase
 {
     protected function setUp(): void
@@ -25,9 +33,9 @@ class BrandPaymentControllerAuthTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_create_checkout_session_fails_if_not_brand()
+    public function testCreateCheckoutSessionFailsIfNotBrand(): void
     {
-        $paymentService = Mockery::mock(PaymentService::class);
+        $paymentService = Mockery::mock(PaymentMethodService::class);
         $controller = new BrandPaymentController($paymentService);
 
         $nonBrandUser = Mockery::mock(User::class)->makePartial();
@@ -40,7 +48,7 @@ class BrandPaymentControllerAuthTest extends TestCase
         Log::shouldReceive('info')->andReturnNull();
         Log::shouldReceive('error')->andReturnNull();
 
-        $request = new Request;
+        $request = new Request();
         $response = $controller->createCheckoutSession($request);
 
         $this->assertEquals(403, $response->getStatusCode());

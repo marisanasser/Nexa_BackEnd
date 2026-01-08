@@ -85,9 +85,9 @@
 
         <div class="content">
             <div class="congratulations">🎉 Parabéns! Sua proposta foi aprovada!</div>
-            
+
             <p>Olá, {{ $application->creator->name ?? 'Criador' }}!</p>
-            
+
             <p>Temos uma ótima notícia: sua proposta foi selecionada pela marca <strong>{{ $application->campaign->brand->name }}</strong>! Isso significa que você foi escolhido(a) para esta parceria e estamos muito animados para ver o resultado do seu trabalho.</p>
 
             <div class="info-box">

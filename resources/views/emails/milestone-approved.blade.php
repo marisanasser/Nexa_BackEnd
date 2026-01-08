@@ -127,7 +127,7 @@
 
         <div class="content">
             <p>Olá <strong>{{ $creator->name }}</strong>,</p>
-            
+
             <p>Parabéns! O milestone <strong>"{{ $milestone->title }}"</strong> do seu contrato foi aprovado pela marca <strong>{{ $brand->name }}</strong>.</p>
 
             <div class="milestone-info">
@@ -194,4 +194,4 @@
         </div>
     </div>
 </body>
-</html> 
+</html>

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\Validator;
@@ -38,22 +40,6 @@ class StoreBankAccountRequest extends FormRequest
     }
 
     /**
-     * Handle a failed validation attempt.
-     *
-     * @return void
-     *
-     * @throws \Illuminate\Http\Exceptions\HttpResponseException
-     */
-    protected function failedValidation(Validator $validator)
-    {
-        throw new HttpResponseException(response()->json([
-            'success' => false,
-            'message' => 'Validation failed',
-            'errors' => $validator->errors(),
-        ], 422));
-    }
-
-    /**
      * Get custom messages for validator errors.
      *
      * @return array
@@ -64,5 +50,19 @@ class StoreBankAccountRequest extends FormRequest
             'bank_code.size' => 'O código do banco deve ter 3 dígitos.',
             'cpf.regex' => 'O CPF deve estar no formato 000.000.000-00.',
         ];
+    }
+
+    /**
+     * Handle a failed validation attempt.
+     *
+     * @throws HttpResponseException
+     */
+    protected function failedValidation(Validator $validator): void
+    {
+        throw new HttpResponseException(response()->json([
+            'success' => false,
+            'message' => 'Validation failed',
+            'errors' => $validator->errors(),
+        ], 422));
     }
 }

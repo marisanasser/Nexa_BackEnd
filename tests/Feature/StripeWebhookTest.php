@@ -1,15 +1,24 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\WebhookEvent;
-use App\Repositories\WebhookEventRepository;
-use App\Services\PaymentService;
+use App\Domain\Payment\Repositories\WebhookEventRepository;
+use App\Domain\Payment\Services\PaymentMethodService;
+use App\Models\Payment\WebhookEvent;
+use App\Models\User\User;
+
+
 use Illuminate\Support\Facades\Config;
 use Mockery;
 use Tests\TestCase;
 
+/**
+ * @internal
+ *
+ * @coversNothing
+ */
 class StripeWebhookTest extends TestCase
 {
     // DB persistence disabled due to missing SQLite driver
@@ -20,18 +29,18 @@ class StripeWebhookTest extends TestCase
         Config::set('services.stripe.webhook_secret', 'whsec_test_secret');
 
         // Mock WebhookEventRepository for all tests to avoid DB calls
-        $this->mock(WebhookEventRepository::class, function ($mock) {
+        $this->mock(WebhookEventRepository::class, function ($mock): void {
             $mock->shouldReceive('findByStripeEventId')->andReturnNull();
-            $mock->shouldReceive('create')->andReturn(new WebhookEvent);
+            $mock->shouldReceive('create')->andReturn(new WebhookEvent());
             $mock->shouldReceive('updateStatus')->andReturnNull();
             $mock->shouldReceive('updateStatusByStripeEventId')->andReturnNull();
         });
     }
 
-    public function test_webhook_handles_setup_checkout_session_for_brand()
+    public function testWebhookHandlesSetupCheckoutSessionForBrand(): void
     {
         // 1. Arrange
-        $user = new User;
+        $user = new User();
         $user->forceFill([
             'id' => 1,
             'role' => 'brand',
@@ -61,12 +70,11 @@ class StripeWebhookTest extends TestCase
         $signature = $this->generateSignature($payloadJson, 'whsec_test_secret', $timestamp);
 
         // Mock PaymentService
-        $this->mock(PaymentService::class, function ($mock) {
+        $this->mock(PaymentMethodService::class, function ($mock): void {
             $mock->shouldReceive('handleGeneralSetupCheckout')
                 ->once()
-                ->with(Mockery::on(function ($arg) {
-                    return $arg->id === 'cs_test_123';
-                }));
+                ->with(Mockery::on(fn($arg) => 'cs_test_123' === $arg->id))
+            ;
         });
 
         // 2. Act
@@ -78,7 +86,7 @@ class StripeWebhookTest extends TestCase
         $response->assertStatus(200);
     }
 
-    public function test_webhook_rejects_invalid_signature()
+    public function testWebhookRejectsInvalidSignature(): void
     {
         $payload = ['id' => 'evt_test_fake'];
 
@@ -87,10 +95,11 @@ class StripeWebhookTest extends TestCase
         ]);
 
         $response->assertStatus(400)
-            ->assertJson(['error' => 'Invalid signature']);
+            ->assertJson(['error' => 'Invalid signature'])
+        ;
     }
 
-    public function test_webhook_ignores_setup_session_if_user_not_found()
+    public function testWebhookIgnoresSetupSessionIfUserNotFound(): void
     {
         // 1. Arrange
         $payload = [
@@ -116,12 +125,11 @@ class StripeWebhookTest extends TestCase
         $signature = $this->generateSignature($payloadJson, 'whsec_test_secret', $timestamp);
 
         // Mock PaymentService
-        $this->mock(PaymentService::class, function ($mock) {
+        $this->mock(PaymentMethodService::class, function ($mock): void {
             $mock->shouldReceive('handleGeneralSetupCheckout')
                 ->once()
-                ->with(Mockery::on(function ($arg) {
-                    return $arg->id === 'cs_test_unknown';
-                }));
+                ->with(Mockery::on(fn($arg) => 'cs_test_unknown' === $arg->id))
+            ;
         });
 
         // 2. Act

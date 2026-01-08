@@ -1,16 +1,23 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Auth;
 
-use App\Models\User;
+use App\Models\User\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
+/**
+ * @internal
+ *
+ * @coversNothing
+ */
 class AuthenticationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_users_can_authenticate_using_api_login(): void
+    public function testUsersCanAuthenticateUsingApiLogin(): void
     {
         $user = User::factory()->create([
             'email' => 'test@example.com',
@@ -50,13 +57,14 @@ class AuthenticationTest extends TestCase
             ->assertJson([
                 'success' => true,
                 'token_type' => 'Bearer',
-            ]);
+            ])
+        ;
 
         $this->assertTrue($response->json('success'));
         $this->assertNotEmpty($response->json('token'));
     }
 
-    public function test_users_can_not_authenticate_with_invalid_password(): void
+    public function testUsersCanNotAuthenticateWithInvalidPassword(): void
     {
         $user = User::factory()->create([
             'email' => 'test@example.com',
@@ -70,7 +78,7 @@ class AuthenticationTest extends TestCase
         $response->assertStatus(422);
     }
 
-    public function test_users_can_not_authenticate_with_invalid_email(): void
+    public function testUsersCanNotAuthenticateWithInvalidEmail(): void
     {
         $response = $this->postJson('/api/login', [
             'email' => 'nonexistent@example.com',
@@ -80,7 +88,7 @@ class AuthenticationTest extends TestCase
         $response->assertStatus(422);
     }
 
-    public function test_authenticated_user_can_access_protected_routes(): void
+    public function testAuthenticatedUserCanAccessProtectedRoutes(): void
     {
         $user = User::factory()->create();
         $token = $user->createToken('test-token')->plainTextToken;
@@ -93,17 +101,18 @@ class AuthenticationTest extends TestCase
             ->assertJson([
                 'id' => $user->id,
                 'email' => $user->email,
-            ]);
+            ])
+        ;
     }
 
-    public function test_unauthenticated_user_cannot_access_protected_routes(): void
+    public function testUnauthenticatedUserCannotAccessProtectedRoutes(): void
     {
         $response = $this->getJson('/api/user');
 
         $response->assertStatus(401);
     }
 
-    public function test_users_can_logout_with_api(): void
+    public function testUsersCanLogoutWithApi(): void
     {
         $user = User::factory()->create();
         $token = $user->createToken('test-token')->plainTextToken;
@@ -116,7 +125,8 @@ class AuthenticationTest extends TestCase
             ->assertJson([
                 'success' => true,
                 'message' => 'Logged out successfully',
-            ]);
+            ])
+        ;
 
         $response = $this->withHeaders([
             'Authorization' => 'Bearer '.$token,
@@ -125,15 +135,16 @@ class AuthenticationTest extends TestCase
         $response->assertStatus(401);
     }
 
-    public function test_login_validates_required_fields(): void
+    public function testLoginValidatesRequiredFields(): void
     {
         $response = $this->postJson('/api/login', []);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['email', 'password']);
+            ->assertJsonValidationErrors(['email', 'password'])
+        ;
     }
 
-    public function test_login_validates_email_format(): void
+    public function testLoginValidatesEmailFormat(): void
     {
         $response = $this->postJson('/api/login', [
             'email' => 'invalid-email',
@@ -141,10 +152,11 @@ class AuthenticationTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['email']);
+            ->assertJsonValidationErrors(['email'])
+        ;
     }
 
-    public function test_user_response_includes_all_expected_fields(): void
+    public function testUserResponseIncludesAllExpectedFields(): void
     {
         $user = User::factory()->create([
             'email' => 'test@example.com',
@@ -168,7 +180,7 @@ class AuthenticationTest extends TestCase
         $this->assertEquals($user->student_verified, $userData['student_verified']);
     }
 
-    public function test_login_works_with_different_user_roles(): void
+    public function testLoginWorksWithDifferentUserRoles(): void
     {
         $creator = User::factory()->create([
             'email' => 'creator@example.com',

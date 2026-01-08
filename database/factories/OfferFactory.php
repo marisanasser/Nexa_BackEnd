@@ -1,9 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
+use App\Models\Chat\ChatRoom;
 use App\Models\Offer;
-use App\Models\User;
+use App\Models\User\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class OfferFactory extends Factory
@@ -15,7 +18,7 @@ class OfferFactory extends Factory
         return [
             'brand_id' => User::factory()->state(['role' => 'brand']),
             'creator_id' => User::factory()->state(['role' => 'creator']),
-            'chat_room_id' => \App\Models\ChatRoom::factory(),
+            'chat_room_id' => ChatRoom::factory(),
             'title' => $this->faker->sentence(3),
             'description' => $this->faker->paragraph(),
             'budget' => $this->faker->randomFloat(2, 100, 10000),

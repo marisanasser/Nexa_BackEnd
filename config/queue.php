@@ -1,11 +1,11 @@
 <?php
 
-return [
+declare(strict_types=1);
 
+return [
     'default' => env('QUEUE_CONNECTION', 'sync'),
 
     'connections' => [
-
         'sync' => [
             'driver' => 'sync',
         ],
@@ -46,7 +46,6 @@ return [
             'block_for' => null,
             'after_commit' => false,
         ],
-
     ],
 
     'batching' => [
@@ -59,5 +58,4 @@ return [
         'database' => env('DB_CONNECTION', 'mysql'),
         'table' => 'failed_jobs',
     ],
-
 ];
