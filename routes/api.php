@@ -1,8 +1,6 @@
 <?php
 
 use App\Http\Controllers\Auth\AccountController;
-use App\Http\Controllers\Admin\BrandRankingController;
-use App\Http\Controllers\Admin\AdminPayoutController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Base\HealthCheckController;
 use App\Http\Controllers\Campaign\BidController;
@@ -54,7 +52,7 @@ Route::get('/download/{path}', function ($path) {
 
     return response()->file($filePath, [
         'Content-Type' => $mimeType,
-        'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
+        'Content-Disposition' => "attachment; filename=\"$fileName\"",
         'Access-Control-Allow-Origin' => '*',
         'Access-Control-Allow-Methods' => 'GET, OPTIONS',
         'Access-Control-Allow-Headers' => 'Content-Type, Authorization, X-Requested-With, Accept, Origin',

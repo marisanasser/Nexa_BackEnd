@@ -6,8 +6,6 @@ namespace App\Http\Controllers\Contract;
 
 use App\Domain\Notification\Services\ContractNotificationService;
 use App\Domain\Notification\Services\UserNotificationService;
-use Illuminate\Support\Facades\Log;
-
 use App\Events\Offer\OfferAccepted;
 use App\Events\Offer\OfferCancelled;
 use App\Events\Offer\OfferCreated;
@@ -19,11 +17,11 @@ use App\Models\Chat\Message;
 use App\Models\Contract\Offer;
 use App\Models\Payment\BrandPaymentMethod;
 use App\Models\User\User;
-
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Stripe\Account;
 use Stripe\Checkout\Session;
@@ -34,14 +32,18 @@ class OfferController extends Controller
 {
     public function store(Request $request): JsonResponse
     {
+        Log::info('Offer store request data:', $request->all());
+
         $validator = Validator::make($request->all(), [
             'creator_id' => 'required|integer|exists:users,id',
             'chat_room_id' => 'required|string',
-            'budget' => 'required|numeric|min:10|max:100000',
+            'budget' => 'required|numeric|min:10|max:10000000',
             'estimated_days' => 'required|integer|min:1|max:365',
         ]);
 
         if ($validator->fails()) {
+            Log::error('Offer validation failed:', $validator->errors()->toArray());
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',

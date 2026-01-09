@@ -37,7 +37,7 @@ class CreatorBalanceService
     public function getOrCreateBalance(User $creator): CreatorBalance
     {
         return CreatorBalance::firstOrCreate(
-            ['user_id' => $creator->id],
+            ['creator_id' => $creator->id],
             [
                 'available_balance' => 0,
                 'pending_balance' => 0,
@@ -117,7 +117,7 @@ class CreatorBalanceService
 
             // Create withdrawal request
             $withdrawal = Withdrawal::create([
-                'user_id' => $creator->id,
+                'creator_id' => $creator->id,
                 'amount' => $amount,
                 'method' => $withdrawalMethod,
                 'details' => $withdrawalDetails,
@@ -151,7 +151,7 @@ class CreatorBalanceService
         ]);
 
         // Update user's total withdrawn
-        $balance = CreatorBalance::where('user_id', $withdrawal->user_id)->first();
+        $balance = CreatorBalance::where('creator_id', $withdrawal->creator_id)->first();
         if ($balance) {
             $balance->increment('total_withdrawn', (float) $withdrawal->amount);
         }
@@ -175,7 +175,7 @@ class CreatorBalanceService
 
         return DB::transaction(function () use ($withdrawal, $reason) {
             // Return funds to available balance
-            $balance = CreatorBalance::where('user_id', $withdrawal->user_id)->first();
+            $balance = CreatorBalance::where('creator_id', $withdrawal->creator_id)->first();
             if ($balance) {
                 $balance->increment('available_balance', (float) $withdrawal->amount);
             }
@@ -200,7 +200,7 @@ class CreatorBalanceService
      */
     public function getWithdrawalHistory(User $creator, int $perPage = 15): LengthAwarePaginator
     {
-        return Withdrawal::where('user_id', $creator->id)
+        return Withdrawal::where('creator_id', $creator->id)
             ->orderBy('created_at', 'desc')
             ->paginate($perPage)
         ;
@@ -218,7 +218,7 @@ class CreatorBalanceService
             'pending_balance' => (float) $balance->pending_balance,
             'total_earned' => (float) $balance->total_earned,
             'total_withdrawn' => (float) $balance->total_withdrawn,
-            'pending_withdrawals' => Withdrawal::where('user_id', $creator->id)
+            'pending_withdrawals' => Withdrawal::where('creator_id', $creator->id)
                 ->where('status', 'pending')
                 ->sum('amount'),
         ];

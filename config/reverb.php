@@ -86,6 +86,23 @@ return [
                 'max_connections' => env('REVERB_APP_MAX_CONNECTIONS'),
                 'max_message_size' => env('REVERB_APP_MAX_MESSAGE_SIZE', 10_000),
             ],
+            [
+                'key' => env('REVERB_LOCAL_APP_KEY', 'local_key'),
+                'secret' => env('REVERB_LOCAL_APP_SECRET', 'local_secret'),
+                'app_id' => env('REVERB_LOCAL_APP_ID', 'local_app'),
+                'options' => [
+                    'host' => env('REVERB_LOCAL_HOST', env('REVERB_HOST', 'localhost')),
+                    'port' => env('REVERB_LOCAL_PORT', env('REVERB_PORT', 8080)),
+                    'scheme' => env('REVERB_LOCAL_SCHEME', env('REVERB_SCHEME', 'http')),
+                    'useTLS' => 'https' === env('REVERB_LOCAL_SCHEME', env('REVERB_SCHEME', 'http')),
+                ],
+                'allowed_origins' => ['*'],
+                'ping_interval' => env('REVERB_LOCAL_APP_PING_INTERVAL', 60),
+                'activity_timeout' => env('REVERB_LOCAL_APP_ACTIVITY_TIMEOUT', 30),
+                'max_connections' => env('REVERB_LOCAL_APP_MAX_CONNECTIONS'),
+                'max_message_size' => env('REVERB_LOCAL_APP_MAX_MESSAGE_SIZE', 10_000),
+            ],
         ],
     ],
+
 ];
