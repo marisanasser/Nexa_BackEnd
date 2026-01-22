@@ -12,7 +12,7 @@ use Exception;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 /**
  * PortfolioService handles portfolio management for creators.
@@ -58,11 +58,14 @@ class PortfolioService
         $portfolio = $this->getPortfolio($user);
 
         $updateData = [];
+        $userUpdateData = []; // Data to sync with User model
+
         if (isset($data['title'])) {
             $updateData['title'] = $data['title'];
         }
         if (isset($data['bio'])) {
             $updateData['bio'] = $data['bio'];
+            $userUpdateData['bio'] = $data['bio']; // Sync bio with User
         }
         if (isset($data['project_links'])) {
             $updateData['project_links'] = $data['project_links'];
@@ -72,15 +75,29 @@ class PortfolioService
             if ($portfolio->profile_picture) {
                 FileUploadHelper::delete($portfolio->profile_picture);
             }
-            $updateData['profile_picture'] = FileUploadHelper::upload($profilePicture, 'portfolio/'.$user->id);
+            // Use 'avatars' path to be consistent with ProfileController
+            $url = FileUploadHelper::upload($profilePicture, 'avatars');
+            $updateData['profile_picture'] = $url;
+            
+            // Sync with user avatar_url
+            $userUpdateData['avatar_url'] = $url;
 
-            // Sync with user avatar if needed
-            $user->update(['avatar' => $updateData['profile_picture']]);
+            Log::info('Portfolio profile picture updated and synced with user avatar', [
+                'user_id' => $user->id,
+                'url' => $url
+            ]);
         }
 
         $portfolio->update($updateData);
 
-        Log::info('Portfolio details updated', ['user_id' => $user->id]);
+        // Perform sync update on User model if there are changes
+        if (!empty($userUpdateData)) {
+            $user->update($userUpdateData);
+            Log::info('Synced Portfolio changes to User profile', [
+                'user_id' => $user->id,
+                'fields' => array_keys($userUpdateData)
+            ]);
+        }
 
         return $portfolio->fresh();
     }
@@ -246,10 +263,13 @@ class PortfolioService
             $path .= "/{$subPath}";
         }
 
-        $fileName = time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
-        $filePath = $file->storeAs($path, $fileName, config('filesystems.default'));
+        $url = FileUploadHelper::upload($file, $path);
 
-        return Storage::url($filePath);
+        if (!$url) {
+            throw new Exception('Failed to upload file');
+        }
+
+        return $url;
     }
 
     /**

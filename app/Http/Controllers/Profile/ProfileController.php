@@ -251,6 +251,28 @@ class ProfileController extends Controller
 
             $user->update($data);
 
+            // Sync with Portfolio (Bidirectional sync for Bio)
+            try {
+                if ($user->portfolio) {
+                    $portfolioData = [];
+                    // Sync Bio if present
+                    if (array_key_exists('bio', $data)) {
+                         $portfolioData['bio'] = $data['bio'];
+                    }
+                    
+                    if (!empty($portfolioData)) {
+                        $user->portfolio->update($portfolioData);
+                        Log::info('Synced User profile changes to Portfolio', [
+                            'user_id' => $user->id,
+                            'fields' => array_keys($portfolioData)
+                        ]);
+                    }
+                }
+            } catch (Throwable $e) {
+                // Ignore sync errors
+                Log::warning('Failed to sync profile changes to portfolio', ['error' => $e->getMessage()]);
+            }
+
             $user->refresh();
 
             return response()->json([
