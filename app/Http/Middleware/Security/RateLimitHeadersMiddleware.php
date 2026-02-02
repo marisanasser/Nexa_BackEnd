@@ -82,30 +82,15 @@ class RateLimitHeadersMiddleware
 
     private function getMaxAttempts(string $throttleName): int
     {
-        switch ($throttleName) {
-            case 'auth':
-                return config('rate_limiting.auth.login.attempts', 20);
-
-            case 'registration':
-                return config('rate_limiting.auth.registration.attempts', 10);
-
-            case 'password-reset':
-                return config('rate_limiting.auth.password_reset.attempts', 5);
-
-            case 'api':
-                return config('rate_limiting.api.general.attempts', 1000);
-
-            case 'notifications':
-                return config('rate_limiting.api.notifications.attempts', 300);
-
-            case 'user-status':
-                return config('rate_limiting.api.user_status.attempts', 600);
-
-            case 'payment':
-                return config('rate_limiting.api.payment.attempts', 100);
-
-            default:
-                return 60;
-        }
+        return match ($throttleName) {
+            'auth' => config('rate_limiting.auth.login.attempts', 20),
+            'registration' => config('rate_limiting.auth.registration.attempts', 10),
+            'password-reset' => config('rate_limiting.auth.password_reset.attempts', 5),
+            'api' => config('rate_limiting.api.general.attempts', 1000),
+            'notifications' => config('rate_limiting.api.notifications.attempts', 300),
+            'user-status' => config('rate_limiting.api.user_status.attempts', 600),
+            'payment' => config('rate_limiting.api.payment.attempts', 100),
+            default => 60,
+        };
     }
 }
