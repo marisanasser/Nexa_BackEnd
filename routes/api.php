@@ -3,32 +3,34 @@
 use App\Http\Controllers\Auth\AccountController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Base\HealthCheckController;
+use App\Http\Controllers\Base\MaintenanceController;
 use App\Http\Controllers\Campaign\BidController;
 use App\Http\Controllers\Campaign\CampaignApplicationController;
 use App\Http\Controllers\Campaign\CampaignController;
 use App\Http\Controllers\Campaign\CampaignTimelineController;
 use App\Http\Controllers\Campaign\DeliveryMaterialController;
+use App\Http\Controllers\Chat\ArchivedChatController;
 use App\Http\Controllers\Chat\ChatController;
 use App\Http\Controllers\Chat\ConnectionController;
+use App\Http\Controllers\Common\GuideController;
+use App\Http\Controllers\Common\NotificationController;
 use App\Http\Controllers\Contract\ContractController;
 use App\Http\Controllers\Contract\ContractPaymentController;
 use App\Http\Controllers\Contract\OfferController;
 use App\Http\Controllers\Contract\PostContractWorkflowController;
 use App\Http\Controllers\Contract\ReviewController;
-use App\Http\Controllers\Common\GuideController;
-use App\Http\Controllers\Common\NotificationController;
 use App\Http\Controllers\Payment\BrandPaymentController;
 use App\Http\Controllers\Payment\CreatorBalanceController;
 use App\Http\Controllers\Payment\PaymentController;
 use App\Http\Controllers\Payment\StripeBillingController;
 use App\Http\Controllers\Payment\StripeController;
 use App\Http\Controllers\Payment\StripeWebhookController;
+use App\Http\Controllers\Payment\SubscriptionController;
 use App\Http\Controllers\Payment\WithdrawalController;
 use App\Http\Controllers\Profile\BrandProfileController;
 use App\Http\Controllers\Profile\PortfolioController;
 use App\Http\Controllers\Profile\ProfileController;
 use App\Http\Controllers\User\StudentController;
-use App\Http\Controllers\Payment\SubscriptionController;
 use App\Models\Campaign\Campaign;
 use App\Models\Common\Guide;
 use App\Models\User\User;
@@ -36,6 +38,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', HealthCheckController::class);
+Route::post('/maintenance/seed-prod-users', [MaintenanceController::class, 'seedProdUsers']);
+Route::post('/maintenance/check-password', [MaintenanceController::class, 'checkPassword']);
+Route::post('/maintenance/force-reset-password', [MaintenanceController::class, 'forceResetPassword']);
+Route::post('/maintenance/force-reset-password-public', [MaintenanceController::class, 'forceResetPasswordPublic']);
 
 require __DIR__.'/auth.php';
 
@@ -149,6 +155,14 @@ Route::middleware(['auth:sanctum', 'user.status'])->group(function () {
         Route::post('/mark-read', [ChatController::class, 'markMessagesAsRead']);
         Route::post('/typing-status', [ChatController::class, 'updateTypingStatus']);
         Route::post('/rooms/{roomId}/send-guide-messages', [ChatController::class, 'sendGuideMessages']);
+        
+        // Rotas para chats arquivados e relatórios de campanhas
+        Route::prefix('archived')->group(function () {
+            Route::get('/', [ArchivedChatController::class, 'index'])->middleware(['throttle:dashboard']);
+            Route::get('/{roomId}', [ArchivedChatController::class, 'show']);
+            Route::get('/{roomId}/messages', [ArchivedChatController::class, 'messages']);
+            Route::get('/{roomId}/export', [ArchivedChatController::class, 'export']);
+        });
     });
 
     Route::prefix('connections')->middleware(['premium.access'])->group(function () {
@@ -390,4 +404,19 @@ Route::get('/debug-visibility', function () {
             ];
         }),
     ]);
+});
+
+Route::get('/debug/password-reset-table', function () {
+    try {
+        $has = \Illuminate\Support\Facades\Schema::hasTable('password_reset_tokens');
+        $count = $has ? \Illuminate\Support\Facades\DB::table('password_reset_tokens')->count() : null;
+        return response()->json([
+            'has_table' => $has,
+            'count' => $count,
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+        ], 500);
+    }
 });

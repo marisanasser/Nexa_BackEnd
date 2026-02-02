@@ -128,7 +128,26 @@ class User extends Authenticatable
 
     public function getAvatarAttribute(): ?string
     {
-        return $this->avatar_url;
+        $value = $this->avatar_url;
+
+        if (! $value) {
+            return null;
+        }
+
+        if (str_starts_with($value, 'http')) {
+            return $value;
+        }
+
+        // Remove /storage/ prefix if present to avoid duplication with GCS url
+        $path = str_replace('/storage/', '', $value);
+
+        // If using GCS, force the full URL
+        if (config('filesystems.default') === 'gcs') {
+            $bucket = config('filesystems.disks.gcs.bucket');
+            return "https://storage.googleapis.com/{$bucket}/{$path}";
+        }
+
+        return $value;
     }
 
     public function campaigns(): HasMany

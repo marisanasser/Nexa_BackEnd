@@ -37,6 +37,22 @@ class OtpController extends Controller
         Cache::put($key, $code, 600);
 
         try {
+            $defaultMailer = config('mail.default');
+            $fromAddress = config('mail.from.address');
+            $fromName = config('mail.from.name');
+            $sesRegion = env('AWS_SES_REGION', env('AWS_DEFAULT_REGION'));
+            $smtpHost = env('MAIL_HOST');
+            $smtpUser = env('MAIL_USERNAME') ? '***' : null;
+            Log::info('OTP mail dispatch attempt', [
+                'contact' => $contact,
+                'type' => $type,
+                'mailer' => $defaultMailer,
+                'from_address' => $fromAddress,
+                'from_name' => $fromName,
+                'ses_region' => $sesRegion,
+                'smtp_host' => $smtpHost,
+                'smtp_user_set' => (bool) $smtpUser,
+            ]);
             if ('email' === $type) {
                 Mail::raw(
                     "Seu código de verificação Nexa é: {$code}. Ele expira em 10 minutos.",
@@ -54,6 +70,10 @@ class OtpController extends Controller
                 'contact' => $contact,
                 'type' => $type,
                 'error' => $e->getMessage(),
+                'mailer' => config('mail.default'),
+                'from_address' => config('mail.from.address'),
+                'smtp_host' => env('MAIL_HOST'),
+                'ses_region' => env('AWS_SES_REGION', env('AWS_DEFAULT_REGION')),
             ]);
         }
 

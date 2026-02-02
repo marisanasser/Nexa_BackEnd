@@ -558,7 +558,7 @@ class CampaignController extends Controller
             $user = $this->getAuthenticatedUser();
             assert($user instanceof User);
 
-            if ($user->isCreator()) {
+            if ($user->isCreator() || $user->isStudent()) {
                 if (!$campaign->isApproved() || !$campaign->is_active) {
                     return response()->json(['error' => 'Campaign not found or not available'], 404);
                 }

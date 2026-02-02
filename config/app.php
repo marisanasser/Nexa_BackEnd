@@ -18,6 +18,20 @@ use Illuminate\Support\ServiceProvider;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\SocialiteServiceProvider;
 
+$frontendEnv = env('FRONTEND_URL', 'http://localhost:3000');
+$frontendRaw = trim((string) $frontendEnv);
+$frontendRaw = trim($frontendRaw, " \t\n\r\0\x0B\"'`");
+$matches = [];
+if (preg_match('#^(https?://[^\s"\'`]+)#i', $frontendRaw, $matches)) {
+    $frontendCandidate = $matches[1];
+} else {
+    $frontendCandidate = preg_split('/\s+/', $frontendRaw)[0];
+    if (!preg_match('#^https?://#i', $frontendCandidate)) {
+        $frontendCandidate = 'https://'.$frontendCandidate;
+    }
+}
+$frontendUrl = rtrim($frontendCandidate, '/');
+
 return [
     'name' => env('APP_NAME', 'Laravel'),
 
@@ -27,7 +41,7 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
-    'frontend_url' => env('FRONTEND_URL', 'http://localhost:5000'),
+    'frontend_url' => $frontendUrl,
 
     'asset_url' => env('ASSET_URL'),
 

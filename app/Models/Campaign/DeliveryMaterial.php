@@ -69,13 +69,15 @@ class DeliveryMaterial extends Model
     {
         $disk = config('filesystems.default');
 
+        $path = str_replace('/storage/', '', $this->file_path);
+
         if ('gcs' === $disk) {
             $bucket = config('filesystems.disks.gcs.bucket');
 
-            return "https://storage.googleapis.com/{$bucket}/{$this->file_path}";
+            return "https://storage.googleapis.com/{$bucket}/{$path}";
         }
 
-        return asset('storage/'.$this->file_path);
+        return asset('storage/'.$path);
     }
 
     public function getFormattedFileSizeAttribute(): string

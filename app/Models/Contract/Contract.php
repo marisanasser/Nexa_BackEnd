@@ -11,13 +11,13 @@ use App\Domain\Payment\Services\AutomaticPaymentService;
 use App\Models\Campaign\Campaign;
 use App\Models\Campaign\CampaignTimeline;
 use App\Models\Campaign\DeliveryMaterial;
+use App\Models\Chat\ChatRoom;
 use App\Models\Chat\Message;
 use App\Models\Payment\CreatorBalance;
 use App\Models\Payment\JobPayment;
 use App\Models\Payment\Transaction;
 use App\Models\User\Review;
 use App\Models\User\User;
-
 use Exception;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -28,6 +28,7 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Log;
+
 use function in_array;
 
 /**
@@ -412,6 +413,62 @@ class Contract extends Model
             'available_balance' => $balance->available_balance,
             'pending_balance' => $balance->pending_balance,
         ]);
+
+        // Arquiva o chat após o pagamento ser processado
+        $this->archiveChatRoom();
+
+        return true;
+    }
+
+    /**
+     * Arquiva o chat room associado a este contrato.
+     * Chamado automaticamente após o pagamento ser processado.
+     */
+    public function archiveChatRoom(): bool
+    {
+        // Busca o chat room através da offer
+        if (!$this->offer || !$this->offer->chat_room_id) {
+            Log::info('No chat room to archive for contract', [
+                'contract_id' => $this->id,
+            ]);
+            return false;
+        }
+
+        $chatRoom = ChatRoom::find($this->offer->chat_room_id);
+        
+        if (!$chatRoom) {
+            Log::warning('Chat room not found for archiving', [
+                'contract_id' => $this->id,
+                'chat_room_id' => $this->offer->chat_room_id,
+            ]);
+            return false;
+        }
+
+        // Verifica se todos os contratos desta campanha estão completos
+        $campaignContracts = self::whereHas('offer', function ($query) use ($chatRoom) {
+            $query->where('campaign_id', $chatRoom->campaign_id);
+        })->get();
+
+        $allCompleted = $campaignContracts->every(fn ($contract) => 
+            in_array($contract->status, ['completed', 'cancelled', 'terminated'])
+        );
+
+        if ($allCompleted) {
+            $archived = $chatRoom->archive(ChatRoom::CLOSURE_PAYMENT_COMPLETED);
+
+            if ($archived) {
+                Log::info('Chat room archived after payment completion', [
+                    'contract_id' => $this->id,
+                    'chat_room_id' => $chatRoom->id,
+                    'campaign_id' => $chatRoom->campaign_id,
+                ]);
+            }
+
+            return $archived;
+        }
+
+        // Se ainda há contratos pendentes, apenas marca como completo
+        $chatRoom->markAsCompleted(ChatRoom::CLOSURE_CONTRACT_COMPLETED);
 
         return true;
     }

@@ -353,12 +353,48 @@ class Campaign extends Model
 
     public function getImageUrlAttribute()
     {
-        return $this->attributes['image_url'] ?? null;
+        $value = $this->attributes['image_url'] ?? null;
+
+        if (! $value) {
+            return null;
+        }
+
+        if (str_starts_with($value, 'http')) {
+            return $value;
+        }
+
+        $path = str_replace('/storage/', '', $value);
+
+        if (config('filesystems.default') === 'gcs') {
+            $bucket = config('filesystems.disks.gcs.bucket');
+
+            return "https://storage.googleapis.com/{$bucket}/{$path}";
+        }
+
+        return $value;
     }
 
     public function getLogoAttribute()
     {
-        return $this->attributes['logo'] ?? null;
+        $value = $this->attributes['logo'] ?? null;
+
+        if (! $value) {
+            return null;
+        }
+
+        if (str_starts_with($value, 'http')) {
+            return $value;
+        }
+
+        $path = str_replace('/storage/', '', $value);
+
+        if (config('filesystems.default') === 'gcs') {
+            $bucket = config('filesystems.disks.gcs.bucket');
+
+            return "https://storage.googleapis.com/{$bucket}/{$path}";
+        }
+
+        return $value;
     }
 
     public function getAttachFileAttribute()

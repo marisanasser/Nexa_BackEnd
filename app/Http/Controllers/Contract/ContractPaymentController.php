@@ -281,7 +281,7 @@ class ContractPaymentController extends Controller
 
         return response()->json([
             'success' => true,
-            'transactions' => $transactions->getCollection()->map(function ($transaction) {
+            'transactions' => collect($transactions->items())->map(function ($transaction) {
                return [
                    'id' => $transaction->id,
                    'contract_id' => $transaction->contract_id,
@@ -521,5 +521,80 @@ class ContractPaymentController extends Controller
             'message' => 'Payment failed',
             'stripe_status' => $intent->status,
         ], 400);
+    }
+
+    /**
+     * Get transaction history for the authenticated user
+     */
+    public function getTransactionHistory(Request $request): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated',
+                ], 401);
+            }
+
+            $perPage = min($request->integer('per_page', 10), 100);
+            $page = $request->integer('page', 1);
+
+            $transactions = Transaction::where('user_id', $user->id)
+                ->orderBy('created_at', 'desc')
+                ->paginate($perPage, ['*'], 'page', $page);
+
+            $transformedTransactions = collect($transactions->items())->map(function ($transaction) {
+                // Get pagarme_transaction_id from payment_data or use stripe_payment_intent_id as fallback
+                $paymentData = $transaction->payment_data ?? [];
+                $pagarmeTransactionId = $paymentData['pagarme_transaction_id'] 
+                    ?? $paymentData['transaction_id'] 
+                    ?? $transaction->stripe_payment_intent_id 
+                    ?? $transaction->stripe_charge_id 
+                    ?? null;
+
+                return [
+                    'id' => $transaction->id,
+                    'pagarme_transaction_id' => $pagarmeTransactionId ?? '',
+                    'status' => $transaction->status,
+                    'amount' => (string) $transaction->amount, // Ensure it's a string
+                    'payment_method' => $transaction->payment_method ?? '',
+                    'card_brand' => $transaction->card_brand ?? '',
+                    'card_last4' => $transaction->card_last4 ?? '',
+                    'card_holder_name' => $transaction->card_holder_name ?? '',
+                    'payment_data' => $transaction->payment_data ?? [],
+                    'paid_at' => $transaction->paid_at?->format('Y-m-d H:i:s') ?? '',
+                    'expires_at' => $transaction->expires_at?->format('Y-m-d H:i:s') ?? '',
+                    'created_at' => $transaction->created_at->format('Y-m-d H:i:s'),
+                    'updated_at' => $transaction->updated_at->format('Y-m-d H:i:s'),
+                ];
+            });
+
+            return response()->json([
+                'transactions' => $transformedTransactions,
+                'pagination' => [
+                    'current_page' => $transactions->currentPage(),
+                    'last_page' => $transactions->lastPage(),
+                    'per_page' => $transactions->perPage(),
+                    'total' => $transactions->total(),
+                    'from' => $transactions->firstItem(),
+                    'to' => $transactions->lastItem(),
+                ],
+            ]);
+
+        } catch (Exception $e) {
+            Log::error('Error fetching transaction history', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch transaction history',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 }

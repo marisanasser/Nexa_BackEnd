@@ -11,11 +11,13 @@ steps:
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
   entrypoint: 'gcloud'
   args: [
-    'run', 'deploy', 'nexa-backend2',
+    'run', 'deploy', 'nexa-backend-prod',
     '--image', 'gcr.io/nexa-teste-1/nexa-backend:latest',
     '--region', 'southamerica-east1',
     '--platform', 'managed',
-    '--allow-unauthenticated'
+    '--allow-unauthenticated',
+    '--set-env-vars',
+    'APP_ENV=production,APP_DEBUG=false,APP_URL=${_APP_URL},FRONTEND_URL=${_FRONTEND_URL},SANCTUM_STATEFUL_DOMAINS=${_SANCTUM_STATEFUL_DOMAINS},SESSION_DOMAIN=${_SESSION_DOMAIN},SESSION_SECURE_COOKIE=true,STRIPE_SECRET_KEY=${_STRIPE_SECRET_KEY},STRIPE_PUBLISHABLE_KEY=${_STRIPE_PUBLISHABLE_KEY},STRIPE_WEBHOOK_SECRET=${_STRIPE_WEBHOOK_SECRET},STRIPE_SECRET=${_STRIPE_SECRET_KEY},STRIPE_KEY=${_STRIPE_PUBLISHABLE_KEY},MAIL_MAILER=ses,MAIL_FROM_ADDRESS=${_MAIL_FROM_ADDRESS},MAIL_FROM_NAME=${_MAIL_FROM_NAME},AWS_ACCESS_KEY_ID=${_AWS_ACCESS_KEY_ID},AWS_SECRET_ACCESS_KEY=${_AWS_SECRET_ACCESS_KEY},AWS_DEFAULT_REGION=sa-east-1,AWS_SES_REGION=sa-east-1,DB_CONNECTION=pgsql,DB_HOST=${_DB_HOST},DB_PORT=${_DB_PORT},DB_DATABASE=${_DB_DATABASE},DB_USERNAME=${_DB_USERNAME},DB_PASSWORD=${_DB_PASSWORD},DB_SSLMODE=require,DATABASE_URL=${_DATABASE_URL}'
   ]
 images:
 - 'gcr.io/nexa-teste-1/nexa-backend:latest'

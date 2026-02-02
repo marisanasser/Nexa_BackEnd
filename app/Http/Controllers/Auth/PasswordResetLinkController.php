@@ -35,22 +35,46 @@ class PasswordResetLinkController extends Controller
         $token = Password::createToken($user);
 
         try {
+            $defaultMailer = config('mail.default');
+            $fromAddress = config('mail.from.address');
+            $fromName = config('mail.from.name');
+            $sesRegion = env('AWS_SES_REGION', env('AWS_DEFAULT_REGION'));
+            $smtpHost = env('MAIL_HOST');
+            $smtpUser = env('MAIL_USERNAME') ? '***' : null;
+            Log::info('Password reset mail dispatch attempt', [
+                'email' => $user->email,
+                'mailer' => $defaultMailer,
+                'from_address' => $fromAddress,
+                'from_name' => $fromName,
+                'ses_region' => $sesRegion,
+                'smtp_host' => $smtpHost,
+                'smtp_user_set' => (bool) $smtpUser,
+            ]);
             Mail::to($user->email)->send(new PasswordReset($token, $user->email));
 
+            Log::info('Password reset mail dispatched', [
+                'email' => $user->email,
+            ]);
             return response()->json([
                 'success' => true,
                 'message' => 'Se o email existe em nosso sistema, você receberá um link para redefinir sua senha.',
+                'reset_url' => config('app.frontend_url').'/reset-password?token='.urlencode($token).'&email='.urlencode($user->email),
             ]);
         } catch (Exception $e) {
             Log::error('Failed to send password reset email', [
                 'email' => $user->email,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
+                'mailer' => config('mail.default'),
+                'from_address' => config('mail.from.address'),
+                'smtp_host' => env('MAIL_HOST'),
+                'ses_region' => env('AWS_SES_REGION', env('AWS_DEFAULT_REGION')),
             ]);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Se o email existe em nosso sistema, você receberá um link para redefinir sua senha.',
+                'reset_url' => config('app.frontend_url').'/reset-password?token='.urlencode($token).'&email='.urlencode($user->email),
             ]);
         }
     }

@@ -121,6 +121,16 @@ class StripeController extends Controller
 
     public function getAccountStatus(Request $request): JsonResponse
     {
+        // Check for Stripe configuration before attempting to use the SDK
+        if (!config('services.stripe.secret')) {
+            Log::error('Stripe secret key missing in getAccountStatus');
+            return response()->json([
+                'success' => false,
+                'message' => 'Stripe configuration is missing. Please check server logs.',
+                'error' => 'STRIPE_SECRET_KEY is not set in .env file'
+            ], 500);
+        }
+
         try {
             $user = $this->getAuthenticatedUser();
             assert($user instanceof User);

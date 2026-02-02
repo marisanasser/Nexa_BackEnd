@@ -1,0 +1,23 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'build',
+    '--no-cache',
+    '-t', 'gcr.io/nexa-teste-1/nexa-chat:latest',
+    '-f', 'Dockerfile.reverb',
+    '.'
+  ]
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/nexa-teste-1/nexa-chat:latest']
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: 'gcloud'
+  args: [
+    'run', 'deploy', 'chat-prod',
+    '--image', 'gcr.io/nexa-teste-1/nexa-chat:latest',
+    '--region', 'southamerica-east1',
+    '--platform', 'managed',
+    '--allow-unauthenticated',
+    '--set-env-vars', 'APP_ENV=production,APP_DEBUG=false,REVERB_APP_KEY=nexa_reverb_key,REVERB_APP_SECRET=nexa_reverb_secret,REVERB_APP_ID=123456,REVERB_HOST=www.nexacreators.com,REVERB_PORT=443,REVERB_SCHEME=https,GOOGLE_CLOUD_PROJECT_ID=nexa-teste-1,GOOGLE_CLOUD_STORAGE_BUCKET=nexa-uploads-prod'
+  ]
+images:
+- 'gcr.io/nexa-teste-1/nexa-chat:latest'

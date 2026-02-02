@@ -33,11 +33,19 @@ class ChatController extends Controller
         ]);
 
         $chatRooms = collect();
-        $perPage = (int) $request->query('per_page', 100);
+        $perPage = (int) $request->query('per_page', '100');
+        // Por padrão, não incluir chats arquivados
+        $includeArchived = filter_var($request->query('include_archived', 'false'), FILTER_VALIDATE_BOOLEAN);
 
         if ($user->isBrand()) {
-            $chatRooms = ChatRoom::where('brand_id', $user->id)
-                ->with([
+            $query = ChatRoom::where('brand_id', $user->id);
+            
+            // Filtrar chats arquivados se necessário
+            if (!$includeArchived) {
+                $query->notArchived();
+            }
+            
+            $chatRooms = $query->with([
                     'creator.onlineStatus',
                     'campaign',
                     'lastMessage.sender',
@@ -55,8 +63,14 @@ class ChatController extends Controller
 
             // Log::info('Found chat rooms for brand', [ ... ]);
         } elseif ($user->isCreator() || $user->isStudent()) {
-            $chatRooms = ChatRoom::where('creator_id', $user->id)
-                ->with([
+            $query = ChatRoom::where('creator_id', $user->id);
+            
+            // Filtrar chats arquivados se necessário
+            if (!$includeArchived) {
+                $query->notArchived();
+            }
+            
+            $chatRooms = $query->with([
                     'brand.onlineStatus',
                     'campaign',
                     'lastMessage.sender',
@@ -74,8 +88,14 @@ class ChatController extends Controller
 
             // Log::info('Found chat rooms for creator/student', [ ... ]);
         } elseif ($user->isAdmin()) {
+            $query = ChatRoom::query();
+            
+            // Filtrar chats arquivados se necessário
+            if (!$includeArchived) {
+                $query->notArchived();
+            }
 
-            $chatRooms = ChatRoom::with([
+            $chatRooms = $query->with([
                 'creator.onlineStatus',
                 'brand.onlineStatus',
                 'campaign',
@@ -128,6 +148,9 @@ class ChatController extends Controller
                 'campaign_id' => $room->campaign_id,
                 'campaign_title' => $room->campaign?->title ?? 'Campaign Not Found',
                 'campaign_status' => $room->campaign?->status ?? 'unknown',
+                'chat_status' => $room->chat_status ?? 'active',
+                'can_send_messages' => $room->canSendMessages(),
+                'archived_at' => $room->archived_at?->toISOString(),
                 'other_user' => [
                     'id' => $otherUser->id,
                     'name' => $otherUser->name,
@@ -239,6 +262,15 @@ class ChatController extends Controller
 
         if (! $room) {
             return response()->json(['success' => false, 'message' => 'Chat room not found'], 404);
+        }
+
+        // Verifica se o chat pode receber mensagens (não arquivado)
+        if (! $room->canSendMessages()) {
+            return response()->json([
+                'success' => false, 
+                'message' => 'Este chat foi arquivado e não aceita novas mensagens.',
+                'chat_status' => $room->chat_status,
+            ], 403);
         }
 
         $messageData = $this->prepareMessageData($request, $room, $user);
