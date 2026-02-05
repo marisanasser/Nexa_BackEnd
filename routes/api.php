@@ -81,7 +81,7 @@ Route::middleware(['auth:sanctum', 'user.status'])->prefix('student')->group(fun
 
 Route::middleware(['auth:sanctum', 'user.status'])->group(function () {
     
-    Route::prefix('terms')->group(function () {
+    Route::prefix('terms')->group(callback: function () {
         Route::get('/check', [TermController::class, 'check']);
         Route::post('/accept', [TermController::class, 'accept']);
     });
