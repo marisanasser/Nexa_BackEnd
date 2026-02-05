@@ -45,6 +45,12 @@ class BrandProfileController extends Controller
                     'avatar' => FileUploadHelper::resolveUrl($user->avatar_url),
                     'avatar_url' => FileUploadHelper::resolveUrl($user->avatar_url),
                     'company_name' => $user->company_name,
+                    'cnpj' => $user->cnpj,
+                    'website' => $user->website,
+                    'description' => $user->bio,
+                    'niche' => $user->niche,
+                    'address' => $user->address,
+                    'city' => $user->city,
                     'whatsapp_number' => $user->whatsapp_number,
                     'gender' => $user->gender,
                     'state' => $user->state,
@@ -107,6 +113,12 @@ class BrandProfileController extends Controller
                     Rule::unique('users')->ignore($user->id),
                 ],
                 'company_name' => 'sometimes|string|max:255',
+                'cnpj' => 'sometimes|string|max:20',
+                'website' => 'sometimes|nullable|string|max:255',
+                'description' => 'sometimes|nullable|string',
+                'niche' => 'sometimes|nullable|string|max:255',
+                'address' => 'sometimes|nullable|string|max:255',
+                'city' => 'sometimes|nullable|string|max:255',
                 'whatsapp_number' => 'sometimes|string|max:20',
                 'gender' => 'sometimes|nullable|string|in:male,female,other',
                 'state' => 'sometimes|nullable|string|max:255',
@@ -148,6 +160,11 @@ class BrandProfileController extends Controller
                 unset($data['username']);
             }
 
+            if (isset($data['description'])) {
+                $data['bio'] = $data['description'];
+                unset($data['description']);
+            }
+
             if ($hasAvatarFile && $avatarFile) {
                 // Delete old avatar
                 if ($user->avatar_url) {
@@ -177,6 +194,12 @@ class BrandProfileController extends Controller
                     'avatar' => FileUploadHelper::resolveUrl($user->avatar_url),
                     'avatar_url' => FileUploadHelper::resolveUrl($user->avatar_url),
                     'company_name' => $user->company_name,
+                    'cnpj' => $user->cnpj,
+                    'website' => $user->website,
+                    'description' => $user->bio,
+                    'niche' => $user->niche,
+                    'address' => $user->address,
+                    'city' => $user->city,
                     'whatsapp_number' => $user->whatsapp_number,
                     'gender' => $user->gender,
                     'state' => $user->state,
