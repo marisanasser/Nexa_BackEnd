@@ -17,7 +17,7 @@ steps:
     '--platform', 'managed',
     '--allow-unauthenticated',
     '--update-env-vars',
-    'APP_ENV=production,APP_DEBUG=false,BROADCAST_DRIVER=reverb,REVERB_APP_KEY=nexa_reverb_key,REVERB_APP_SECRET=nexa_reverb_secret,REVERB_APP_ID=123456,REVERB_HOST=chat-prod-1044548850970.southamerica-east1.run.app,REVERB_PORT=443,REVERB_SCHEME=https,FILESYSTEM_DISK=gcs,GOOGLE_CLOUD_PROJECT_ID=nexa-teste-1,GOOGLE_CLOUD_STORAGE_BUCKET=nexa-uploads-prod'
+    'APP_ENV=production,APP_DEBUG=true,MAIL_MAILER=log,BROADCAST_DRIVER=reverb,REVERB_APP_KEY=nexa_reverb_key,REVERB_APP_SECRET=nexa_reverb_secret,REVERB_APP_ID=123456,REVERB_HOST=chat-prod-1044548850970.southamerica-east1.run.app,REVERB_PORT=443,REVERB_SCHEME=https,FILESYSTEM_DISK=gcs,GOOGLE_CLOUD_PROJECT_ID=nexa-teste-1,GOOGLE_CLOUD_STORAGE_BUCKET=nexa-uploads-prod'
   ]
 images:
 - 'gcr.io/nexa-teste-1/nexa-backend:latest'
