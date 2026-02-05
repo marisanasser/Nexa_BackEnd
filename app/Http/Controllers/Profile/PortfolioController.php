@@ -193,9 +193,13 @@ class PortfolioController extends Controller
     public function update(UpdatePortfolioItemRequest $request, int $id): JsonResponse
     {
         $user = $this->getAuthenticatedUser();
-        $item = PortfolioItem::find($id);
+        $item = PortfolioItem::where('id', $id)
+            ->whereHas('portfolio', function ($query) use ($user): void {
+                $query->where('user_id', $user->id);
+            })
+            ->first();
 
-        if (!$item || $item->user_id !== $user->id) {
+        if (!$item) {
             return $this->notFoundResponse('Item not found or access denied');
         }
 
@@ -219,9 +223,13 @@ class PortfolioController extends Controller
     public function destroy(int $id): JsonResponse
     {
         $user = $this->getAuthenticatedUser();
-        $item = PortfolioItem::find($id);
+        $item = PortfolioItem::where('id', $id)
+            ->whereHas('portfolio', function ($query) use ($user): void {
+                $query->where('user_id', $user->id);
+            })
+            ->first();
 
-        if (!$item || $item->user_id !== $user->id) {
+        if (!$item) {
             return $this->notFoundResponse('Item not found');
         }
 

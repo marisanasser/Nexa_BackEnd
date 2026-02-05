@@ -724,8 +724,21 @@ class ChatController extends Controller
 
     private function enrichOfferData($offerData): ?array
     {
-        if (! $offerData || ! is_array($offerData)) {
-            return $offerData;
+        if (! $offerData) {
+            return null;
+        }
+
+        if (is_string($offerData)) {
+            $decoded = json_decode($offerData, true);
+            if (is_array($decoded)) {
+                $offerData = $decoded;
+            } else {
+                return null;
+            }
+        }
+
+        if (! is_array($offerData)) {
+            return null;
         }
 
         if (isset($offerData['offer_id'])) {

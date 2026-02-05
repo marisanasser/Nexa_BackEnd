@@ -14,6 +14,7 @@ use App\Http\Controllers\Chat\ChatController;
 use App\Http\Controllers\Chat\ConnectionController;
 use App\Http\Controllers\Common\GuideController;
 use App\Http\Controllers\Common\NotificationController;
+use App\Http\Controllers\Common\TermController;
 use App\Http\Controllers\Contract\ContractController;
 use App\Http\Controllers\Contract\ContractPaymentController;
 use App\Http\Controllers\Contract\OfferController;
@@ -79,6 +80,11 @@ Route::middleware(['auth:sanctum', 'user.status'])->prefix('student')->group(fun
 });
 
 Route::middleware(['auth:sanctum', 'user.status'])->group(function () {
+    
+    Route::prefix('terms')->group(function () {
+        Route::get('/check', [TermController::class, 'check']);
+        Route::post('/accept', [TermController::class, 'accept']);
+    });
 
     Route::prefix('profile')->group(function () {
         Route::get('/', [ProfileController::class, 'show'])->middleware(['throttle:dashboard']);
@@ -207,8 +213,8 @@ Route::middleware(['auth:sanctum', 'user.status'])->group(function () {
     Route::post('/portfolio/test-upload', [PortfolioController::class, 'testUpload']);
     Route::post('/portfolio/test-update', [PortfolioController::class, 'testUpdate']);
     Route::put('/portfolio/items/{item}', [PortfolioController::class, 'updateItem']);
-    Route::delete('/portfolio/items/{item}', [PortfolioController::class, 'deleteItem']);
-    Route::post('/portfolio/reorder', [PortfolioController::class, 'reorderItems']);
+    Route::delete('/portfolio/items/{item}', [PortfolioController::class, 'destroy']);
+    Route::post('/portfolio/reorder', [PortfolioController::class, 'reorder']);
     Route::get('/portfolio/statistics', [PortfolioController::class, 'statistics'])->middleware(['throttle:dashboard']);
 });
 
@@ -380,7 +386,8 @@ Route::post('/google/auth', [GoogleController::class, 'handleGoogleWithRole'])
 
 Route::post('/account/checked', [AccountController::class, 'checkAccount']);
 
-Route::post('/webhook/stripe', [StripeWebhookController::class, 'handleWebhook']);
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
+Route::post('/webhook/stripe', [StripeWebhookController::class, 'handle']);
 
 // Temporary Debug Route
 Route::get('/debug-visibility', function () {

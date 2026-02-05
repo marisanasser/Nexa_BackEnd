@@ -32,7 +32,7 @@ class CampaignApplicationController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $this->getAuthenticatedUser();
-        $query = CampaignApplication::with(['campaign', 'creator', 'reviewer'])
+        $query = CampaignApplication::with(['campaign.brand', 'creator', 'reviewer'])
             ->whereHas('creator')
         ;
 

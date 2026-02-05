@@ -191,17 +191,8 @@ class StripeController extends Controller
         } catch (InvalidRequestException $e) {
             $errorMessage = $e->getMessage();
 
-            // Checks if the error is "No such account"
-            if (false !== stripos($errorMessage, 'No such account')) {
-                Log::warning('Stripe account not found. Resetting user stripe_account_id', [
-                    'user_id' => auth()->id(),
-                    'invalid_id' => $user->stripe_account_id,
-                ]);
-
-                // Clear valid ID from database
-                $user->stripe_account_id = null;
-                $user->stripe_verification_status = 'unverified';
-                $user->save();
+            if ($this->isStripeAccountInvalidError($errorMessage)) {
+                $this->resetStripeAccount($user, $errorMessage);
 
                 return response()->json([
                     'success' => true,
@@ -219,6 +210,28 @@ class StripeController extends Controller
                 'success' => false,
                 'message' => 'Invalid request: '.$errorMessage,
             ], 400);
+        } catch (ApiErrorException $e) {
+            $errorMessage = $e->getMessage();
+
+            if ($this->isStripeAccountInvalidError($errorMessage)) {
+                $this->resetStripeAccount($user, $errorMessage);
+
+                return response()->json([
+                    'success' => true,
+                    'has_account' => false,
+                    'message' => 'Stripe account ID was invalid or inaccessible and has been reset.',
+                ]);
+            }
+
+            Log::error('Stripe API error during status check', [
+                'user_id' => auth()->id(),
+                'error' => $errorMessage,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment service error: '.$errorMessage,
+            ], 502);
         } catch (Exception $e) {
             Log::error('Error retrieving Stripe account status', [
                 'user_id' => auth()->id(),
@@ -833,6 +846,16 @@ class StripeController extends Controller
                 return $this->buildStripeConnectErrorResponse($errorMessage);
             }
 
+            if ($this->isStripeAccountInvalidError($errorMessage)) {
+                $this->resetStripeAccount($user, $errorMessage);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Stripe account is invalid or not connected to this platform. Please retry to create a new connection.',
+                    'error' => $errorMessage,
+                ], 409);
+            }
+
             $statusCode = $e instanceof InvalidRequestException ? 400 : 500;
             $messagePrefix = $e instanceof InvalidRequestException ? 'Failed to create account link: ' : 'Payment service error: ';
 
@@ -868,7 +891,42 @@ class StripeController extends Controller
      */
     private function isStripeConnectError(string $errorMessage): bool
     {
-        return false !== stripos($errorMessage, 'Connect') || false !== stripos($errorMessage, 'connect');
+        $matches = [
+            'stripe connect is not enabled',
+            'connect is not enabled',
+            'connect is not enabled on your stripe account',
+            'enable stripe connect',
+            'enable connect',
+        ];
+
+        foreach ($matches as $match) {
+            if (false !== stripos($errorMessage, $match)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isStripeAccountInvalidError(string $errorMessage): bool
+    {
+        return false !== stripos($errorMessage, 'No such account')
+            || false !== stripos($errorMessage, 'does not have access to account')
+            || false !== stripos($errorMessage, 'not connected to your platform')
+            || false !== stripos($errorMessage, 'does not exist');
+    }
+
+    private function resetStripeAccount(User $user, string $errorMessage): void
+    {
+        Log::warning('Stripe account invalid. Resetting user stripe_account_id', [
+            'user_id' => $user->id,
+            'invalid_id' => $user->stripe_account_id,
+            'error' => $errorMessage,
+        ]);
+
+        $user->stripe_account_id = null;
+        $user->stripe_verification_status = 'failed';
+        $user->save();
     }
 
     /**

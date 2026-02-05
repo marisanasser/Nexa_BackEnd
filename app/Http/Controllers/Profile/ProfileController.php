@@ -23,6 +23,7 @@ class ProfileController extends Controller
     {
         try {
             $user = $this->getAuthenticatedUser();
+            $user->load('portfolio');
 
             if (!$user) {
                 return response()->json([
@@ -63,6 +64,7 @@ class ProfileController extends Controller
                     'free_trial_expires_at' => $user->free_trial_expires_at,
                     'created_at' => $user->created_at,
                     'updated_at' => $user->updated_at,
+                    'portfolio' => $user->portfolio,
                 ],
                 'message' => 'Profile retrieved successfully',
             ]);

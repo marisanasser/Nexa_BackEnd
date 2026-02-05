@@ -572,6 +572,10 @@ class CampaignController extends Controller
 
             $campaign->load(['brand', 'approvedBy', 'bids.user']);
 
+            if ($user) {
+                $campaign->setAttribute('has_applied', $campaign->applications()->where('creator_id', $user->id)->exists());
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => $campaign,
