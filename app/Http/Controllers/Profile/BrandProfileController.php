@@ -104,7 +104,13 @@ class BrandProfileController extends Controller
                 }
             }
 
-            $validator = Validator::make($request->all(), [
+            // Filter out avatar from validation if it's not a file (e.g. existing URL string)
+            $input = $request->all();
+            if (isset($input['avatar']) && (!($input['avatar'] instanceof \Illuminate\Http\UploadedFile) && !($input['avatar'] instanceof \Symfony\Component\HttpFoundation\File\UploadedFile))) {
+                unset($input['avatar']);
+            }
+
+            $validator = Validator::make($input, [
                 'username' => 'sometimes|string|max:255',
                 'email' => [
                     'sometimes',
@@ -119,10 +125,10 @@ class BrandProfileController extends Controller
                 'niche' => 'sometimes|nullable|string|max:255',
                 'address' => 'sometimes|nullable|string|max:255',
                 'city' => 'sometimes|nullable|string|max:255',
-                'whatsapp_number' => 'sometimes|string|max:20',
+                'whatsapp_number' => 'sometimes|nullable|string|max:20',
                 'gender' => 'sometimes|nullable|string|in:male,female,other',
                 'state' => 'sometimes|nullable|string|max:255',
-                'avatar' => 'sometimes|image|mimes:jpeg,png,jpg,gif|max:2048',
+                'avatar' => 'sometimes|nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             ]);
 
             $hasAvatarFile = false;
