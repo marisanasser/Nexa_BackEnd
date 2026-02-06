@@ -18,9 +18,36 @@ class StoreCampaignRequest extends FormRequest
     {
         try {
             // Debug log to understand what's coming
-            \Illuminate\Support\Facades\Log::info('StoreCampaignRequest PRE-CLEANUP', [
+            $debugFiles = [];
+            foreach ($this->allFiles() as $key => $file) {
+                if (is_array($file)) {
+                    foreach ($file as $subKey => $subFile) {
+                        if ($subFile instanceof \Illuminate\Http\UploadedFile) {
+                            $debugFiles["{$key}.{$subKey}"] = [
+                                'name' => $subFile->getClientOriginalName(),
+                                'size' => $subFile->getSize(),
+                                'mime' => $subFile->getClientMimeType(),
+                                'error' => $subFile->getError(),
+                                'isValid' => $subFile->isValid(),
+                                'realMime' => $subFile->getMimeType(), // Requires file to exist
+                            ];
+                        }
+                    }
+                } elseif ($file instanceof \Illuminate\Http\UploadedFile) {
+                    $debugFiles[$key] = [
+                        'name' => $file->getClientOriginalName(),
+                        'size' => $file->getSize(),
+                        'mime' => $file->getClientMimeType(),
+                        'error' => $file->getError(),
+                        'isValid' => $file->isValid(),
+                        'realMime' => $file->getMimeType(),
+                    ];
+                }
+            }
+
+            \Illuminate\Support\Facades\Log::info('StoreCampaignRequest FILE DEBUG', [
                 'input_keys' => array_keys($this->input()),
-                'file_keys' => array_keys($this->allFiles()),
+                'files_info' => $debugFiles,
             ]);
 
             $keysToCheck = ['image', 'logo'];
@@ -82,7 +109,7 @@ class StoreCampaignRequest extends FormRequest
                 }
             }
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('Error in prepareForValidation: ' . $e->getMessage());
+          Log::error('Error in prepareForValidation: ' . $e->getMessage());
             // Intentionally swallow error to let validation proceed (and likely fail if data is bad)
         }
     }
