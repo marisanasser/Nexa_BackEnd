@@ -8,6 +8,7 @@ use Exception;
 use Illuminate\Support\Facades\Log;
 
 use App\Http\Controllers\Base\Controller;
+use App\Models\User\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
@@ -26,6 +27,14 @@ class OtpController extends Controller
 
         $contact = $request->contact;
         $type = $request->type;
+
+        // Check if user already exists
+        if ('email' === $type && User::where('email', $contact)->exists()) {
+            return response()->json([
+                'message' => 'Você já possui cadastro.',
+                'success' => false,
+            ], 409);
+        }
 
         // Generate a 6-digit code
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
