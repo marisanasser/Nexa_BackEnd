@@ -17,7 +17,7 @@ steps:
     '--platform', 'managed',
     '--allow-unauthenticated',
     '--update-env-vars',
-    'APP_ENV=production,APP_DEBUG=false,MAIL_MAILER=ses,MAIL_FROM_ADDRESS=no-reply@nexacreators.com.br,MAIL_FROM_NAME=Nexa,AWS_DEFAULT_REGION=sa-east-1,AWS_SES_REGION=sa-east-1,QUEUE_CONNECTION=sync,BROADCAST_DRIVER=reverb,REVERB_APP_KEY=nexa_reverb_key,REVERB_APP_SECRET=nexa_reverb_secret,REVERB_APP_ID=123456,REVERB_HOST=chat-prod-1044548850970.southamerica-east1.run.app,REVERB_PORT=443,REVERB_SCHEME=https,FILESYSTEM_DISK=gcs,GOOGLE_CLOUD_PROJECT_ID=nexa-teste-1,GOOGLE_CLOUD_STORAGE_BUCKET=nexa-uploads-prod,GOOGLE_REDIRECT_URI=https://nexacreators.com/auth/google/callback'
+    'APP_ENV=production,APP_DEBUG=false,MAIL_MAILER=ses,MAIL_FROM_ADDRESS=no-reply@nexacreators.com,MAIL_FROM_NAME=Nexa,AWS_DEFAULT_REGION=sa-east-1,AWS_SES_REGION=sa-east-1,QUEUE_CONNECTION=sync,BROADCAST_DRIVER=reverb,REVERB_APP_KEY=nexa_reverb_key,REVERB_APP_SECRET=nexa_reverb_secret,REVERB_APP_ID=123456,REVERB_HOST=chat-prod-1044548850970.southamerica-east1.run.app,REVERB_PORT=443,REVERB_SCHEME=https,FILESYSTEM_DISK=gcs,GOOGLE_CLOUD_PROJECT_ID=nexa-teste-1,GOOGLE_CLOUD_STORAGE_BUCKET=nexa-uploads-prod,GOOGLE_REDIRECT_URI=https://www.nexacreators.com/auth/google/callback'
   ]
 images:
 - 'gcr.io/nexa-teste-1/nexa-backend:latest'
