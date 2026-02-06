@@ -13,6 +13,39 @@ class StoreCampaignRequest extends FormRequest
         return auth()->check() && auth()->user()->isBrand();
     }
 
+    protected function prepareForValidation()
+    {
+        // Remove 'image' if it is not a file (e.g. "undefined" string from frontend)
+        if ($this->has('image') && !($this->file('image') instanceof \Illuminate\Http\UploadedFile)) {
+            $this->request->remove('image');
+        }
+
+        // Remove 'logo' if it is not a file
+        if ($this->has('logo') && !($this->file('logo') instanceof \Illuminate\Http\UploadedFile)) {
+            $this->request->remove('logo');
+        }
+
+        // Handle attach_file cleaning
+        if ($this->has('attach_file')) {
+            $files = $this->all()['attach_file'];
+            if (is_array($files)) {
+                $cleanFiles = [];
+                foreach ($files as $key => $file) {
+                    if ($file instanceof \Illuminate\Http\UploadedFile) {
+                        $cleanFiles[$key] = $file;
+                    }
+                }
+                if (empty($cleanFiles)) {
+                    $this->request->remove('attach_file');
+                } else {
+                    $this->merge(['attach_file' => $cleanFiles]);
+                }
+            } elseif (!($files instanceof \Illuminate\Http\UploadedFile)) {
+                $this->request->remove('attach_file');
+            }
+        }
+    }
+
     public function rules(): array
     {
         return [
