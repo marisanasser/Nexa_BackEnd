@@ -138,6 +138,9 @@ class ProfileController extends Controller
                 'languages' => 'sometimes',
                 'categories' => 'sometimes|nullable|string',
                 'avatar' => 'sometimes|nullable|image|mimes:jpeg,png,jpg,gif,webp|max:10240',
+                'project_links' => 'sometimes|array',
+                'project_links.*.url' => 'required|url',
+                'project_links.*.title' => 'nullable|string|max:255',
             ];
 
             $creatorTypeFromRequest = $request->input('creator_type');
@@ -248,6 +251,11 @@ class ProfileController extends Controller
             }
 
             unset($data['categories']);
+            
+            // project_links belongs to portfolio, not user table
+            if (array_key_exists('project_links', $data)) {
+                unset($data['project_links']);
+            }
 
             $user->update($data);
 
@@ -258,6 +266,11 @@ class ProfileController extends Controller
                     // Sync Bio if present
                     if (array_key_exists('bio', $data)) {
                          $portfolioData['bio'] = $data['bio'];
+                    }
+
+                    // Sync Project Links if present
+                    if (array_key_exists('project_links', $data)) {
+                        $portfolioData['project_links'] = $data['project_links'];
                     }
                     
                     if (!empty($portfolioData)) {
