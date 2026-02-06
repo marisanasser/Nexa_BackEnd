@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Campaign;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Log;
 
 class StoreCampaignRequest extends FormRequest
 {
@@ -15,55 +16,74 @@ class StoreCampaignRequest extends FormRequest
 
     protected function prepareForValidation()
     {
-        // Debug log to understand what's coming
-        \Illuminate\Support\Facades\Log::info('StoreCampaignRequest PRE-CLEANUP', [
-            'input' => $this->input(),
-            'files' => $this->allFiles(),
-        ]);
+        try {
+            // Debug log to understand what's coming
+            \Illuminate\Support\Facades\Log::info('StoreCampaignRequest PRE-CLEANUP', [
+                'input_keys' => array_keys($this->input()),
+                'file_keys' => array_keys($this->allFiles()),
+            ]);
 
-        $keysToCheck = ['image', 'logo'];
-        foreach ($keysToCheck as $key) {
-            // Check if it exists in input (POST/GET) but is not a valid file in FILES
-            if ($this->has($key)) {
-                $file = $this->file($key);
-                if (!($file instanceof \Illuminate\Http\UploadedFile) || !$file->isValid()) {
-                    $this->offsetUnset($key);
-                    $this->files->remove($key);
-                    $this->request->remove($key);
-                }
-            }
-        }
-
-        // Special handling for attach_file array
-        if ($this->has('attach_file')) {
-            $files = $this->allFiles()['attach_file'] ?? [];
-            
-            // If it's not an array of files, or empty, just remove the input entirely
-            if (!is_array($files)) {
-                // It might be in input as strings
-                $this->offsetUnset('attach_file');
-                $this->files->remove('attach_file');
-                $this->request->remove('attach_file');
-            } else {
-                // Filter out invalid files
-                $validFiles = [];
-                foreach ($files as $key => $file) {
-                    if ($file instanceof \Illuminate\Http\UploadedFile && $file->isValid()) {
-                        $validFiles[$key] = $file;
+            $keysToCheck = ['image', 'logo'];
+            foreach ($keysToCheck as $key) {
+                // Check if it exists in input (POST/GET) but is not a valid file in FILES
+                if ($this->has($key)) {
+                    $file = $this->file($key);
+                    // Short-circuit: if not instance, don't call isValid
+                    if (!($file instanceof \Illuminate\Http\UploadedFile) || !$file->isValid()) {
+                        $this->offsetUnset($key);
+                        if ($this->files->has($key)) {
+                            $this->files->remove($key);
+                        }
+                        if ($this->request->has($key)) {
+                            $this->request->remove($key);
+                        }
                     }
                 }
+            }
 
-                if (empty($validFiles)) {
+            // Special handling for attach_file array
+            if ($this->has('attach_file')) {
+                $allFiles = $this->allFiles();
+                $files = $allFiles['attach_file'] ?? [];
+                
+                // If it's not an array of files, or empty, just remove the input entirely
+                if (!is_array($files)) {
+                    // It might be in input as strings
                     $this->offsetUnset('attach_file');
-                    $this->files->remove('attach_file');
-                    $this->request->remove('attach_file');
+                    if ($this->files->has('attach_file')) {
+                        $this->files->remove('attach_file');
+                    }
+                    if ($this->request->has('attach_file')) {
+                        $this->request->remove('attach_file');
+                    }
                 } else {
-                    // Update files bag
-                    $this->files->set('attach_file', $validFiles);
-                    // Update input to match (merge files into input)
-                    $this->merge(['attach_file' => $validFiles]);
+                    // Filter out invalid files
+                    $validFiles = [];
+                    foreach ($files as $key => $file) {
+                        if ($file instanceof \Illuminate\Http\UploadedFile && $file->isValid()) {
+                            $validFiles[$key] = $file;
+                        }
+                    }
+
+                    if (empty($validFiles)) {
+                        $this->offsetUnset('attach_file');
+                        if ($this->files->has('attach_file')) {
+                            $this->files->remove('attach_file');
+                        }
+                        if ($this->request->has('attach_file')) {
+                            $this->request->remove('attach_file');
+                        }
+                    } else {
+                        // Update files bag
+                        $this->files->set('attach_file', $validFiles);
+                        // Update input to match (merge files into input)
+                        $this->merge(['attach_file' => $validFiles]);
+                    }
                 }
             }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Error in prepareForValidation: ' . $e->getMessage());
+            // Intentionally swallow error to let validation proceed (and likely fail if data is bad)
         }
     }
 
