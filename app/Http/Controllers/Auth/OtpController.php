@@ -8,6 +8,7 @@ use Exception;
 use Illuminate\Support\Facades\Log;
 
 use App\Http\Controllers\Base\Controller;
+use App\Mail\OtpMail;
 use App\Models\User\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -63,12 +64,7 @@ class OtpController extends Controller
                 'smtp_user_set' => (bool) $smtpUser,
             ]);
             if ('email' === $type) {
-                Mail::raw(
-                    "Seu código de verificação Nexa é: {$code}. Ele expira em 10 minutos.",
-                    function ($message) use ($contact): void {
-                        $message->to($contact)->subject('Código de verificação Nexa');
-                    }
-                );
+                Mail::to($contact)->send(new OtpMail($code));
 
                 Log::info("OTP email sent to {$contact}: {$code}");
             } elseif ('whatsapp' === $type) {
