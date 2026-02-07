@@ -247,6 +247,7 @@ class GoogleController extends Controller
         $request->validate([
             'registration_id' => 'required|string',
             'role' => 'required|in:creator,brand',
+            'whatsapp' => 'required|string|max:20',
         ]);
 
         $googleData = Cache::get('google_reg_' . $request->registration_id);
@@ -268,6 +269,7 @@ class GoogleController extends Controller
                     'email' => $googleData['email'],
                     'password' => Hash::make('12345678'),
                     'role' => $request->role,
+                    'whatsapp' => $request->whatsapp,
                     'avatar_url' => $googleData['avatar'],
                     'google_id' => $googleData['id'],
                     'google_token' => $googleData['token'] ?? null,
