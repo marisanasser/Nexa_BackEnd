@@ -12,7 +12,10 @@ use App\Http\Controllers\Base\Controller;
 use App\Models\User\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\AbstractProvider as SocialiteAbstractProvider;
 use Laravel\Socialite\Two\GoogleProvider;
@@ -76,22 +79,10 @@ class GoogleController extends Controller
 
             $googleUser = $this->googleProvider()->stateless()->user();
 
-            $role = $request->input('role', 'creator');
-            $isStudent = $request->boolean('is_student', false);
-
-            if (!in_array($role, ['creator', 'brand', 'student'])) {
-                $role = 'creator';
-            }
-
-            if ($isStudent) {
-                $role = 'student';
-            }
-
             $user = User::withTrashed()
                 ->where('google_id', $googleUser->getId())
                 ->orWhere('email', $googleUser->getEmail())
-                ->first()
-            ;
+                ->first();
 
             if ($user) {
                 if ($user->trashed()) {
@@ -119,6 +110,7 @@ class GoogleController extends Controller
                     ]);
                 }
 
+                $isStudent = $request->boolean('is_student', false);
                 if ($isStudent && !$user->student_verified) {
                     $updateData['free_trial_expires_at'] = now()->addMonth();
                 }
@@ -150,6 +142,45 @@ class GoogleController extends Controller
                     ],
                     'message' => 'Login successful',
                 ], 200);
+            }
+
+            // --- NEW USER LOGIC ---
+            $role = $request->input('role');
+            $isStudent = $request->boolean('is_student', false);
+
+            // If user doesn't exist AND no role is provided (and not student flow),
+            // we return a special response to prompt the user to select a role.
+            if (!$role && !$isStudent) {
+                $registrationId = Str::random(40);
+                $googleData = [
+                    'id' => $googleUser->getId(),
+                    'name' => $googleUser->getName(),
+                    'email' => $googleUser->getEmail(),
+                    'avatar' => $googleUser->getAvatar(),
+                    'token' => $googleUser->token,
+                    'refresh_token' => $googleUser->refreshToken,
+                ];
+                // Store Google data in cache for 10 minutes
+                Cache::put('google_reg_' . $registrationId, $googleData, 600);
+
+                return response()->json([
+                    'success' => true,
+                    'action' => 'role_selection',
+                    'registration_id' => $registrationId,
+                    'google_user' => [
+                        'name' => $googleUser->getName(),
+                        'email' => $googleUser->getEmail(),
+                        'avatar' => $googleUser->getAvatar(),
+                    ]
+                ], 200);
+            }
+
+            if (!in_array($role, ['creator', 'brand', 'student'])) {
+                $role = 'creator';
+            }
+
+            if ($isStudent) {
+                $role = 'student';
             }
 
             $userData = [
@@ -207,7 +238,78 @@ class GoogleController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Google authentication failed: '.$e->getMessage(),
+                'message' => 'Google authentication failed: ' . $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function completeRegistration(Request $request): JsonResponse
+    {
+        $request->validate([
+            'registration_id' => 'required|string',
+            'role' => 'required|in:creator,brand',
+        ]);
+
+        $googleData = Cache::get('google_reg_' . $request->registration_id);
+
+        if (!$googleData) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sessão de registro expirada. Por favor, tente novamente.',
+            ], 422);
+        }
+
+        try {
+            // Double check if user was created in the meantime
+            $user = User::where('email', $googleData['email'])->first();
+
+            if (!$user) {
+                $userData = [
+                    'name' => $googleData['name'],
+                    'email' => $googleData['email'],
+                    'password' => Hash::make('12345678'),
+                    'role' => $request->role,
+                    'avatar_url' => $googleData['avatar'],
+                    'google_id' => $googleData['id'],
+                    'google_token' => $googleData['token'] ?? null,
+                    'google_refresh_token' => $googleData['refresh_token'] ?? null,
+                    'email_verified_at' => now(),
+                    'birth_date' => '1990-01-01',
+                    'gender' => 'other',
+                ];
+
+                $user = User::create($userData);
+                AdminNotificationService::notifyAdminOfNewRegistration($user);
+            }
+
+            $token = $user->createToken('auth_token')->plainTextToken;
+
+            // Clear cache
+            Cache::forget('google_reg_' . $request->registration_id);
+
+            return response()->json([
+                'success' => true,
+                'token' => $token,
+                'token_type' => 'Bearer',
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $user->role,
+                    'avatar_url' => $user->avatar_url,
+                    'student_verified' => $user->student_verified,
+                    'has_premium' => $user->has_premium,
+                ],
+                'message' => 'Registration successful',
+            ], 201);
+        } catch (Exception $e) {
+            Log::error('Google OAuth completion failed', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Registration failed: ' . $e->getMessage(),
             ], 422);
         }
     }

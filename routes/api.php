@@ -384,6 +384,9 @@ Route::get('/google/callback', [GoogleController::class, 'handleGoogleCallback']
 Route::post('/google/auth', [GoogleController::class, 'handleGoogleWithRole'])
     ->name('google.auth');
 
+Route::post('/google/complete-registration', [GoogleController::class, 'completeRegistration'])
+    ->name('google.complete-registration');
+
 Route::post('/account/checked', [AccountController::class, 'checkAccount']);
 
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
