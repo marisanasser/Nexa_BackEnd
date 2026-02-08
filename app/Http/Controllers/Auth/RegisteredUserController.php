@@ -428,18 +428,16 @@ class RegisteredUserController extends Controller
     private function uploadAvatar($file): string
     {
         try {
-            $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-            Log::info('Generated filename: ' . $filename);
-
-            $path = $file->storeAs('avatars', $filename, config('filesystems.default'));
-            Log::info('File stored at path: ' . $path);
-
-            $url = Storage::url($path);
-            Log::info('Storage URL: ' . $url);
+            // Use FileUploadHelper for consistent avatar uploads
+            $url = \App\Helpers\FileUploadHelper::upload($file, 'avatars');
+            
+            if (!$url) {
+                throw new Exception('Failed to upload avatar via FileUploadHelper');
+            }
 
             return $url;
         } catch (Exception $e) {
-            Log::error('Avatar upload failed: ' . $e->getMessage());
+            Log::error('Avatar upload failed in RegisteredUserController: ' . $e->getMessage());
 
             throw $e;
         }

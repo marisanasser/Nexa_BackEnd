@@ -127,13 +127,15 @@ class PortfolioService
         // Upload file if provided
         if ($file) {
             $path = $this->uploadFile($file, $user->id);
-            // Storage::url returns full URL, we need path for DB if that's what model expects,
-            // but let's assume uploadFile returns path relative to storage root for simplicity or fix uploadFile.
-            // Actually, existing uploadFile returns Storage::url($filePath). 
-            // The model expects file_path. Let's adjust slightly.
             
-            // To be safe and compliant with model expectations:
-            $data['file_path'] = str_replace('/storage/', '', $path); 
+            if (!$path) {
+                throw new Exception("Falha ao fazer upload do arquivo. Por favor, tente novamente.");
+            }
+            
+            // FileUploadHelper::upload returns the path relative to bucket or local storage/
+            // We store this relative path in DB. FileUploadHelper::resolveUrl handles both.
+            
+            $data['file_path'] = $path; 
             $data['file_name'] = $file->getClientOriginalName();
             $data['file_type'] = $file->getMimeType();
             $data['file_size'] = $file->getSize();
@@ -166,13 +168,16 @@ class PortfolioService
 
         // Upload new file if provided
         if ($file) {
-            // Delete old file - logic needs to be robust
+            // Delete old file
             if ($item->file_path) {
-                // $this->deleteFile($item->file_path); // Skipping inconsistent delete for safety in this refactor
+                FileUploadHelper::delete($item->file_path);
             }
             
             $path = $this->uploadFile($file, $item->portfolio->user_id);
-            $data['file_path'] = str_replace('/storage/', '', $path);
+            if (!$path) {
+                throw new Exception("Falha ao fazer upload do arquivo. Por favor, tente novamente.");
+            }
+            $data['file_path'] = $path;
             $data['file_name'] = $file->getClientOriginalName();
             $data['file_type'] = $file->getMimeType();
             $data['file_size'] = $file->getSize();
@@ -278,14 +283,6 @@ class PortfolioService
      */
     private function deleteFile(string $fileUrl): void
     {
-        try {
-            $path = str_replace('/storage/', '', $fileUrl);
-            Storage::disk(config('filesystems.default'))->delete($path);
-        } catch (Exception $e) {
-            Log::warning('Failed to delete portfolio file', [
-                'url' => $fileUrl,
-                'error' => $e->getMessage(),
-            ]);
-        }
+        FileUploadHelper::delete($fileUrl);
     }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Chat;
 use App\Events\Chat\MessagesRead;
 use App\Events\Chat\NewMessage;
 use App\Events\Chat\UserTyping;
+use App\Helpers\FileUploadHelper;
 use App\Http\Controllers\Base\Controller;
 use App\Models\Campaign\CampaignApplication;
 use App\Models\Chat\ChatRoom;
@@ -315,9 +316,9 @@ class ChatController extends Controller
                 throw new Exception('Failed to upload chat file');
             }
 
-            // If it's a relative path (local storage), FileUploadHelper::upload returns /storage/...
-            // The model expects file_path which is usually just the part after /storage/
-            $filePath = str_replace('/storage/', '', $url);
+            // FileUploadHelper::upload returns the relative path which we store in DB.
+            // FileUploadHelper::resolveUrl handles both local and GCS paths.
+            $filePath = $url;
 
             if (empty($messageData['message'])) {
                 $messageData['message'] = $file->getClientOriginalName();

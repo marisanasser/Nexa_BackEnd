@@ -19,7 +19,7 @@ class StorePortfolioItemRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'file' => ['required', 'file', 'mimes:jpeg,png,jpg,mp4,mov,avi,webm', 'max:51200'], // 50MB
+            'file' => ['required', 'file', 'mimes:jpeg,png,jpg,webp,avif,gif,bmp,mp4,mov,avi,webm', 'max:51200'], // 50MB
             'thumbnail' => ['nullable', 'image', 'max:5120'],
             'title' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],

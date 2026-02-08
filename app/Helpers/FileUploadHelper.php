@@ -8,7 +8,7 @@ use Google\Cloud\Storage\StorageClient;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Log;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class FileUploadHelper
@@ -37,22 +37,34 @@ class FileUploadHelper
             // Fallback to local storage
             return self::uploadToLocal($file, $path);
         } catch (Throwable $e) {
+            $errorMessage = $e->getMessage();
+            if ($e instanceof \Google\Cloud\Core\Exception\ServiceException) {
+                $errorMessage = 'GCS Service Exception: ' . $e->getMessage() . ' | Data: ' . json_encode($e->getServiceException());
+            }
+
             Log::error('File upload failed', [
                 'path' => $path,
                 'file' => $file->getClientOriginalName(),
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                'error_class' => get_class($e),
+                'error' => $errorMessage,
+                'trace' => substr($e->getTraceAsString(), 0, 1000), // Truncate trace to avoid long logs
             ]);
 
-            // Try local as last resort
+            // If we are using GCS and it failed, don't fallback to local in production
+            // as local storage is ephemeral and will result in broken links.
+            if (self::shouldUseGcs() && !app()->isLocal()) {
+                throw $e; // Throw exception to be caught by controller
+            }
+
+            // Try local as last resort (only if not in production or GCS is not configured)
             try {
-                Log::info('Falling back to local storage after GCS error');
+                Log::info('Falling back to local storage');
 
                 return self::uploadToLocal($file, $path);
             } catch (Throwable $e2) {
                 Log::error('Local upload also failed: '.$e2->getMessage());
 
-                return null;
+                throw $e2;
             }
         }
     }
@@ -63,12 +75,20 @@ class FileUploadHelper
     public static function delete(string $url): bool
     {
         try {
-            if (str_contains($url, 'storage.googleapis.com')) {
+            // Check if it's a GCS URL
+            $bucket = env('GOOGLE_CLOUD_STORAGE_BUCKET', 'nexa-uploads-prod');
+            if (str_contains($url, 'storage.googleapis.com') || (self::shouldUseGcs() && !str_starts_with($url, 'http'))) {
                 return self::deleteFromGcs($url);
             }
 
             // Local file
             $path = str_replace('/storage/', '', $url);
+            // Also handle full URLs that point to local storage
+            $baseUrl = asset('storage');
+            if (str_starts_with($path, $baseUrl)) {
+                $path = substr($path, strlen($baseUrl));
+            }
+            $path = ltrim($path, '/');
 
             return Storage::disk('public')->delete($path);
         } catch (Throwable $e) {
@@ -81,27 +101,50 @@ class FileUploadHelper
     /**
      * Delete from GCS.
      */
-    public static function deleteFromGcs(string $url): bool
+    public static function deleteFromGcs(string $urlOrPath): bool
     {
         $bucket = env('GOOGLE_CLOUD_STORAGE_BUCKET', 'nexa-uploads-prod');
         $projectId = env('GOOGLE_CLOUD_PROJECT_ID', 'nexa-teste-1');
 
-        // Extract object path from URL
-        $pattern = "/https:\\/\\/storage\\.googleapis\\.com\\/{$bucket}\\/(.+)/";
-        if (!preg_match($pattern, $url, $matches)) {
-            return false;
+        $objectPath = $urlOrPath;
+
+        // Extract object path if it's a full URL
+        if (str_starts_with($urlOrPath, 'http')) {
+            $pattern = "/https:\\/\\/storage\\.googleapis\\.com\\/{$bucket}\\/(.+)/";
+            if (preg_match($pattern, $urlOrPath, $matches)) {
+                $objectPath = $matches[1];
+            } else {
+                // If it's a URL but doesn't match the GCS pattern, we can't delete it from GCS
+                Log::warning('URL provided to deleteFromGcs does not match bucket pattern', ['url' => $urlOrPath, 'bucket' => $bucket]);
+                return false;
+            }
         }
 
-        $objectPath = $matches[1];
+        // Ensure we don't have leading slashes
+        $objectPath = ltrim($objectPath, '/');
 
-        $storage = new StorageClient([
-            'projectId' => $projectId,
-        ]);
+        try {
+            $storage = new StorageClient([
+                'projectId' => $projectId,
+            ]);
 
-        $object = $storage->bucket($bucket)->object($objectPath);
-        $object->delete();
+            $object = $storage->bucket($bucket)->object($objectPath);
+            
+            if ($object->exists()) {
+                $object->delete();
+                Log::info('File deleted from GCS', ['path' => $objectPath]);
+            } else {
+                Log::warning('File not found in GCS for deletion', ['path' => $objectPath]);
+            }
 
-        return true;
+            return true;
+        } catch (Throwable $e) {
+            Log::error('GCS delete failed', [
+                'path' => $objectPath,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
     }
 
     /**
@@ -112,14 +155,23 @@ class FileUploadHelper
         if (!$path) {
             return null;
         }
+
+        // If it's already a full URL, return it
         if (str_starts_with($path, 'http')) {
             return $path;
         }
 
-        // Check if path already starts with /storage/ or storage/
+        // If it starts with /storage/ or storage/, it's a local path
         $cleanPath = ltrim($path, '/');
         if (str_starts_with($cleanPath, 'storage/')) {
             $cleanPath = substr($cleanPath, 8);
+        }
+
+        // Check if we should use GCS for resolution
+        // If we are in GCS mode, we might have relative paths that need to be resolved to GCS URLs
+        if (self::shouldUseGcs()) {
+            $bucket = env('GOOGLE_CLOUD_STORAGE_BUCKET', 'nexa-uploads-prod');
+            return "https://storage.googleapis.com/{$bucket}/" . ltrim($cleanPath, '/');
         }
 
         $url = asset("storage/{$cleanPath}");
@@ -177,25 +229,35 @@ class FileUploadHelper
         $objectPath = trim($path, '/').'/'.$filename;
 
         Log::info('Uploading to GCS bucket', [
+            'bucket' => $bucket,
             'object_path' => $objectPath,
+            'file_size' => $file->getSize(),
+            'mime_type' => $file->getMimeType(),
         ]);
 
-        // Note: Don't use predefinedAcl when bucket has uniform bucket-level access
-        $gcsBucket->upload(
-            fopen($file->getRealPath(), 'r'),
-            [
-                'name' => $objectPath,
-            ]
-        );
+        try {
+            // Note: Don't use predefinedAcl when bucket has uniform bucket-level access
+            $gcsBucket->upload(
+                fopen($file->getRealPath(), 'r'),
+                [
+                    'name' => $objectPath,
+                ]
+            );
+        } catch (Throwable $e) {
+            Log::error('GCS Upload Exception directly in uploadToGcs', [
+                'message' => $e->getMessage(),
+                'class' => get_class($e),
+            ]);
+            throw $e;
+        }
 
-        $url = "https://storage.googleapis.com/{$bucket}/{$objectPath}";
-
+        // Return the object path instead of full URL to be consistent with uploadToLocal
+        // and let resolveUrl handle it.
         Log::info('File uploaded to GCS successfully', [
             'path' => $objectPath,
-            'url' => $url,
         ]);
 
-        return $url;
+        return $objectPath;
     }
 
     /**

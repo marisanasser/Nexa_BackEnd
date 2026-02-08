@@ -23,7 +23,7 @@ class UpdatePortfolioItemRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'file' => ['nullable', 'file', 'mimes:jpeg,png,jpg,mp4,mov,avi,webm', 'max:51200'],
+            'file' => ['nullable', 'file', 'mimes:jpeg,png,jpg,webp,avif,gif,bmp,mp4,mov,avi,webm', 'max:51200'],
             'thumbnail' => ['nullable', 'image', 'max:5120'],
             'title' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],

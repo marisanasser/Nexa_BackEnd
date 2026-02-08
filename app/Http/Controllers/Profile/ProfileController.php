@@ -342,11 +342,7 @@ class ProfileController extends Controller
             }
 
             if ($user->avatar_url) {
-                $path = str_replace('/storage/', '', $user->avatar_url);
-                $disk = config('filesystems.default');
-                if (Storage::disk($disk)->exists($path)) {
-                    Storage::disk($disk)->delete($path);
-                }
+                FileUploadHelper::delete($user->avatar_url);
                 $user->avatar_url = null;
                 $user->save();
             }
@@ -480,36 +476,56 @@ class ProfileController extends Controller
                 ], 422);
             }
 
-            try {
-                if ($user->avatar_url) {
-                    $oldPath = str_replace('/storage/', '', $user->avatar_url);
-                    if (Storage::disk(config('filesystems.default'))->exists($oldPath)) {
-                        Storage::disk(config('filesystems.default'))->delete($oldPath);
-                    }
-                }
-            } catch (Throwable $e) {
+            // Delete old avatar
+            if ($user->avatar_url) {
+                FileUploadHelper::delete($user->avatar_url);
             }
 
             $filename = 'avatar_'.$user->id.'_'.time().'.'.$ext;
-            $path = 'avatars/'.$filename;
-            Storage::disk(config('filesystems.default'))->put($path, $binary);
+            $tempPath = sys_get_temp_dir().'/'.$filename;
+            file_put_contents($tempPath, $binary);
 
-            $user->avatar_url = Storage::url($path);
-            $user->save();
+            $uploadedFile = new UploadedFile(
+                $tempPath,
+                $filename,
+                $mime,
+                null,
+                true
+            );
+
+            $avatarUrl = FileUploadHelper::upload($uploadedFile, 'avatars');
+            
+            if ($avatarUrl) {
+                $user->avatar_url = $avatarUrl;
+                $user->save();
+                
+                // Sync with Portfolio
+                try {
+                    if ($user->portfolio) {
+                        $user->portfolio->profile_picture = $avatarUrl;
+                        $user->portfolio->save();
+                    }
+                } catch (Throwable $e) {
+                }
+            }
+
+            // Cleanup temp file
+            if (file_exists($tempPath)) {
+                unlink($tempPath);
+            }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Avatar atualizado com sucesso (base64)',
+                'message' => 'Avatar atualizado com sucesso',
                 'profile' => [
                     'id' => $user->id,
-                    'avatar' => $user->avatar_url,
-                    'avatar_url' => $user->avatar_url,
+                    'avatar' => FileUploadHelper::resolveUrl($user->avatar_url),
                 ],
             ]);
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Falha ao enviar avatar (base64): '.$e->getMessage(),
+                'message' => 'Falha ao enviar avatar: '.$e->getMessage(),
             ], 500);
         }
     }

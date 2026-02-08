@@ -355,46 +355,22 @@ class Campaign extends Model
     {
         $value = $this->attributes['image_url'] ?? null;
 
-        if (! $value) {
+        if (!$value) {
             return null;
         }
 
-        if (str_starts_with($value, 'http')) {
-            return $value;
-        }
-
-        $path = str_replace('/storage/', '', $value);
-
-        if (config('filesystems.default') === 'gcs') {
-            $bucket = config('filesystems.disks.gcs.bucket');
-
-            return "https://storage.googleapis.com/{$bucket}/{$path}";
-        }
-
-        return $value;
+        return \App\Helpers\FileUploadHelper::resolveUrl($value);
     }
 
     public function getLogoAttribute()
     {
         $value = $this->attributes['logo'] ?? null;
 
-        if (! $value) {
+        if (!$value) {
             return null;
         }
 
-        if (str_starts_with($value, 'http')) {
-            return $value;
-        }
-
-        $path = str_replace('/storage/', '', $value);
-
-        if (config('filesystems.default') === 'gcs') {
-            $bucket = config('filesystems.disks.gcs.bucket');
-
-            return "https://storage.googleapis.com/{$bucket}/{$path}";
-        }
-
-        return $value;
+        return \App\Helpers\FileUploadHelper::resolveUrl($value);
     }
 
     public function getAttachFileAttribute()

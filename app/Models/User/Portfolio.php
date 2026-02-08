@@ -52,7 +52,11 @@ class Portfolio extends Model
     public function getProfilePictureUrlAttribute(): ?string
     {
         // Always use the user avatar as the single source of truth to prevent sync issues
-        return $this->user->avatar_url;
+        if (!$this->user->avatar_url) {
+            return null;
+        }
+
+        return \App\Helpers\FileUploadHelper::resolveUrl($this->user->avatar_url);
     }
 
     public function getItemsCount(): int
