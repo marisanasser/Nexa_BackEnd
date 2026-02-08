@@ -116,13 +116,20 @@ class FileUploadHelper
             return $path;
         }
 
-        // If it already starts with /storage/, just prepend the app URL if needed,
-        // but Laravel's asset() does this correctly.
-        if (str_starts_with($path, '/storage/')) {
-            return asset($path);
+        // Check if path already starts with /storage/ or storage/
+        $cleanPath = ltrim($path, '/');
+        if (str_starts_with($cleanPath, 'storage/')) {
+            $cleanPath = substr($cleanPath, 8);
         }
 
-        return asset("storage/{$path}");
+        $url = asset("storage/{$cleanPath}");
+
+        // Ensure HTTPS in production or if requested by app config
+        if (!app()->isLocal()) {
+            $url = str_replace('http://', 'https://', $url);
+        }
+
+        return $url;
     }
 
     /**

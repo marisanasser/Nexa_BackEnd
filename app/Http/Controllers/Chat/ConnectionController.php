@@ -336,8 +336,14 @@ class ConnectionController extends Controller
 
         if ($request->hasFile('file')) {
             $file = $request->file('file');
-            $fileName = time().'_'.$file->getClientOriginalName();
-            $filePath = $file->storeAs('direct-chat-files/'.$user->id, $fileName, config('filesystems.default'));
+            $path = 'direct-chat-files/'.$user->id;
+            $url = \App\Helpers\FileUploadHelper::upload($file, $path);
+
+            if (!$url) {
+                return response()->json(['success' => false, 'message' => 'Failed to upload file'], 500);
+            }
+
+            $filePath = str_replace('/storage/', '', $url);
 
             if (empty($messageData['message'])) {
                 $messageData['message'] = $file->getClientOriginalName();

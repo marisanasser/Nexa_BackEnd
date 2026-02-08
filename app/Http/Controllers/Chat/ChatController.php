@@ -308,21 +308,16 @@ class ChatController extends Controller
 
         if ($request->hasFile('file')) {
             $file = $request->file('file');
-            $fileName = time().'_'.preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
-            $gcsBucket = env('GOOGLE_CLOUD_STORAGE_BUCKET', 'nexa-uploads-prod');
-            $gcsPath = 'chat-files/'.$fileName;
-            $filePath = null;
+            $path = 'chat-files/'.$user->id;
+            $url = FileUploadHelper::upload($file, $path);
 
-            try {
-                $storage = new \Google\Cloud\Storage\StorageClient([
-                    'projectId' => env('GOOGLE_CLOUD_PROJECT_ID', 'nexa-teste-1'),
-                ]);
-                $bucket = $storage->bucket($gcsBucket);
-                $bucket->upload(fopen($file->getRealPath(), 'r'), ['name' => $gcsPath]);
-                $filePath = $gcsPath;
-            } catch (\Throwable $e) {
-                $filePath = $file->storeAs('chat-files/'.$user->id, $fileName, config('filesystems.default'));
+            if (!$url) {
+                throw new Exception('Failed to upload chat file');
             }
+
+            // If it's a relative path (local storage), FileUploadHelper::upload returns /storage/...
+            // The model expects file_path which is usually just the part after /storage/
+            $filePath = str_replace('/storage/', '', $url);
 
             if (empty($messageData['message'])) {
                 $messageData['message'] = $file->getClientOriginalName();

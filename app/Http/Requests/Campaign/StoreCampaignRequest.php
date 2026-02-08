@@ -6,12 +6,13 @@ namespace App\Http\Requests\Campaign;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-
 class StoreCampaignRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return auth()->check() && auth()->user()->isBrand();
+        /** @var \App\Models\User\User|null $user */
+        $user = auth()->user();
+        return $user?->isBrand() ?? false;
     }
 
     protected function prepareForValidation()
@@ -45,7 +46,7 @@ class StoreCampaignRequest extends FormRequest
                 }
             }
 
-            \Illuminate\Support\Facades\Log::info('StoreCampaignRequest FILE DEBUG', [
+            Log::info('StoreCampaignRequest FILE DEBUG', [
                 'input_keys' => array_keys($this->input()),
                 'files_info' => $debugFiles,
             ]);

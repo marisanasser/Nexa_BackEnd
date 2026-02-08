@@ -133,7 +133,7 @@ class PortfolioService
             // The model expects file_path. Let's adjust slightly.
             
             // To be safe and compliant with model expectations:
-            $data['file_path'] = $path; // This might need refinement if model expects relative path
+            $data['file_path'] = str_replace('/storage/', '', $path); 
             $data['file_name'] = $file->getClientOriginalName();
             $data['file_type'] = $file->getMimeType();
             $data['file_size'] = $file->getSize();
@@ -171,7 +171,8 @@ class PortfolioService
                 // $this->deleteFile($item->file_path); // Skipping inconsistent delete for safety in this refactor
             }
             
-            $data['file_path'] = $this->uploadFile($file, $item->portfolio->user_id);
+            $path = $this->uploadFile($file, $item->portfolio->user_id);
+            $data['file_path'] = str_replace('/storage/', '', $path);
             $data['file_name'] = $file->getClientOriginalName();
             $data['file_type'] = $file->getMimeType();
             $data['file_size'] = $file->getSize();

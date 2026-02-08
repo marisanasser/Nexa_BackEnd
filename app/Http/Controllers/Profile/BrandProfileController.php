@@ -105,7 +105,7 @@ class BrandProfileController extends Controller
 
             // Filter out avatar from validation if it's not a file (e.g. existing URL string)
             $input = $request->all();
-            if (isset($input['avatar']) && (!($input['avatar'] instanceof \Illuminate\Http\UploadedFile) && !($input['avatar'] instanceof \Symfony\Component\HttpFoundation\File\UploadedFile))) {
+            if (isset($input['avatar']) && (!($input['avatar'] instanceof UploadedFile) && !($input['avatar'] instanceof \Symfony\Component\HttpFoundation\File\UploadedFile))) {
                 unset($input['avatar']);
             }
 

@@ -40,21 +40,13 @@ class PortfolioItem extends Model
         return $this->belongsTo(Portfolio::class);
     }
 
-    public function getFileUrlAttribute(): string
+    public function getFileUrlAttribute(): ?string
     {
-        if (str_starts_with($this->file_path, 'http')) {
-            return $this->file_path;
+        if (!$this->file_path) {
+            return null;
         }
 
-        $disk = config('filesystems.default');
-
-        if ('gcs' === $disk) {
-            $bucket = config('filesystems.disks.gcs.bucket');
-
-            return "https://storage.googleapis.com/{$bucket}/{$this->file_path}";
-        }
-
-        return asset('storage/'.$this->file_path);
+        return \App\Helpers\FileUploadHelper::resolveUrl($this->file_path);
     }
 
     public function getFormattedFileSizeAttribute(): string

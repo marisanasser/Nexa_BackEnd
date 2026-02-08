@@ -66,7 +66,7 @@ return [
     ],
 
     'from' => [
-        'address' => env('MAIL_FROM_ADDRESS', 'noreply@nexacreators.com.br'),
+        'address' => env('MAIL_FROM_ADDRESS', 'no-reply@nexacreators.com.br'),
         'name' => env('MAIL_FROM_NAME', 'Nexa'),
     ],
 

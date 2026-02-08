@@ -84,19 +84,7 @@ class Message extends Model
             return null;
         }
 
-        // Try to use GCS URL directly if configured
-        $disk = config('filesystems.default');
-        if ('gcs' === $disk) {
-            $bucket = config('filesystems.disks.gcs.bucket', env('GOOGLE_CLOUD_STORAGE_BUCKET'));
-            if ($bucket) {
-                return "https://storage.googleapis.com/{$bucket}/{$this->file_path}";
-            }
-        }
-
-        // Fallback to local URL with forced HTTPS
-        $url = asset("storage/{$this->file_path}");
-
-        return str_replace('http://', 'https://', $url);
+        return \App\Helpers\FileUploadHelper::resolveUrl($this->file_path);
     }
 
     public function getFormattedFileSizeAttribute(): ?string
