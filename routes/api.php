@@ -308,6 +308,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/{id}/cancel', [ContractController::class, 'cancel'])->where('id', '[0-9]+');
         Route::post('/{id}/terminate', [ContractController::class, 'terminate'])->where('id', '[0-9]+');
         Route::post('/{id}/dispute', [ContractController::class, 'dispute'])->where('id', '[0-9]+');
+        Route::post('/{id}/workflow-status', [ContractController::class, 'updateWorkflowStatus'])->where('id', '[0-9]+');
     });
 
     Route::prefix('campaign-timeline')->group(function () {

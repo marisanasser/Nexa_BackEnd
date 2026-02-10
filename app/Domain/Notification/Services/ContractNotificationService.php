@@ -14,8 +14,9 @@ use App\Models\Campaign\DeliveryMaterial;
 use App\Models\Common\Notification;
 use App\Models\Contract\Contract;
 use Exception;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Log;
+
 
 class ContractNotificationService
 {
@@ -396,7 +397,7 @@ class ContractNotificationService
                     'milestone_type' => $milestone->milestone_type,
                     'deadline' => $milestone->deadline->toISOString(),
                     'days_overdue' => $milestone->getDaysOverdue(),
-                    'warning_sent_at' => now()->toISOString(),
+                    'warning_sent_at' => now()->toISOString()
                 ],
                 'read_at' => null,
             ]);
@@ -602,6 +603,67 @@ class ContractNotificationService
             Log::error('Failed to notify creator of delivery material rejection', [
                 'material_id' => $material->id,
                 'creator_id' => $material->creator_id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public static function notifyBrandOfMilestoneSubmission($milestone): void
+    {
+        try {
+            $milestone->load(['contract.creator', 'contract.brand']);
+
+            $notification = Notification::create([
+                'user_id' => $milestone->contract->brand_id,
+                'type' => 'milestone_submitted',
+                'title' => 'Milestone Submetido',
+                'message' => "O criador submeteu o milestone '{$milestone->title}' para revisão.",
+                'data' => [
+                    'milestone_id' => $milestone->id,
+                    'contract_id' => $milestone->contract_id,
+                    'contract_title' => $milestone->contract->title,
+                    'creator_name' => $milestone->contract->creator->name,
+                    'submitted_at' => now()->toISOString(),
+                ],
+                'read_at' => null,
+            ]);
+
+            NotificationService::sendSocketNotification($milestone->contract->brand_id, $notification);
+        } catch (Exception $e) {
+            Log::error('Failed to notify brand of milestone submission', [
+                'milestone_id' => $milestone->id,
+                'brand_id' => $milestone->contract->brand_id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public static function notifyCreatorOfMilestoneChangesRequested($milestone): void
+    {
+        try {
+            $milestone->load(['contract.creator', 'contract.brand']);
+
+            $notification = Notification::create([
+                'user_id' => $milestone->contract->creator_id,
+                'type' => 'milestone_changes_requested',
+                'title' => 'Ajustes Solicitados',
+                'message' => "A marca solicitou ajustes no milestone '{$milestone->title}'.",
+                'data' => [
+                    'milestone_id' => $milestone->id,
+                    'contract_id' => $milestone->contract_id,
+                    'contract_title' => $milestone->contract->title,
+                    'brand_name' => $milestone->contract->brand->name,
+                    'feedback' => $milestone->feedback,
+                    'requested_at' => now()->toISOString(),
+                ],
+                'read_at' => null,
+            ]);
+
+            NotificationService::sendSocketNotification($milestone->contract->creator_id, $notification);
+        } catch (Exception $e) {
+            Log::error('Failed to notify creator of milestone changes requested', [
+                'milestone_id' => $milestone->id,
+                'creator_id' => $milestone->contract->creator_id,
                 'error' => $e->getMessage(),
             ]);
         }

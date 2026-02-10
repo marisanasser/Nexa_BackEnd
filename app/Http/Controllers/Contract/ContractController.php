@@ -45,6 +45,7 @@ class ContractController extends Controller
         }
     }
 
+
     private function sendContractCompletionMessage(Contract $contract, User $brand): void
     {
         try {
@@ -833,6 +834,91 @@ class ContractController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Falha ao disputar contrato. Tente novamente.',
+            ], 500);
+        }
+    }
+
+    public function updateWorkflowStatus(Request $request, int $id): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'workflow_status' => 'required|string|in:alignment_preparation,material_sent,product_sent,product_received',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validação falhou',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $user = $this->getAuthenticatedUser();
+
+        try {
+            $contract = Contract::where(function ($query) use ($user) {
+                $query->where('brand_id', $user->id)
+                    ->orWhere('creator_id', $user->id);
+            })
+                ->where('status', 'active')
+                ->find($id);
+
+            if (! $contract) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contrato não encontrado ou acesso negado',
+                ], 404);
+            }
+
+            $newStatus = $request->workflow_status;
+
+            // Authorization logic for specific statuses
+            if (in_array($newStatus, ['material_sent', 'product_sent']) && ! $user->isBrand()) {
+                return response()->json(['success' => false, 'message' => 'Apenas a marca pode marcar material/produto como enviado'], 403);
+            }
+
+            if ('product_received' === $newStatus && ! $user->isCreator()) {
+                return response()->json(['success' => false, 'message' => 'Apenas o criador pode confirmar recebimento do produto'], 403);
+            }
+
+            $contract->update([
+                'workflow_status' => $newStatus,
+            ]);
+
+            // Notify via chat/system message
+            $chatRoom = $contract->offer->chatRoom ?? null;
+            if ($chatRoom) {
+                $messageText = match ($newStatus) {
+                    'material_sent' => '📦 Material enviado pela marca. Aguardando confirmação de recebimento.',
+                    'product_sent' => '📦 Produto enviado pela marca. Aguardando confirmação de recebimento.',
+                    'product_received' => '✅ Produto/Material recebido pelo criador. O prazo de produção começou!',
+                    default => 'Status de logística atualizado: '.$newStatus,
+                };
+
+                $this->createSystemMessage($chatRoom, $messageText, [
+                    'contract_id' => $contract->id,
+                    'workflow_status' => $newStatus,
+                    'message_type' => 'logistics_update',
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Status atualizado com sucesso',
+                'data' => [
+                    'contract_id' => $contract->id,
+                    'workflow_status' => $contract->workflow_status,
+                ],
+            ]);
+        } catch (Exception $e) {
+            Log::error('Error updating contract workflow status', [
+                'user_id' => $user->id,
+                'contract_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Falha ao atualizar status',
             ], 500);
         }
     }

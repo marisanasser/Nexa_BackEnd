@@ -145,6 +145,9 @@ class Offer extends Model
         ]);
 
         if (!$this->contract) {
+            $platformFee = round($this->budget * 0.10, 2);
+            $creatorAmount = round($this->budget - $platformFee, 2);
+            $startedAt = now();
             Contract::create([
                 'offer_id' => $this->id,
                 'brand_id' => $this->brand_id,
@@ -156,6 +159,10 @@ class Offer extends Model
                 'requirements' => $this->requirements,
                 'status' => 'active',
                 'workflow_status' => 'active',
+                'platform_fee' => $platformFee,
+                'creator_amount' => $creatorAmount,
+                'started_at' => $startedAt,
+                'expected_completion_at' => $startedAt->copy()->addDays($this->estimated_days),
                 'created_at' => now(),
             ]);
             $this->refresh();

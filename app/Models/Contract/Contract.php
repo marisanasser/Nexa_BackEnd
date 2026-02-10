@@ -27,7 +27,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 use function in_array;
 
@@ -86,6 +86,8 @@ class Contract extends Model
         'has_brand_review',
         'has_creator_review',
         'has_both_reviews',
+        'phase',
+        'current_milestone_id',
     ];
 
     protected $appends = ['remaining_percentage'];
@@ -144,6 +146,21 @@ class Contract extends Model
     public function payment(): HasOne
     {
         return $this->hasOne(JobPayment::class);
+    }
+
+    public function milestones(): HasMany
+    {
+        return $this->hasMany(ContractMilestone::class)->orderBy('order');
+    }
+
+    public function currentMilestone(): BelongsTo
+    {
+        return $this->belongsTo(ContractMilestone::class, 'current_milestone_id');
+    }
+
+    public function auditLogs(): HasMany
+    {
+        return $this->hasMany(ContractAuditLog::class)->orderByDesc('created_at');
     }
 
     public static function checkBrandFundsForApplication(int $brandId, int $campaignId, int $creatorId): array

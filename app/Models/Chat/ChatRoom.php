@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Carbon;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 /**
  * ChatRoom representa o chat de uma campanha específica.
