@@ -17,6 +17,9 @@ use App\Models\User\PortfolioItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rules\File;
+
 class PortfolioController extends Controller
 {
     use HasApiResponses;
@@ -76,11 +79,12 @@ class PortfolioController extends Controller
         $request->validate([
             'title' => 'nullable|string|max:255',
             'bio' => 'nullable|string|max:1000',
+            'whatsapp' => 'nullable|string|max:20',
             'profile_picture' => 'nullable|image|max:5120',
             'project_links' => 'nullable', // JSON or array handling inside service/controller logic if complex
         ]);
 
-        $data = $request->only(['title', 'bio', 'project_links']);
+        $data = $request->only(['title', 'bio', 'whatsapp', 'project_links']);
 
         // Handle project_links JSON decoding if string
         if (isset($data['project_links']) && is_string($data['project_links'])) {
@@ -119,7 +123,6 @@ class PortfolioController extends Controller
 
         $files = $request->file('files');
         if (!$files) {
-            // Fallback for single file upload or different field name
             $files = $request->file('file') ? [$request->file('file')] : [];
         }
 
@@ -140,6 +143,24 @@ class PortfolioController extends Controller
 
         foreach ($files as $index => $file) {
             try {
+                // Validate file type and size
+                $validator = Validator::make(['file' => $file], [
+                    'file' => [
+                        'required',
+                        'file',
+                        'mimes:jpeg,png,jpg,webp,avif,gif,bmp,svg,mp4,mov,avi,webm,ogg,mkv,flv,3gp,wmv',
+                        'max:102400' // 100MB
+                    ]
+                ], [
+                    'file.mimes' => 'Tipo de arquivo não suportado. Use imagens ou vídeos (mp4, mov, avi, etc).',
+                    'file.max' => 'O arquivo excede o limite de 100MB.'
+                ]);
+
+                if ($validator->fails()) {
+                    $errors[] = "Arquivo {$file->getClientOriginalName()}: " . $validator->errors()->first('file');
+                    continue;
+                }
+
                 // Determine type based on mime
                 $mime = $file->getMimeType();
                 $type = str_starts_with($mime, 'video') ? 'video' : 'image';
@@ -152,12 +173,12 @@ class PortfolioController extends Controller
 
                 $createdItems[] = $item;
             } catch (Exception $e) {
-                $errors[] = "File {$index}: ".$e->getMessage();
+                $errors[] = "File {$index}: " . $e->getMessage();
             }
         }
 
         if (empty($createdItems) && !empty($errors)) {
-            return $this->errorResponse('Failed to upload files', 500, ['errors' => $errors]);
+            return $this->errorResponse('Failed to upload files', 422, ['errors' => $errors]);
         }
 
         return $this->successResponse([

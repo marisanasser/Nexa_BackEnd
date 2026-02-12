@@ -67,6 +67,9 @@ class PortfolioService
             $updateData['bio'] = $data['bio'];
             $userUpdateData['bio'] = $data['bio']; // Sync bio with User
         }
+        if (isset($data['whatsapp'])) {
+            $userUpdateData['whatsapp'] = $data['whatsapp'];
+        }
         if (isset($data['project_links'])) {
             $updateData['project_links'] = $data['project_links'];
         }
