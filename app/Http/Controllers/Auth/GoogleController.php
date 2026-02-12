@@ -139,6 +139,7 @@ class GoogleController extends Controller
                         'student_verified' => $user->student_verified,
                         'has_premium' => $user->has_premium,
                     ],
+                    'is_new_user' => false,
                     'message' => 'Login successful',
                 ], 200);
             }
@@ -226,6 +227,7 @@ class GoogleController extends Controller
                     'student_verified' => $user->student_verified,
                     'has_premium' => $user->has_premium,
                 ],
+                'is_new_user' => true,
                 'message' => 'Registration successful',
             ], 201);
         } catch (Exception $e) {
@@ -301,6 +303,7 @@ class GoogleController extends Controller
                     'student_verified' => $user->student_verified,
                     'has_premium' => $user->has_premium,
                 ],
+                'is_new_user' => true,
                 'message' => 'Registration successful',
             ], 201);
         } catch (Exception $e) {
@@ -358,6 +361,7 @@ class GoogleController extends Controller
                         'student_verified' => $user->student_verified,
                         'has_premium' => $user->has_premium,
                     ],
+                    'is_new_user' => false,
                     'message' => 'Login successful',
                 ], 200);
             }
@@ -391,6 +395,7 @@ class GoogleController extends Controller
                     'student_verified' => $user->student_verified,
                     'has_premium' => $user->has_premium,
                 ],
+                'is_new_user' => true,
                 'message' => 'Registration successful',
             ], 201);
         } catch (Exception $e) {

@@ -113,12 +113,11 @@ class AdminUserController extends Controller
     {
         $stats = [
             'total_users' => User::count(),
-            'creators' => User::where('role', 'creator')->count(),
-            'brands' => User::where('role', 'brand')->count(),
-            'premium_users' => User::where('has_premium', true)->count(),
-            'verified_students' => User::where('student_verified', true)->count(),
-            'active_users' => User::where('email_verified_at', '!=', null)->count(),
-            'pending_users' => User::where('email_verified_at', '=', null)->count(),
+            'total_creators' => User::where('role', 'creator')->count(),
+            'total_brands' => User::where('role', 'brand')->count(),
+            'active_users' => User::whereNotNull('email_verified_at')->count(),
+            'blocked_users' => User::whereNull('email_verified_at')->where('created_at', '<', now()->subDays(30))->count(), // Example logic for blocked
+            'pending_verification' => User::whereNull('email_verified_at')->where('created_at', '>=', now()->subDays(30))->count(),
         ];
 
         return response()->json([
