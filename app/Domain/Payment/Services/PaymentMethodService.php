@@ -10,7 +10,7 @@ use App\Models\User\User;
 use App\Wrappers\StripeWrapper;
 use Exception;
 use Illuminate\Database\Eloquent\Collection;
-use Log;
+use Illuminate\Support\Facades\Log;
 use Stripe\Checkout\Session;
 
 /**
@@ -52,9 +52,10 @@ class PaymentMethodService
             'user_id' => $user->id,
             'stripe_payment_method_id' => $data['stripe_payment_method_id'],
             'card_brand' => $data['card_brand'] ?? null,
-            'card_last_four' => $data['card_last_four'] ?? null,
-            'card_exp_month' => $data['card_exp_month'] ?? null,
-            'card_exp_year' => $data['card_exp_year'] ?? null,
+            'card_last4' => $data['card_last_four'] ?? null, // Fixed key mapping if needed, check model
+            'card_holder_name' => $data['card_holder_name'] ?? null, // Add this
+            // 'card_exp_month' => $data['card_exp_month'] ?? null, // Not in table schema provided?
+            // 'card_exp_year' => $data['card_exp_year'] ?? null,
             'is_default' => !$hasExistingMethods,
             'is_active' => true,
         ]);
@@ -283,19 +284,22 @@ class PaymentMethodService
 
         if ($isBrand) {
             // Save as BrandPaymentMethod
-            // Check if we should ignore if already exists?
-            // The old logic seemed to update user default payment method ID directly too.
-            // But we have BrandPaymentMethod table.
+            
+            // Ensure card_holder_name is set or null
+            if (!$cardHolderName) {
+                $cardHolderName = $user->name ?? 'Unknown Holder';
+            }
 
             $data = [
                 'stripe_payment_method_id' => $stripePaymentMethodId,
                 'card_brand' => $cardBrand,
                 'card_last_four' => $cardLast4,
+                'card_holder_name' => $cardHolderName, // Add this field
                 'card_exp_month' => $cardExpMonth,
                 'card_exp_year' => $cardExpYear,
             ];
-
-            // If it's a new method, save it
+            
+            // ... rest of the code
             $existing = BrandPaymentMethod::where('user_id', $user->id)
                 ->where('stripe_payment_method_id', $stripePaymentMethodId)
                 ->first()

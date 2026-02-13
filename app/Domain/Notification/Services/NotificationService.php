@@ -7,7 +7,7 @@ namespace App\Domain\Notification\Services;
 use App\Events\User\NotificationSent;
 use App\Models\Common\Notification;
 use Exception;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 class NotificationService
 {

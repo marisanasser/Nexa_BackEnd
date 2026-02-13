@@ -8,7 +8,7 @@ use App\Models\Common\Notification;
 use App\Models\Contract\Offer;
 use App\Models\User\User;
 use Exception;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 class UserNotificationService
 {

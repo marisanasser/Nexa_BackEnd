@@ -7,7 +7,7 @@ namespace App\Domain\Payment\Services;
 use App\Models\Contract\Contract;
 use App\Models\Payment\JobPayment;
 use Exception;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 class AutomaticPaymentService
 {

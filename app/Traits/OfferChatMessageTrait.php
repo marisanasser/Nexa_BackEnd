@@ -8,7 +8,7 @@ use App\Models\Chat\ChatRoom;
 use App\Models\Chat\Message;
 use Exception;
 use Illuminate\Support\Facades\Http;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 trait OfferChatMessageTrait
 {

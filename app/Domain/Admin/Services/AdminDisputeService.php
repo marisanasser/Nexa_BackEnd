@@ -9,7 +9,7 @@ use App\Models\Contract\Contract;
 use Exception;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 class AdminDisputeService
 {

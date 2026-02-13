@@ -7,7 +7,7 @@ namespace App\Domain\User\Services;
 use App\Models\User\User;
 use Exception;
 use Illuminate\Support\Facades\Hash;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 /**
  * UserProfileService handles user profile operations.

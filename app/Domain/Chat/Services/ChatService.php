@@ -9,7 +9,7 @@ use App\Models\Chat\DirectMessage;
 use App\Models\User\User;
 use Exception;
 use Illuminate\Database\Eloquent\Collection;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 /**
  * ChatService handles messaging operations.

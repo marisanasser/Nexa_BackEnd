@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
 use League\Flysystem\Filesystem;
 use League\Flysystem\GoogleCloudStorage\GoogleCloudStorageAdapter;
-use Log;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class AppServiceProvider extends ServiceProvider

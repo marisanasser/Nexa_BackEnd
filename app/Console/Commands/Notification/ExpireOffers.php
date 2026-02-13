@@ -7,7 +7,7 @@ namespace App\Console\Commands\Notification;
 use App\Models\Chat\Message;
 use App\Models\Contract\Offer;
 use Illuminate\Console\Command;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 class ExpireOffers extends Command
 {

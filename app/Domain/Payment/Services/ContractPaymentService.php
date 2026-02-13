@@ -28,7 +28,7 @@ use Stripe\PaymentIntent;
  */
 class ContractPaymentService
 {
-    public const PLATFORM_FEE_PERCENTAGE = 0.10; // 10%
+    public const PLATFORM_FEE_PERCENTAGE = 0.05; // 5%
         
     public function __construct(
         private StripeWrapper $stripeWrapper,
@@ -481,7 +481,7 @@ class ContractPaymentService
         int $jobPaymentId
     ): CreatorBalance {
         $balance = CreatorBalance::firstOrCreate(
-            ['user_id' => $creatorId],
+            ['creator_id' => $creatorId],
             ['available_balance' => 0, 'pending_balance' => 0, 'total_earned' => 0]
         );
 
@@ -505,7 +505,7 @@ class ContractPaymentService
      */
     private function deductFromCreatorBalance(int $creatorId, float $amount): void
     {
-        $balance = CreatorBalance::where('user_id', $creatorId)->first();
+        $balance = CreatorBalance::where('creator_id', $creatorId)->first();
 
         if ($balance) {
             $balance->decrement('available_balance', min($amount, $balance->available_balance));

@@ -13,7 +13,7 @@ use App\Wrappers\StripeWrapper;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Support\Facades\DB;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 /**
  * CreateSubscriptionAction handles the complex process of creating a subscription.

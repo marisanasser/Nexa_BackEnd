@@ -8,7 +8,7 @@ use Exception;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
-use Log;
+use Illuminate\Support\Facades\Log;
 use function is_array;
 
 /**

@@ -7,7 +7,7 @@ namespace App\Domain\Payment\Services;
 use App\Models\User\User;
 use App\Wrappers\StripeWrapper;
 use Exception;
-use Log;
+use Illuminate\Support\Facades\Log;
 use Stripe\Customer;
 
 /**

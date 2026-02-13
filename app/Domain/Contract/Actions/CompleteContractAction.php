@@ -10,7 +10,7 @@ use App\Models\Campaign\Campaign;
 use App\Models\Contract\Contract;
 use Exception;
 use Illuminate\Support\Facades\DB;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 /**
  * CompleteContractAction handles the process of completing a contract.

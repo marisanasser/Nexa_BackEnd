@@ -8,7 +8,7 @@ use App\Models\User\User;
 use Closure;
 use Exception;
 use Illuminate\Http\Request;
-use Log;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class PagarMeAuthMiddleware

@@ -12,7 +12,7 @@ use App\Models\User\User;
 use DB;
 use Exception;
 use Illuminate\Console\Command;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 class CheckTimelineDeadlines extends Command
 {

@@ -13,7 +13,7 @@ use App\Domain\Notification\Services\NotificationService;
 use App\Wrappers\StripeWrapper;
 use Exception;
 use Illuminate\Support\Facades\DB;
-use Log;
+use Illuminate\Support\Facades\Log;
 use Stripe\Checkout\Session;
 
 class BrandFundingService

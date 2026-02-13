@@ -7,7 +7,7 @@ namespace App\Domain\Notification\Services;
 use App\Models\Common\Notification;
 use App\Models\Payment\WithdrawalMethod;
 use Exception;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 class PaymentNotificationService
 {

@@ -7,7 +7,7 @@ namespace Tests\Unit\Http\Controllers;
 use App\Domain\Payment\Services\PaymentMethodService;
 use App\Http\Controllers\Payment\BrandPaymentController;
 use App\Models\User\User;
-use Log;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Mockery;

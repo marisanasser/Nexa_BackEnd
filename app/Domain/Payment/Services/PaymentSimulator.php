@@ -8,7 +8,7 @@ use App\Models\Payment\Subscription;
 use App\Models\Payment\SubscriptionPlan;
 use App\Models\Payment\Transaction;
 use App\Models\User\User;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 class PaymentSimulator
 {

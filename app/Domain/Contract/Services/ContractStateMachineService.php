@@ -10,7 +10,7 @@ use App\Models\Contract\ContractMilestone;
 use App\Models\User\User;
 use Exception;
 use Illuminate\Support\Facades\DB;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 class ContractStateMachineService
 {

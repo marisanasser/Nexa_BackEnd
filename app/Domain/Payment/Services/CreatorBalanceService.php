@@ -13,7 +13,7 @@ use App\Wrappers\StripeWrapper;
 use Exception;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use Log;
+use Illuminate\Support\Facades\Log;
 use Stripe\Checkout\Session;
 use Stripe\Customer;
 
@@ -24,7 +24,7 @@ use function config;
  */
 class CreatorBalanceService
 {
-    private const float PLATFORM_FEE_PERCENTAGE = 0.10; // 10%
+    private const float PLATFORM_FEE_PERCENTAGE = 0.05; // 5%
 
     public function __construct(
         private readonly ?StripeWrapper $stripe = null

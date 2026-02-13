@@ -10,7 +10,7 @@ use App\Models\Common\Notification;
 use App\Models\User\User;
 use Exception;
 use Illuminate\Console\Command;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 class CheckMilestoneDeadlines extends Command
 {

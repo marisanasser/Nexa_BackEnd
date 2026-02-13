@@ -12,7 +12,7 @@ use App\Models\Payment\Withdrawal;
 use Exception;
 use Illuminate\Support\Facades\DB;
 
-use Log;
+use Illuminate\Support\Facades\Log;
 use function in_array;
 
 /**

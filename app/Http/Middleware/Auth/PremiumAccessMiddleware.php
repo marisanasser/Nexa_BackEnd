@@ -7,7 +7,7 @@ namespace App\Http\Middleware\Auth;
 use App\Domain\Shared\Traits\HasAuthenticatedUser;
 use Closure;
 use Illuminate\Http\Request;
-use Log;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class PremiumAccessMiddleware

@@ -8,7 +8,7 @@ use App\Models\Contract\Contract;
 use App\Models\User\User;
 use Carbon\Carbon;
 use Exception;
-use Log;
+use Illuminate\Support\Facades\Log;
 use function in_array;
 
 /**

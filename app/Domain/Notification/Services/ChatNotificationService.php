@@ -8,7 +8,7 @@ use App\Models\Chat\DirectMessage;
 use App\Models\Chat\Message;
 use App\Models\Common\Notification;
 use Exception;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 class ChatNotificationService
 {

@@ -7,7 +7,7 @@ namespace App\Console\Commands\Payment;
 use App\Models\Payment\JobPayment;
 use Exception;
 use Illuminate\Console\Command;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 class ProcessPayments extends Command
 {

@@ -145,10 +145,12 @@ class Offer extends Model
         ]);
 
         if (!$this->contract) {
-            $platformFee = round($this->budget * 0.10, 2);
+            $platformFee = round($this->budget * 0.05, 2);
             $creatorAmount = round($this->budget - $platformFee, 2);
             $startedAt = now();
-            Contract::create([
+            
+            // Create the contract
+            $contract = Contract::create([
                 'offer_id' => $this->id,
                 'brand_id' => $this->brand_id,
                 'creator_id' => $this->creator_id,
@@ -157,14 +159,27 @@ class Offer extends Model
                 'budget' => $this->budget,
                 'estimated_days' => $this->estimated_days,
                 'requirements' => $this->requirements,
-                'status' => 'active',
-                'workflow_status' => 'active',
+                // Status should be pending_payment until the brand funds it
+                'status' => 'pending_payment', 
+                'workflow_status' => 'payment_pending',
                 'platform_fee' => $platformFee,
                 'creator_amount' => $creatorAmount,
-                'started_at' => $startedAt,
-                'expected_completion_at' => $startedAt->copy()->addDays($this->estimated_days),
+                // started_at should be set when payment is made
+                'expected_completion_at' => now()->addDays($this->estimated_days),
                 'created_at' => now(),
             ]);
+
+            // Automatically create a default milestone if none exists
+            // This ensures the timeline/workflow has at least one step
+            $contract->milestones()->create([
+                'title' => 'Entrega Final',
+                'description' => 'Entrega final do projeto conforme combinado.',
+                'status' => 'pending',
+                'amount' => $this->budget,
+                'due_date' => $contract->expected_completion_at,
+                'order' => 1,
+            ]);
+
             $this->refresh();
         }
 
