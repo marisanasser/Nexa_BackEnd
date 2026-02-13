@@ -735,6 +735,12 @@ class Contract extends Model
             return;
         }
 
+        // Check if we should auto-complete the campaign
+        // If the campaign has a future deadline, we keep it open for more offers
+        if ($campaign->deadline && $campaign->deadline->isFuture()) {
+            return;
+        }
+
         $allContracts = self::whereHas('offer', function ($query) use ($campaign): void {
             $query->where('campaign_id', $campaign->id);
         })->get();
@@ -747,6 +753,18 @@ class Contract extends Model
 
         if ($allCompletedOrCancelled) {
             $campaign->complete();
+            
+            // Log the automatic completion
+            try {
+                app(\App\Domain\Campaign\Services\CampaignAuditService::class)->log(
+                    $campaign, 
+                    'campaign_auto_completed', 
+                    ['reason' => 'All contracts completed and deadline passed/reached']
+                );
+            } catch (Exception $e) {
+                // Ignore audit log errors to not break the flow
+                Log::warning('Failed to log campaign auto-completion', ['error' => $e->getMessage()]);
+            }
 
             $this->processCampaignPayments($campaign, $allContracts);
 

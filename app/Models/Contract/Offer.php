@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @property int $id
@@ -139,51 +140,91 @@ class Offer extends Model
             return false;
         }
 
-        $this->update([
-            'status' => 'accepted',
-            'accepted_at' => now(),
-        ]);
-
-        if (!$this->contract) {
-            $platformFee = round($this->budget * 0.05, 2);
-            $creatorAmount = round($this->budget - $platformFee, 2);
-            $startedAt = now();
-            
-            // Create the contract
-            $contract = Contract::create([
-                'offer_id' => $this->id,
-                'brand_id' => $this->brand_id,
-                'creator_id' => $this->creator_id,
-                'title' => $this->title,
-                'description' => $this->description,
-                'budget' => $this->budget,
-                'estimated_days' => $this->estimated_days,
-                'requirements' => $this->requirements,
-                // Status should be pending_payment until the brand funds it
-                'status' => 'pending_payment', 
-                'workflow_status' => 'payment_pending',
-                'platform_fee' => $platformFee,
-                'creator_amount' => $creatorAmount,
-                // started_at should be set when payment is made
-                'expected_completion_at' => now()->addDays($this->estimated_days),
-                'created_at' => now(),
+        return DB::transaction(function () {
+            $this->update([
+                'status' => 'accepted',
+                'accepted_at' => now(),
             ]);
 
-            // Automatically create a default milestone if none exists
-            // This ensures the timeline/workflow has at least one step
-            $contract->milestones()->create([
-                'title' => 'Entrega Final',
-                'description' => 'Entrega final do projeto conforme combinado.',
-                'status' => 'pending',
-                'amount' => $this->budget,
-                'due_date' => $contract->expected_completion_at,
-                'order' => 1,
-            ]);
+            if (!$this->contract) {
+                $platformFee = round($this->budget * 0.05, 2);
+                $creatorAmount = round($this->budget - $platformFee, 2);
+                
+                // Create the contract
+                $contract = Contract::create([
+                    'offer_id' => $this->id,
+                    'brand_id' => $this->brand_id,
+                    'creator_id' => $this->creator_id,
+                    'title' => $this->title,
+                    'description' => $this->description,
+                    'budget' => $this->budget,
+                    'estimated_days' => $this->estimated_days,
+                    'requirements' => $this->requirements,
+                    // Status should be pending until the brand funds it
+                    'status' => 'pending', 
+                    'workflow_status' => 'payment_pending',
+                    'platform_fee' => $platformFee,
+                    'creator_amount' => $creatorAmount,
+                    // started_at should be set when payment is made
+                    'expected_completion_at' => now()->addDays($this->estimated_days),
+                    'created_at' => now(),
+                ]);
 
-            $this->refresh();
-        }
+                // Create the standard full timeline for the campaign
+                // This ensures the flow matches the real-world process: Script -> Approval -> Video -> Final Approval
+                $startDate = now();
+                $totalDays = $this->estimated_days ?? 7;
 
-        return true;
+                $timelineMilestones = [
+                    [
+                        'milestone_type' => 'script_submission',
+                        'title' => 'Envio do Roteiro',
+                        'description' => 'Enviar o roteiro inicial para revisão da marca.',
+                        'status' => 'pending',
+                        'deadline' => $startDate->copy()->addDays((int) ceil($totalDays * 0.25)),
+                    ],
+                    [
+                        'milestone_type' => 'script_approval',
+                        'title' => 'Aprovação do Roteiro',
+                        'description' => 'Aprovação do roteiro pela marca.',
+                        'status' => 'pending',
+                        'deadline' => $startDate->copy()->addDays((int) ceil($totalDays * 0.35)),
+                    ],
+                    [
+                        'milestone_type' => 'video_submission',
+                        'title' => 'Envio de Imagem e Vídeo',
+                        'description' => 'Enviar o conteúdo final de imagem e vídeo.',
+                        'status' => 'pending',
+                        'deadline' => $startDate->copy()->addDays((int) ceil($totalDays * 0.85)),
+                    ],
+                    [
+                        'milestone_type' => 'final_approval',
+                        'title' => 'Aprovação Final',
+                        'description' => 'Aprovação final do vídeo pela marca.',
+                        'status' => 'pending',
+                        'deadline' => $startDate->copy()->addDays($totalDays),
+                    ],
+                ];
+
+                foreach ($timelineMilestones as $milestone) {
+                    $contract->timeline()->create($milestone);
+                }
+
+                // Also create a default ContractMilestone for backend compatibility (Contract State Machine)
+                $contract->milestones()->create([
+                    'title' => 'Execução do Projeto',
+                    'description' => 'Execução de todas as etapas do projeto (Roteiro e Vídeo).',
+                    'status' => 'pending',
+                    'amount' => $this->budget,
+                    'due_date' => $contract->expected_completion_at,
+                    'order' => 1,
+                ]);
+
+                $this->refresh();
+            }
+
+            return true;
+        });
     }
 
     public function reject(?string $reason = null): bool
