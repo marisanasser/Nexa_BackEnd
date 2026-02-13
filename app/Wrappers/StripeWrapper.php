@@ -17,6 +17,14 @@ use Stripe\Subscription;
 
 class StripeWrapper
 {
+    public function __construct()
+    {
+        $apiKey = config('services.stripe.secret');
+        if ($apiKey) {
+            Stripe::setApiKey($apiKey);
+        }
+    }
+
     public function setApiKey(string $apiKey): void
     {
         Stripe::setApiKey($apiKey);
