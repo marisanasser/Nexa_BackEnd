@@ -76,6 +76,7 @@ class GoogleController extends Controller
                 'is_student' => $request->input('is_student'),
             ]);
 
+            /** @var \Laravel\Socialite\Two\User $googleUser */
             $googleUser = $this->googleProvider()->stateless()->user();
 
             $user = User::withTrashed()

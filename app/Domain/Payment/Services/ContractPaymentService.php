@@ -28,7 +28,7 @@ use Stripe\PaymentIntent;
  */
 class ContractPaymentService
 {
-    private const PLATFORM_FEE_PERCENTAGE = 0.10; // 10%
+    public const PLATFORM_FEE_PERCENTAGE = 0.10; // 10%
         
     public function __construct(
         private StripeWrapper $stripeWrapper,
@@ -325,13 +325,16 @@ class ContractPaymentService
      */
     public function recordContractJobPayment(Contract $contract, Transaction $transaction): JobPayment
     {
+        $platformFee = $contract->budget * self::PLATFORM_FEE_PERCENTAGE;
+        $creatorAmount = $contract->budget * (1 - self::PLATFORM_FEE_PERCENTAGE);
+        
         return JobPayment::create([
             'contract_id' => $contract->id,
             'brand_id' => $contract->brand_id,
             'creator_id' => $contract->creator_id,
             'total_amount' => $contract->budget,
-            'platform_fee' => $contract->budget * 0.05,
-            'creator_amount' => $contract->budget * 0.95,
+            'platform_fee' => $platformFee,
+            'creator_amount' => $creatorAmount,
             'payment_method' => 'stripe_escrow',
             'status' => 'pending',
             'transaction_id' => $transaction->id,
@@ -343,6 +346,8 @@ class ContractPaymentService
      */
     public function updateCreatorBalance(Contract $contract): void
     {
+        $creatorAmount = $contract->budget * (1 - self::PLATFORM_FEE_PERCENTAGE);
+        
         $balance = CreatorBalance::firstOrCreate(
             ['creator_id' => $contract->creator_id],
             [
@@ -352,7 +357,7 @@ class ContractPaymentService
                 'total_withdrawn' => 0,
             ]
         );
-        $balance->increment('pending_balance', $contract->budget * 0.95);
+        $balance->increment('pending_balance', $creatorAmount);
     }
 
     /**
@@ -407,14 +412,17 @@ class ContractPaymentService
             ]);
 
             // Create/Update JobPayment
+            $platformFee = $contract->budget * self::PLATFORM_FEE_PERCENTAGE;
+            $creatorAmount = $contract->budget * (1 - self::PLATFORM_FEE_PERCENTAGE);
+
             return JobPayment::updateOrCreate(
                 ['contract_id' => $contract->id],
                 [
                     'brand_id' => $contract->brand_id,
                     'creator_id' => $contract->creator_id,
                     'total_amount' => $contract->budget,
-                    'platform_fee' => $contract->budget * 0.05,
-                    'creator_amount' => $contract->budget * 0.95,
+                    'platform_fee' => $platformFee,
+                    'creator_amount' => $creatorAmount,
                     'payment_method' => 'stripe_escrow',
                     'status' => 'held', // Money is held until contract completion
                     'stripe_payment_intent_id' => $paymentIntentId,

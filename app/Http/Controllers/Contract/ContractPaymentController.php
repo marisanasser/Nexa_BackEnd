@@ -358,13 +358,16 @@ class ContractPaymentController extends Controller
                 'contract_id' => $contract->id,
             ]);
 
+            $platformFee = $contract->budget * ContractPaymentService::PLATFORM_FEE_PERCENTAGE;
+            $creatorAmount = $contract->budget * (1 - ContractPaymentService::PLATFORM_FEE_PERCENTAGE);
+
             $jobPayment = JobPayment::create([
                 'contract_id' => $contract->id,
                 'brand_id' => $contract->brand_id,
                 'creator_id' => $contract->creator_id,
                 'total_amount' => $contract->budget,
-                'platform_fee' => $contract->budget * 0.05,
-                'creator_amount' => $contract->budget * 0.95,
+                'platform_fee' => $platformFee,
+                'creator_amount' => $creatorAmount,
                 'payment_method' => 'credit_card',
                 'status' => 'paid',
                 'transaction_id' => $transaction->id,
