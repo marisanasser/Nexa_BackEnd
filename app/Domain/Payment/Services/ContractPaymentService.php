@@ -389,6 +389,11 @@ class ContractPaymentService
 
         $existingTransaction = Transaction::where('stripe_payment_intent_id', $paymentIntentId)->first();
         if ($existingTransaction) {
+            // Ensure contract is activated even if transaction exists (idempotency safety)
+            if ($contract->status !== 'active') {
+                $this->activateContract($contract);
+            }
+            
             // Return existing job payment if transaction exists
             $jobPayment = JobPayment::where('transaction_id', $existingTransaction->id)->first();
             if ($jobPayment) {
@@ -415,7 +420,7 @@ class ContractPaymentService
             $platformFee = $contract->budget * self::PLATFORM_FEE_PERCENTAGE;
             $creatorAmount = $contract->budget * (1 - self::PLATFORM_FEE_PERCENTAGE);
 
-            return JobPayment::updateOrCreate(
+            $jobPayment = JobPayment::updateOrCreate(
                 ['contract_id' => $contract->id],
                 [
                     'brand_id' => $contract->brand_id,
@@ -430,6 +435,11 @@ class ContractPaymentService
                     'paid_at' => now(),
                 ]
             );
+
+            // Activate contract immediately after payment success
+            $this->activateContract($contract);
+
+            return $jobPayment;
         });
     }
 
