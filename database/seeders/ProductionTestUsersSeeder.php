@@ -70,15 +70,46 @@ class ProductionTestUsersSeeder extends Seeder
         );
         $this->command->info("Creator Free user: {$creatorFree->email}");
 
+        // Student Verified User
+        $studentVerified = User::updateOrCreate(
+            ['email' => 'student.verified@nexacreators.com.br'],
+            [
+                'name' => 'Student Verified Teste',
+                'password' => Hash::make('StudentVerified@2025'),
+                'role' => 'student',
+                'email_verified_at' => now(),
+                'student_verified' => true,
+                'student_expires_at' => now()->addYear(),
+                'has_premium' => false, // Students don't need premium if verified
+            ]
+        );
+        $this->command->info("Student Verified user: {$studentVerified->email}");
+
+        // Student Not Verified User
+        $studentFree = User::updateOrCreate(
+            ['email' => 'student.free@nexacreators.com.br'],
+            [
+                'name' => 'Student Free Teste',
+                'password' => Hash::make('StudentFree@2025'),
+                'role' => 'student',
+                'email_verified_at' => now(),
+                'student_verified' => false,
+                'has_premium' => false,
+            ]
+        );
+        $this->command->info("Student Free user: {$studentFree->email}");
+
         $this->command->newLine();
         $this->command->info('=== Production Test Users Created ===');
         $this->command->table(
-            ['Role', 'Email', 'Password', 'Premium'],
+            ['Role', 'Email', 'Password', 'Premium', 'Verified'],
             [
-                ['Admin', 'admin@nexacreators.com.br', 'NexaAdmin@2025', 'Yes'],
-                ['Brand', 'brand.teste@nexacreators.com.br', 'BrandTeste@2025', 'Yes'],
-                ['Creator', 'creator.premium@nexacreators.com.br', 'CreatorPremium@2025', 'Yes'],
-                ['Creator', 'creator.free@nexacreators.com.br', 'CreatorFree@2025', 'No'],
+                ['Admin', 'admin@nexacreators.com.br', 'NexaAdmin@2025', 'Yes', '-'],
+                ['Brand', 'brand.teste@nexacreators.com.br', 'BrandTeste@2025', 'Yes', '-'],
+                ['Creator', 'creator.premium@nexacreators.com.br', 'CreatorPremium@2025', 'Yes', '-'],
+                ['Creator', 'creator.free@nexacreators.com.br', 'CreatorFree@2025', 'No', '-'],
+                ['Student', 'student.verified@nexacreators.com.br', 'StudentVerified@2025', 'No', 'Yes'],
+                ['Student', 'student.free@nexacreators.com.br', 'StudentFree@2025', 'No', 'No'],
             ]
         );
     }
