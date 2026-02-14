@@ -136,7 +136,7 @@ class CampaignTimelineController extends Controller
         }
 
         if (!$milestone->canUploadFile()) {
-            return response()->json(['error' => 'Não é possível enviar arquivo para este milestone'], 400);
+            return response()->json(['error' => $milestone->getUploadBlockerReason() ?? 'Não é possível enviar arquivo para este milestone'], 400);
         }
 
         $file = $request->file('file');

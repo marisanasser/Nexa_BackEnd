@@ -524,6 +524,27 @@ class CampaignTimeline extends Model
         ;
     }
 
+    public function getUploadBlockerReason(): ?string
+    {
+        if (!$this->isSubmissionMilestone()) {
+            return 'Este não é um milestone de submissão.';
+        }
+
+        if (!in_array($this->status, ['pending', 'rejected'], true)) {
+            return "O status do milestone não permite upload ({$this->status}).";
+        }
+
+        if (!$this->isDependencySatisfied()) {
+            $dependencyName = match ($this->milestone_type) {
+                'video_submission' => 'Aprovação do Roteiro',
+                default => 'Etapa anterior',
+            };
+            return "A etapa anterior ({$dependencyName}) precisa ser concluída antes de enviar este arquivo.";
+        }
+
+        return null;
+    }
+
     private function isSubmissionMilestone(): bool
     {
         return in_array($this->milestone_type, ['script_submission', 'video_submission'], true);

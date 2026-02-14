@@ -146,7 +146,7 @@ class ContractController extends Controller
             $message = Message::create([
                 'chat_room_id' => $chatRoom->id,
                 'sender_id' => null,
-                'message' => 'ðŸŽ‰ O contrato foi finalizado com sucesso! O pagamento jÃ¡ foi liberado para a carteira do criador.',
+                'message' => '🎉 O contrato foi finalizado com sucesso! O pagamento já foi liberado para a carteira do criador.',
                 'message_type' => 'contract_completion',
                 'offer_data' => json_encode([
                     'contract_id' => $contract->id,
@@ -190,7 +190,7 @@ class ContractController extends Controller
                 return;
             }
 
-            $this->createSystemMessage($chatRoom, 'âœ… Contrato ativado com sucesso! O trabalho jÃ¡ pode comeÃ§ar.', [
+            $this->createSystemMessage($chatRoom, '✅ Contrato ativado com sucesso! O trabalho já pode começar.', [
                 'contract_id' => $contract->id,
                 'status' => 'active',
                 'workflow_status' => 'active',
@@ -326,7 +326,7 @@ class ContractController extends Controller
             if (! $contract) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Contrato nÃ£o encontrado ou acesso negado',
+                    'message' => 'Contrato não encontrado ou acesso negado',
                 ], 404);
             }
 
@@ -598,14 +598,14 @@ class ContractController extends Controller
             if (! $contract) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Contrato nÃ£o encontrado ou nÃ£o pode ser ativado',
+                    'message' => 'Contrato não encontrado ou não pode ser ativado',
                 ], 404);
             }
 
             if (! $contract->canBeStarted()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Contrato nÃ£o pode ser ativado',
+                    'message' => 'Contrato não pode ser ativado',
                 ], 400);
             }
 
@@ -677,14 +677,14 @@ class ContractController extends Controller
             if (! $contract) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Contrato nÃ£o encontrado ou nÃ£o pode ser finalizado',
+                    'message' => 'Contrato não encontrado ou não pode ser finalizado',
                 ], 404);
             }
 
             if (! $contract->canBeCompleted()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Contrato nÃ£o pode ser finalizado',
+                    'message' => 'Contrato não pode ser finalizado',
                 ], 400);
             }
 
@@ -749,7 +749,7 @@ class ContractController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'ValidaÃ§Ã£o falhou',
+                'message' => 'Validação falhou',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -767,14 +767,14 @@ class ContractController extends Controller
             if (! $contract) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Contrato nÃ£o encontrado ou nÃ£o pode ser cancelado',
+                    'message' => 'Contrato não encontrado ou não pode ser cancelado',
                 ], 404);
             }
 
             if (! $contract->canBeCancelled()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Contrato nÃ£o pode ser cancelado',
+                    'message' => 'Contrato não pode ser cancelado',
                 ], 400);
             }
 
@@ -822,7 +822,7 @@ class ContractController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'ValidaÃ§Ã£o falhou',
+                'message' => 'Validação falhou',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -844,14 +844,14 @@ class ContractController extends Controller
             if (! $contract) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Contrato nÃ£o encontrado ou nÃ£o pode ser terminado',
+                    'message' => 'Contrato não encontrado ou não pode ser terminado',
                 ], 404);
             }
 
             if (! $contract->canBeTerminated()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Contrato nÃ£o pode ser terminado',
+                    'message' => 'Contrato não pode ser terminado',
                 ], 400);
             }
 
@@ -933,7 +933,7 @@ class ContractController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'ValidaÃ§Ã£o falhou',
+                'message' => 'Validação falhou',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -951,7 +951,7 @@ class ContractController extends Controller
             if (! $contract) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Contrato nÃ£o encontrado ou nÃ£o pode ser disputado',
+                    'message' => 'Contrato não encontrado ou não pode ser disputado',
                 ], 404);
             }
 
@@ -964,7 +964,7 @@ class ContractController extends Controller
 
                 return response()->json([
                     'success' => true,
-                    'message' => 'Contrato disputado com sucesso. Nossa equipe revisarÃ¡ o caso.',
+                    'message' => 'Contrato disputado com sucesso. Nossa equipe revisará o caso.',
                     'data' => [
                         'contract_id' => $contract->id,
                         'status' => $contract->status,
@@ -1000,7 +1000,7 @@ class ContractController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'ValidaÃ§Ã£o falhou',
+                'message' => 'Validação falhou',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -1018,7 +1018,7 @@ class ContractController extends Controller
             if (! $contract) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Contrato nÃ£o encontrado ou acesso negado',
+                    'message' => 'Contrato não encontrado ou acesso negado',
                 ], 404);
             }
 
@@ -1129,10 +1129,10 @@ class ContractController extends Controller
             $chatRoom = $contract->offer?->chatRoom;
             if ($chatRoom) {
                 $messageText = match ($newStatus) {
-                    'material_sent' => 'ðŸ“¦ Material enviado pela marca. Aguardando confirmaÃ§Ã£o de recebimento.',
-                    'product_sent' => 'ðŸ“¦ Produto enviado pela marca. Aguardando confirmaÃ§Ã£o de recebimento.',
-                    'product_received' => 'âœ… Produto/Material recebido pelo criador. O prazo de produÃ§Ã£o comeÃ§ou!',
-                    default => 'Status de logÃ­stica atualizado: '.$newStatus,
+                    'material_sent' => '📦 Material enviado pela marca. Aguardando confirmação de recebimento.',
+                    'product_sent' => '📦 Produto enviado pela marca. Aguardando confirmação de recebimento.',
+                    'product_received' => '✅ Produto/Material recebido pelo criador. O prazo de produção começou!',
+                    default => 'Status de logística atualizado: '.$newStatus,
                 };
 
                 $this->createSystemMessage($chatRoom, $messageText, [
