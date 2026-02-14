@@ -146,7 +146,9 @@ class Offer extends Model
                 'accepted_at' => now(),
             ]);
 
-            if (!$this->contract) {
+            $existingContract = $this->contract()->first();
+
+            if (!$existingContract) {
                 $platformFee = round($this->budget * 0.05, 2);
                 $creatorAmount = round($this->budget - $platformFee, 2);
                 
@@ -220,8 +222,12 @@ class Offer extends Model
                     'order' => 1,
                 ]);
 
-                $this->refresh();
             }
+
+            // Avoid stale cached relation returning null right after contract creation.
+            $this->unsetRelation('contract');
+            $this->refresh();
+            $this->load('contract');
 
             return true;
         });

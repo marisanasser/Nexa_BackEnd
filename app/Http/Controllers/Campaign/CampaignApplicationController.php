@@ -13,6 +13,7 @@ use App\Models\Campaign\Campaign;
 use App\Models\Campaign\CampaignApplication;
 use App\Models\Chat\ChatRoom;
 use App\Models\Contract\Contract;
+use App\Models\Contract\Offer;
 use App\Models\Payment\BrandPaymentMethod;
 use App\Models\User\User;
 use Exception;
@@ -194,13 +195,18 @@ class CampaignApplicationController extends Controller
         $application->approve($user->id);
 
         // 6. Post-Approval Tasks (Chat, Notifications)
-        $this->initializeChatForApprovedApplication($application, $user);
+        $chatRoom = $this->initializeChatForApprovedApplication($application, $user);
+        $contract = $this->ensureContractCreatedAfterApproval($application, $chatRoom);
         $this->sendApprovalNotifications($application, $user);
 
         return response()->json([
             'success' => true,
             'message' => 'Application approved successfully.',
             'data' => $application->load(['campaign', 'creator']),
+            'chat_room_id' => $chatRoom?->room_id,
+            'contract_id' => $contract?->id,
+            'contract_status' => $contract?->status,
+            'contract_workflow_status' => $contract?->workflow_status,
         ]);
     }
 
@@ -564,7 +570,7 @@ class CampaignApplicationController extends Controller
     /**
      * Initialize chat room and first contact for approved application.
      */
-    private function initializeChatForApprovedApplication(CampaignApplication $application, User $brand): void
+    private function initializeChatForApprovedApplication(CampaignApplication $application, User $brand): ?ChatRoom
     {
         try {
             $chatRoom = ChatRoom::findOrCreateRoom(
@@ -573,16 +579,105 @@ class CampaignApplicationController extends Controller
                 $application->creator_id
             );
 
-            if ($chatRoom->wasRecentlyCreated) {
+            // Always move the application workflow forward after approval.
+            // A room may already exist, and in that case we still need to advance and ensure the first offer exists.
+            if ($application->isFirstContactPending()) {
                 $application->initiateFirstContact();
-                (new ChatController())->sendInitialOfferIfNeeded($chatRoom);
             }
+
+            (new ChatController())->sendInitialOfferIfNeeded($chatRoom);
+
+            return $chatRoom;
         } catch (Exception $e) {
             Log::error('Failed to initialize chat for approved application', [
                 'application_id' => $application->id,
                 'error' => $e->getMessage(),
             ]);
+
+            return null;
         }
+    }
+
+    /**
+     * Ensure contract is created immediately after proposal approval.
+     * This aligns the application flow with "approve proposal -> contract pending payment".
+     */
+    private function ensureContractCreatedAfterApproval(CampaignApplication $application, ?ChatRoom $chatRoom): ?Contract
+    {
+        if (!$chatRoom) {
+            return null;
+        }
+
+        $existingContract = Contract::whereHas('offer', function ($query) use ($chatRoom): void {
+            $query->where('chat_room_id', $chatRoom->id);
+        })
+            ->where('brand_id', $chatRoom->brand_id)
+            ->where('creator_id', $chatRoom->creator_id)
+            ->orderByDesc('id')
+            ->first()
+        ;
+
+        if ($existingContract) {
+            return $existingContract;
+        }
+
+        $campaign = $application->campaign;
+
+        $budget = (float) ($application->proposed_budget ?? $campaign->budget ?? 0);
+        $campaignDeadline = $campaign->deadline ?? null;
+        $defaultEstimatedDays = $campaignDeadline ? now()->diffInDays($campaignDeadline, false) : 30;
+        $estimatedDays = (int) ($application->estimated_delivery_days ?? $defaultEstimatedDays);
+        if ($estimatedDays <= 0) {
+            $estimatedDays = 30;
+        }
+
+        $offer = Offer::where('chat_room_id', $chatRoom->id)
+            ->where('campaign_id', $application->campaign_id)
+            ->where('brand_id', $chatRoom->brand_id)
+            ->where('creator_id', $chatRoom->creator_id)
+            ->where('status', 'pending')
+            ->orderByDesc('id')
+            ->first()
+        ;
+
+        if (!$offer) {
+            $offer = Offer::create([
+                'brand_id' => $chatRoom->brand_id,
+                'creator_id' => $chatRoom->creator_id,
+                'campaign_id' => $application->campaign_id,
+                'chat_room_id' => $chatRoom->id,
+                'title' => 'Proposta aprovada',
+                'description' => (string) ($application->proposal ?: 'Proposta aprovada automaticamente pela marca.'),
+                'budget' => $budget,
+                'estimated_days' => $estimatedDays,
+                'requirements' => $campaign->requirements ?? [],
+                'expires_at' => now()->addDays(7),
+            ]);
+        } else {
+            $offer->update([
+                'title' => 'Proposta aprovada',
+                'description' => (string) ($application->proposal ?: $offer->description),
+                'budget' => $budget,
+                'estimated_days' => $estimatedDays,
+                'requirements' => $campaign->requirements ?? $offer->requirements ?? [],
+                'expires_at' => now()->addDays(7),
+            ]);
+        }
+
+        if (!$offer->accept()) {
+            Log::warning('Failed to auto-accept offer after application approval', [
+                'application_id' => $application->id,
+                'offer_id' => $offer->id,
+            ]);
+
+            return null;
+        }
+
+        if ($application->isAgreementInProgress()) {
+            $application->finalizeAgreement();
+        }
+
+        return Contract::where('offer_id', $offer->id)->first();
     }
 
     /**

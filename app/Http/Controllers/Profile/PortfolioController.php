@@ -13,6 +13,7 @@ use App\Domain\User\Services\PortfolioService;
 use App\Http\Controllers\Base\Controller;
 use App\Http\Requests\Profile\StorePortfolioItemRequest;
 use App\Http\Requests\Profile\UpdatePortfolioItemRequest;
+use App\Models\User\User;
 use App\Models\User\PortfolioItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -289,5 +290,73 @@ class PortfolioController extends Controller
         $stats = $this->portfolioService->getStatistics($user);
 
         return $this->successResponse($stats, 'Statistics retrieved successfully');
+    }
+
+    /**
+     * Get public creator profile/portfolio by creator ID.
+     */
+    public function getCreatorProfile(int $creatorId): JsonResponse
+    {
+        // Ensure request is authenticated
+        $this->getAuthenticatedUser();
+
+        $creator = User::query()
+            ->where('id', $creatorId)
+            ->where(function ($query): void {
+                $query->where('role', 'creator')
+                    ->orWhere('role', 'student')
+                    ->orWhere('student_verified', true);
+            })
+            ->with([
+                'portfolio.items' => function ($query): void {
+                    $query->orderBy('order', 'asc')
+                        ->orderBy('created_at', 'desc');
+                },
+            ])
+            ->first();
+
+        if (! $creator) {
+            return $this->notFoundResponse('Creator not found');
+        }
+
+        $portfolio = $creator->portfolio;
+        $items = $portfolio?->items ?? collect();
+
+        return $this->successResponse([
+            'creator' => [
+                'id' => $creator->id,
+                'name' => $creator->name,
+                'avatar' => $creator->avatar,
+                'bio' => $creator->bio,
+                'instagram_handle' => $creator->instagram_handle,
+                'tiktok_handle' => $creator->tiktok_handle,
+                'youtube_channel' => $creator->youtube_channel,
+                'facebook_page' => $creator->facebook_page,
+                'twitter_handle' => $creator->twitter_handle,
+            ],
+            'portfolio' => $portfolio ? [
+                'id' => $portfolio->id,
+                'title' => $portfolio->title,
+                'bio' => $portfolio->bio,
+                'profile_picture_url' => $portfolio->profile_picture_url,
+                'project_links' => $portfolio->project_links ?? [],
+                'items' => $items->map(function (PortfolioItem $item): array {
+                    return [
+                        'id' => $item->id,
+                        'title' => $item->title,
+                        'description' => $item->description,
+                        'media_type' => $item->media_type,
+                        'file_url' => $item->file_url,
+                        'thumbnail_url' => $item->thumbnail_url,
+                        'order' => $item->order,
+                    ];
+                })->values(),
+            ] : null,
+            'stats' => [
+                'total_items' => $items->count(),
+                'images_count' => $items->where('media_type', 'image')->count(),
+                'videos_count' => $items->where('media_type', 'video')->count(),
+            ],
+        ], 'Creator profile retrieved successfully');
     }
 }

@@ -48,7 +48,8 @@ class BrandProfileController extends Controller
                     'cnpj' => $user->cnpj,
                     'website' => $user->website,
                     'description' => $user->bio,
-                    'niche' => $user->niche,
+                    'niches' => $this->normalizeNiches($user->niches, $user->niche),
+                    'niche' => $this->primaryNiche($user->niches, $user->niche),
                     'address' => $user->address,
                     'city' => $user->city,
                     'gender' => $user->gender,
@@ -103,6 +104,19 @@ class BrandProfileController extends Controller
                 }
             }
 
+            $hasNichePayload = $request->exists('niches') || $request->exists('niche');
+            if ($hasNichePayload) {
+                $normalizedNiches = $this->normalizeNiches(
+                    $request->input('niches'),
+                    is_string($request->input('niche')) ? $request->input('niche') : null
+                );
+
+                $request->merge([
+                    'niches' => $normalizedNiches,
+                    'niche' => $normalizedNiches[0] ?? null,
+                ]);
+            }
+
             // Filter out avatar from validation if it's not a file (e.g. existing URL string)
             $input = $request->all();
             if (isset($input['avatar']) && (!($input['avatar'] instanceof UploadedFile) && !($input['avatar'] instanceof \Symfony\Component\HttpFoundation\File\UploadedFile))) {
@@ -122,6 +136,8 @@ class BrandProfileController extends Controller
                 'website' => 'sometimes|nullable|string|max:255',
                 'description' => 'sometimes|nullable|string',
                 'niche' => 'sometimes|nullable|string|max:255',
+                'niches' => 'sometimes|array',
+                'niches.*' => 'sometimes|string|max:255',
                 'address' => 'sometimes|nullable|string|max:255',
                 'city' => 'sometimes|nullable|string|max:255',
                 'gender' => 'sometimes|nullable|string|in:male,female,other',
@@ -158,6 +174,15 @@ class BrandProfileController extends Controller
             }
 
             $data = $validator->validated();
+
+            if (array_key_exists('niches', $data) || array_key_exists('niche', $data)) {
+                $normalizedNiches = $this->normalizeNiches(
+                    $data['niches'] ?? null,
+                    isset($data['niche']) && is_string($data['niche']) ? $data['niche'] : null
+                );
+                $data['niches'] = $normalizedNiches;
+                $data['niche'] = $normalizedNiches[0] ?? null;
+            }
 
             if (isset($data['username'])) {
                 $data['name'] = $data['username'];
@@ -201,7 +226,8 @@ class BrandProfileController extends Controller
                     'cnpj' => $user->cnpj,
                     'website' => $user->website,
                     'description' => $user->bio,
-                    'niche' => $user->niche,
+                    'niches' => $this->normalizeNiches($user->niches, $user->niche),
+                    'niche' => $this->primaryNiche($user->niches, $user->niche),
                     'address' => $user->address,
                     'city' => $user->city,
                     'gender' => $user->gender,
@@ -220,6 +246,49 @@ class BrandProfileController extends Controller
                 'message' => 'Failed to update profile: '.$e->getMessage(),
             ], 500);
         }
+    }
+
+    private function normalizeNiches(mixed $niches, ?string $legacyNiche = null): array
+    {
+        $values = [];
+
+        if (is_array($niches)) {
+            $values = $niches;
+        } elseif (is_string($niches)) {
+            $decoded = json_decode($niches, true);
+            if (JSON_ERROR_NONE === json_last_error() && is_array($decoded)) {
+                $values = $decoded;
+            } elseif (trim($niches) !== '') {
+                $values = [$niches];
+            }
+        }
+
+        if (empty($values) && is_string($legacyNiche) && trim($legacyNiche) !== '') {
+            $values = [$legacyNiche];
+        }
+
+        $normalized = [];
+        foreach ($values as $value) {
+            if (! is_string($value)) {
+                continue;
+            }
+
+            $item = trim($value);
+            if ($item === '' || in_array($item, $normalized, true)) {
+                continue;
+            }
+
+            $normalized[] = $item;
+        }
+
+        return $normalized;
+    }
+
+    private function primaryNiche(mixed $niches, ?string $legacyNiche = null): ?string
+    {
+        $normalized = $this->normalizeNiches($niches, $legacyNiche);
+
+        return $normalized[0] ?? null;
     }
 
     public function changePassword(Request $request): JsonResponse

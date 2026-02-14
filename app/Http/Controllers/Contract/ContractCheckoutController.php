@@ -54,7 +54,7 @@ class ContractCheckoutController extends Controller
                 ], 422);
             }
 
-            $contract = Contract::with(['brand', 'creator'])->find($request->contract_id);
+            $contract = Contract::with(['brand', 'creator', 'offer.chatRoom'])->find($request->contract_id);
 
             if ('pending' !== $contract->status || 'payment_pending' !== $contract->workflow_status) {
                 return response()->json([
@@ -81,8 +81,16 @@ class ContractCheckoutController extends Controller
 
             $customerId = $this->customerService->ensureStripeCustomer($user);
             $frontendUrl = (string) config('app.frontend_url', 'http://localhost:5000');
-            $successUrl = "{$frontendUrl}/dashboard/payment-methods?funding_success=true&session_id={CHECKOUT_SESSION_ID}&contract_id={$contract->id}";
-            $cancelUrl = "{$frontendUrl}/dashboard/payment-methods?funding_canceled=true&contract_id={$contract->id}";
+            $roomId = $contract->offer?->chatRoom?->room_id;
+            $messagesUrl = "{$frontendUrl}/dashboard/messages";
+
+            if ($roomId) {
+                $messagesUrl .= '?roomId=' . rawurlencode($roomId);
+            }
+
+            $separator = str_contains($messagesUrl, '?') ? '&' : '?';
+            $successUrl = "{$messagesUrl}{$separator}funding_success=true&session_id={CHECKOUT_SESSION_ID}&contract_id={$contract->id}";
+            $cancelUrl = "{$messagesUrl}{$separator}funding_canceled=true&contract_id={$contract->id}";
 
             $checkoutSession = $this->paymentService->createContractFundingCheckout($contract, $user, $successUrl, $cancelUrl);
 
@@ -152,8 +160,10 @@ class ContractCheckoutController extends Controller
                 'contract_id' => $contract->id,
                 'user_id' => $user->id,
                 'payment_id' => $payment->id,
-                'amount' => $payment->amount,
+                'amount' => $payment->total_amount,
             ]);
+
+            $contract->refresh();
 
             return response()->json([
                 'success' => true,

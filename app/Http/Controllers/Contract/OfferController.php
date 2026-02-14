@@ -317,11 +317,13 @@ class OfferController extends Controller
             ]);
 
             if ($offer->accept()) {
+                $offer->unsetRelation('contract');
+                $offer->refresh();
+
                 $chatRoom = ChatRoom::find($offer->chat_room_id);
+                $contract = $offer->contract()->first();
 
                 if ($chatRoom) {
-                    $contract = $offer->contract;
-
                     $application = CampaignApplication::where('campaign_id', $chatRoom->campaign_id)
                         ->where('creator_id', $chatRoom->creator_id)
                         ->where('status', 'approved')
@@ -382,7 +384,7 @@ class OfferController extends Controller
                     'offer_id' => $offer->id,
                     'creator_id' => $user->id,
                     'brand_id' => $offer->brand_id,
-                    'contract_id' => $offer->contract->id ?? 'null',
+                    'contract_id' => $contract?->id ?? 'null',
                 ]);
 
                 return response()->json([
@@ -390,7 +392,7 @@ class OfferController extends Controller
                     'message' => 'Offer accepted successfully! Contract has been created.',
                     'data' => [
                         'offer_id' => $offer->id,
-                        'contract_id' => $offer->contract->id ?? null,
+                        'contract_id' => $contract?->id ?? null,
                         'status' => $offer->status,
                         'offer' => [
                             'id' => $offer->id,
@@ -402,14 +404,14 @@ class OfferController extends Controller
                             'status' => $offer->status,
                             'brand_id' => $offer->brand_id,
                             'creator_id' => $offer->creator_id,
-                            'chat_room_id' => $chatRoom->room_id,
+                            'chat_room_id' => $chatRoom?->room_id,
                         ],
                         'contract' => $contract ? [
                             'id' => $contract->id,
                             'title' => $contract->title,
                             'description' => $contract->description,
                             'status' => $contract->status,
-                            'workflow_status' => $contract->status,
+                            'workflow_status' => $contract->workflow_status,
                             'brand_id' => $contract->brand_id,
                             'creator_id' => $contract->creator_id,
                             'can_be_completed' => $contract->canBeCompleted(),

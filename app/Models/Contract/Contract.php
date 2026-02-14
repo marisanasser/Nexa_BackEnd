@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 use function in_array;
@@ -50,6 +51,7 @@ use function in_array;
  * @property float               $platform_fee
  * @property float               $creator_amount
  * @property string              $workflow_status
+ * @property null|string         $tracking_code
  * @property bool                $has_brand_review
  * @property bool                $has_creator_review
  * @property bool                $has_both_reviews
@@ -83,6 +85,7 @@ class Contract extends Model
         'platform_fee',
         'creator_amount',
         'workflow_status',
+        'tracking_code',
         'has_brand_review',
         'has_creator_review',
         'has_both_reviews',
@@ -260,6 +263,10 @@ class Contract extends Model
 
     public function isOverdue(): bool
     {
+        if (! $this->expected_completion_at) {
+            return false;
+        }
+
         return $this->isActive() && $this->expected_completion_at->isPast();
     }
 
@@ -582,54 +589,93 @@ class Contract extends Model
             return false;
         }
 
-        $creatorAmount = $this->budget * 0.95;
-        $platformFee = $this->budget * 0.05;
+        $creatorAmount = round((float) $this->budget * 0.95, 2);
+        $platformFee = round((float) $this->budget * 0.05, 2);
 
-        $existingTransaction = Transaction::where('contract_id', $this->id)->first();
+        DB::transaction(function () use ($creatorAmount, $platformFee): void {
+            $jobPayment = JobPayment::where('contract_id', $this->id)
+                ->orderByDesc('id')
+                ->first()
+            ;
 
-        if (!$existingTransaction) {
-            $transaction = Transaction::create([
-                'user_id' => $this->brand_id,
-                'contract_id' => $this->id,
-                'stripe_payment_intent_id' => 'contract_completed_'.$this->id,
-                'status' => 'paid',
-                'amount' => $this->budget,
-                'payment_method' => 'platform_escrow',
-                'payment_data' => [
-                    'type' => 'contract_completion',
+            if (!$jobPayment) {
+                Log::warning('No escrow payment found while completing contract, creating fallback payment record', [
                     'contract_id' => $this->id,
-                    'created_at_completion' => true,
-                ],
-                'paid_at' => now(),
+                    'brand_id' => $this->brand_id,
+                    'creator_id' => $this->creator_id,
+                ]);
+
+                $transaction = Transaction::firstOrCreate(
+                    [
+                        'contract_id' => $this->id,
+                        'payment_method' => 'platform_escrow',
+                    ],
+                    [
+                        'user_id' => $this->brand_id,
+                        'stripe_payment_intent_id' => 'contract_escrow_'.$this->id,
+                        'status' => 'paid',
+                        'amount' => $this->budget,
+                        'payment_data' => [
+                            'type' => 'contract_escrow_fallback',
+                            'contract_id' => $this->id,
+                        ],
+                        'paid_at' => now(),
+                    ]
+                );
+
+                $jobPayment = JobPayment::create([
+                    'contract_id' => $this->id,
+                    'brand_id' => $this->brand_id,
+                    'creator_id' => $this->creator_id,
+                    'total_amount' => $this->budget,
+                    'platform_fee' => $platformFee,
+                    'creator_amount' => $creatorAmount,
+                    'payment_method' => 'platform_escrow',
+                    'status' => 'pending',
+                    'transaction_id' => $transaction->id,
+                    'paid_at' => now(),
+                ]);
+            }
+
+            $alreadyReleased = 'completed' === $jobPayment->status;
+
+            $jobPayment->update([
+                'total_amount' => $this->budget,
+                'platform_fee' => $platformFee,
+                'creator_amount' => $creatorAmount,
+                'status' => 'completed',
+                'processed_at' => now(),
             ]);
-        } else {
-            $transaction = $existingTransaction;
-        }
 
-        $jobPayment = JobPayment::create([
-            'contract_id' => $this->id,
-            'brand_id' => $this->brand_id,
-            'creator_id' => $this->creator_id,
-            'total_amount' => $this->budget,
-            'platform_fee' => $platformFee,
-            'creator_amount' => $creatorAmount,
-            'payment_method' => 'platform_escrow',
-            'status' => 'pending',
-            'transaction_id' => $transaction->id,
-        ]);
+            if (!$alreadyReleased) {
+                $balance = CreatorBalance::firstOrCreate(
+                    ['creator_id' => $this->creator_id],
+                    [
+                        'available_balance' => 0,
+                        'pending_balance' => 0,
+                        'total_earned' => 0,
+                        'total_withdrawn' => 0,
+                    ]
+                );
 
-        $this->update([
-            'status' => 'completed',
-            'completed_at' => now(),
-            'workflow_status' => 'waiting_review',
-            'platform_fee' => $platformFee,
-            'creator_amount' => $creatorAmount,
-        ]);
+                $balance->increment('available_balance', $creatorAmount);
+                $balance->increment('total_earned', $creatorAmount);
+            }
 
-        ContractNotificationService::notifyBrandOfReviewRequired($this);
+            $this->update([
+                'status' => 'completed',
+                'completed_at' => now(),
+                'workflow_status' => 'payment_available',
+                'platform_fee' => $platformFee,
+                'creator_amount' => $creatorAmount,
+            ]);
+        });
 
         ContractNotificationService::notifyCreatorOfContractCompleted($this);
+        PaymentNotificationService::notifyCreatorOfPaymentAvailable($this);
 
+        // Archive chat after payment release to keep campaign history consistent.
+        $this->archiveChatRoom();
         $this->checkAndCompleteCampaign();
 
         return true;
@@ -686,6 +732,10 @@ class Contract extends Model
 
     public function getDaysUntilCompletionAttribute(): int
     {
+        if (! $this->expected_completion_at) {
+            return 0;
+        }
+
         return max(0, now()->diffInDays($this->expected_completion_at, false));
     }
 
@@ -703,12 +753,12 @@ class Contract extends Model
 
         $elapsedDays = $this->started_at->diffInDays(now());
 
-        return min(100, max(0, round(($elapsedDays / $totalDays) * 100)));
+        return (int) min(100, max(0, round(($elapsedDays / $totalDays) * 100)));
     }
 
     public function getRemainingPercentageAttribute(): int
     {
-        return 100 - $this->progress_percentage;
+        return max(0, 100 - (int) $this->progress_percentage);
     }
 
     public function getIsNearCompletionAttribute(): bool

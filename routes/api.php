@@ -16,6 +16,7 @@ use App\Http\Controllers\Common\GuideController;
 use App\Http\Controllers\Common\NotificationController;
 use App\Http\Controllers\Common\TermController;
 use App\Http\Controllers\Contract\ContractController;
+use App\Http\Controllers\Contract\ContractCheckoutController;
 use App\Http\Controllers\Contract\ContractPaymentController;
 use App\Http\Controllers\Contract\OfferController;
 use App\Http\Controllers\Contract\PostContractWorkflowController;
@@ -282,8 +283,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/status', [ContractPaymentController::class, 'getContractPaymentStatus']);
         Route::get('/methods', [ContractPaymentController::class, 'getAvailablePaymentMethods']);
         Route::post('/retry', [ContractPaymentController::class, 'retryPayment']);
-        Route::post('/checkout-session', [ContractPaymentController::class, 'createContractCheckoutSession']);
-        Route::post('/handle-funding-success', [ContractPaymentController::class, 'handleFundingSuccess']);
+        Route::post('/checkout-session', [ContractCheckoutController::class, 'createContractCheckoutSession']);
+        Route::post('/handle-funding-success', [ContractCheckoutController::class, 'handleFundingSuccess']);
     });
 
     Route::prefix('offers')->group(function () {

@@ -71,6 +71,7 @@ class User extends Authenticatable
         'twitter_handle',
         'industry',
         'niche',
+        'niches',
         'state',
         'city',
         'address',
@@ -128,6 +129,7 @@ class User extends Authenticatable
         'suspended_until' => 'datetime',
         'birth_date' => 'date',
         'languages' => 'array',
+        'niches' => 'array',
     ];
 
     public function getAvatarAttribute(): ?string

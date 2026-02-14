@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Payment\Services;
 
 use App\Domain\Notification\Services\ContractNotificationService;
+use App\Domain\Notification\Services\PaymentNotificationService;
 use App\Models\Contract\Contract;
 use App\Models\Payment\CreatorBalance;
 use App\Models\Payment\JobPayment;
@@ -46,8 +47,7 @@ class ContractPaymentService
         string $cancelUrl
     ): Session {
         $customerId = $this->customerService->ensureStripeCustomer($brand);
-
-        $amount = $this->calculateTotalAmount((float) ($contract->budget ?? 0));
+        $amount = (float) ($contract->budget ?? 0);
 
         return $this->stripeWrapper->createCheckoutSession([
             'customer' => $customerId,
@@ -60,7 +60,7 @@ class ContractPaymentService
                             'name' => "Contract: {$contract->title}",
                             'description' => "Payment for contract #{$contract->id}",
                         ],
-                        'unit_amount' => (int) ($amount * 100), // Convert to cents
+                        'unit_amount' => (int) round($amount * 100),
                     ],
                     'quantity' => 1,
                 ]
@@ -82,7 +82,6 @@ class ContractPaymentService
     public function handleContractFundingCompleted(Session $session): void
     {
         $contractId = $session->metadata->contract_id ?? null;
-        $userId = $session->metadata->user_id ?? null;
 
         if (!$contractId) {
             Log::error('Missing contract_id in checkout session', ['session_id' => $session->id]);
@@ -97,8 +96,8 @@ class ContractPaymentService
             return;
         }
 
-        DB::transaction(function () use ($contract, $session, $userId): void {
-            $this->processContractPayment($contract, $session, $userId);
+        DB::transaction(function () use ($contract, $session): void {
+            $this->handleContractFundingSuccess($contract, $session);
         });
     }
 
@@ -108,19 +107,26 @@ class ContractPaymentService
     public function releasePaymentToCreator(Contract $contract): void
     {
         $jobPayment = JobPayment::where('contract_id', $contract->id)
-            ->where('status', 'held')
             ->first()
         ;
 
         if (!$jobPayment) {
-            throw new Exception('No held payment found for this contract');
+            throw new Exception('No escrow payment found for this contract');
+        }
+
+        if ('completed' === $jobPayment->status) {
+            return;
+        }
+
+        if (!in_array($jobPayment->status, ['pending', 'processing'], true)) {
+            throw new Exception("Cannot release payment in '{$jobPayment->status}' status");
         }
 
         DB::transaction(function () use ($contract, $jobPayment): void {
             // Update job payment status
             $jobPayment->update([
                 'status' => 'completed',
-                'released_at' => now(),
+                'processed_at' => now(),
             ]);
 
             // Add to creator balance
@@ -134,6 +140,8 @@ class ContractPaymentService
             // Update contract workflow status
             $contract->update([
                 'workflow_status' => 'payment_available',
+                'platform_fee' => $jobPayment->platform_fee,
+                'creator_amount' => $jobPayment->creator_amount,
             ]);
 
             Log::info('Payment released to creator', [
@@ -142,17 +150,17 @@ class ContractPaymentService
                 'amount' => $jobPayment->creator_amount,
             ]);
 
-            // TODO: Implement notification
-            // PaymentNotificationService::notifyPaymentReleased($contract, $jobPayment);
+            PaymentNotificationService::notifyCreatorOfPaymentAvailable($contract);
         });
     }
 
     /**
-     * Calculate total amount including platform fee.
+     * Calculate total amount to charge.
      */
     public function calculateTotalAmount(float $baseAmount): float
     {
-        return $baseAmount * (1 + self::PLATFORM_FEE_PERCENTAGE);
+        // Brand pays the agreed contract budget. Platform fee is deducted from payout on release.
+        return $baseAmount;
     }
 
     /**
@@ -169,7 +177,7 @@ class ContractPaymentService
     public function refundContractPayment(Contract $contract, ?string $reason = null): void
     {
         $jobPayment = JobPayment::where('contract_id', $contract->id)
-            ->whereIn('status', ['held', 'completed'])
+            ->whereIn('status', ['pending', 'processing', 'completed'])
             ->first()
         ;
 
@@ -178,6 +186,8 @@ class ContractPaymentService
         }
 
         try {
+            $wasCompleted = 'completed' === $jobPayment->status;
+
             // Refund in Stripe
             $this->stripeWrapper->createRefund([
                 'payment_intent' => $jobPayment->stripe_payment_intent_id,
@@ -192,7 +202,7 @@ class ContractPaymentService
             ]);
 
             // If payment was already released, deduct from creator balance
-            if ('completed' === $jobPayment->status) {
+            if ($wasCompleted) {
                 $this->deductFromCreatorBalance($contract->creator_id, $jobPayment->creator_amount);
             }
 
@@ -395,30 +405,45 @@ class ContractPaymentService
             }
             
             // Return existing job payment if transaction exists
-            $jobPayment = JobPayment::where('transaction_id', $existingTransaction->id)->first();
+            $jobPayment = JobPayment::where('contract_id', $contract->id)->first();
             if ($jobPayment) {
                 return $jobPayment;
             }
         }
 
         return DB::transaction(function () use ($contract, $session, $paymentIntentId) {
-            $amount = $session->amount_total / 100;
+            $amount = (float) ($contract->budget ?? 0);
 
-            // Create Transaction
-            $transaction = Transaction::create([
-                'user_id' => $contract->brand_id,
-                'stripe_payment_intent_id' => $paymentIntentId,
-                'status' => 'paid',
-                'amount' => $amount,
-                'payment_method' => 'stripe',
-                'payment_data' => ['session_id' => $session->id, 'type' => 'contract_funding'],
-                'paid_at' => now(),
-                'contract_id' => $contract->id,
-            ]);
+            if (
+                isset($session->amount_total)
+                && (float) $session->amount_total > 0
+                && ((float) $session->amount_total / 100) !== $amount
+            ) {
+                Log::warning('Contract funding amount differs from contract budget', [
+                    'contract_id' => $contract->id,
+                    'session_amount' => (float) $session->amount_total / 100,
+                    'contract_budget' => $amount,
+                    'session_id' => $session->id,
+                ]);
+            }
+
+            // Create or update transaction (idempotent)
+            $transaction = Transaction::updateOrCreate(
+                ['stripe_payment_intent_id' => $paymentIntentId],
+                [
+                    'user_id' => $contract->brand_id,
+                    'status' => 'paid',
+                    'amount' => $amount,
+                    'payment_method' => 'stripe',
+                    'payment_data' => ['session_id' => $session->id, 'type' => 'contract_funding'],
+                    'paid_at' => now(),
+                    'contract_id' => $contract->id,
+                ]
+            );
 
             // Create/Update JobPayment
-            $platformFee = $contract->budget * self::PLATFORM_FEE_PERCENTAGE;
-            $creatorAmount = $contract->budget * (1 - self::PLATFORM_FEE_PERCENTAGE);
+            $platformFee = round($amount * self::PLATFORM_FEE_PERCENTAGE, 2);
+            $creatorAmount = round($amount - $platformFee, 2);
 
             $jobPayment = JobPayment::updateOrCreate(
                 ['contract_id' => $contract->id],
@@ -429,12 +454,16 @@ class ContractPaymentService
                     'platform_fee' => $platformFee,
                     'creator_amount' => $creatorAmount,
                     'payment_method' => 'stripe_escrow',
-                    'status' => 'held', // Money is held until contract completion
-                    'stripe_payment_intent_id' => $paymentIntentId,
+                    'status' => 'pending', // Escrow funded and held until completion
                     'transaction_id' => $transaction->id,
                     'paid_at' => now(),
                 ]
             );
+
+            $contract->update([
+                'platform_fee' => $platformFee,
+                'creator_amount' => $creatorAmount,
+            ]);
 
             // Activate contract immediately after payment success
             $this->activateContract($contract);
@@ -451,34 +480,7 @@ class ContractPaymentService
         Session $session,
         ?string $userId
     ): void {
-        $amount = (float) ($session->metadata->amount ?? $contract->budget);
-        $platformFee = $this->calculatePlatformFee($amount);
-        $creatorAmount = $amount - $platformFee;
-
-        // Create job payment record
-        $jobPayment = JobPayment::create([
-            'contract_id' => $contract->id,
-            'brand_id' => $contract->brand_id,
-            'creator_id' => $contract->creator_id,
-            'amount' => $amount,
-            'platform_fee' => $platformFee,
-            'creator_amount' => $creatorAmount,
-            'status' => 'held', // Money is held until contract completion
-            'stripe_payment_intent_id' => $session->payment_intent,
-            'paid_at' => now(),
-        ]);
-
-        // Update contract status
-        $contract->update([
-            'payment_status' => 'funded',
-            'funded_at' => now(),
-        ]);
-
-        Log::info('Contract payment processed', [
-            'contract_id' => $contract->id,
-            'job_payment_id' => $jobPayment->id,
-            'amount' => $amount,
-        ]);
+        $this->handleContractFundingSuccess($contract, $session);
     }
 
     /**
@@ -492,20 +494,11 @@ class ContractPaymentService
     ): CreatorBalance {
         $balance = CreatorBalance::firstOrCreate(
             ['creator_id' => $creatorId],
-            ['available_balance' => 0, 'pending_balance' => 0, 'total_earned' => 0]
+            ['available_balance' => 0, 'pending_balance' => 0, 'total_earned' => 0, 'total_withdrawn' => 0]
         );
 
         $balance->increment('available_balance', $amount);
         $balance->increment('total_earned', $amount);
-
-        // Record the balance transaction
-        $balance->transactions()->create([
-            'type' => 'credit',
-            'amount' => $amount,
-            'description' => "Payment for contract #{$contractId}",
-            'reference_type' => 'job_payment',
-            'reference_id' => $jobPaymentId,
-        ]);
 
         return $balance->fresh();
     }

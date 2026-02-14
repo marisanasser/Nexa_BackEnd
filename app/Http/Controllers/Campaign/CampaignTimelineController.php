@@ -117,7 +117,7 @@ class CampaignTimelineController extends Controller
     {
         $request->validate([
             'milestone_id' => 'required|exists:campaign_timelines,id',
-            'file' => 'required|file|max:10240',
+            'file' => 'required|file|max:102400',
         ]);
 
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
@@ -379,7 +379,7 @@ class CampaignTimelineController extends Controller
             'delayed_milestones' => $timeline->where('is_delayed', true)->count(),
             'overdue_milestones' => $timeline->filter(fn ($milestone) => $milestone->isOverdue())->count(),
             'progress_percentage' => $timeline->count() > 0
-                ? round(($timeline->where('status', 'completed')->count() / $timeline->count()) * 100) : 0,
+                ? round(($timeline->filter(fn ($milestone) => in_array($milestone->status, ['approved', 'completed'], true))->count() / $timeline->count()) * 100) : 0,
         ];
 
         return response()->json([
@@ -402,15 +402,12 @@ class CampaignTimelineController extends Controller
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
-        if (!$milestone->canBeApproved()) {
+        if (!$milestone->canBeRejected()) {
             return response()->json(['error' => 'Não é possível rejeitar este milestone'], 400);
         }
 
         try {
-            $milestone->update([
-                'status' => 'rejected',
-                'comment' => $request->comment,
-            ]);
+            $milestone->markAsRejected($request->comment);
 
             try {
                 ContractNotificationService::notifyCreatorOfMilestoneRejection($milestone);

@@ -12,6 +12,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            // SQLite has limited ALTER COLUMN support and in fresh setups started_at is already nullable.
+            return;
+        }
+
         // Bypass Doctrine for timestamp change on Postgres
         if (DB::connection()->getDriverName() === 'pgsql') {
             DB::statement('ALTER TABLE contracts ALTER COLUMN started_at DROP NOT NULL');
@@ -27,6 +32,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            return;
+        }
+
         if (DB::connection()->getDriverName() === 'pgsql') {
              // We can't easily revert to NOT NULL without ensuring data integrity, but let's try
              // DB::statement('ALTER TABLE contracts ALTER COLUMN started_at SET NOT NULL');

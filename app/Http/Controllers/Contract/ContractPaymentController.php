@@ -77,14 +77,14 @@ class ContractPaymentController extends Controller
 
         $contract = Contract::with(['brand', 'creator'])->find($request->integer('contract_id'));
 
-        if ('active' !== $contract->status) {
+        if ('pending' !== $contract->status || 'payment_pending' !== $contract->workflow_status) {
             return response()->json([
                 'success' => false,
-                'message' => 'Contract is not in active status',
+                'message' => 'Contract is not in a state that requires funding',
             ], 400);
         }
 
-        if ($contract->payment && 'completed' === $contract->payment->status) {
+        if ($contract->payment && in_array($contract->payment->status, ['pending', 'processing', 'completed'], true)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Payment for this contract has already been processed',
@@ -369,7 +369,7 @@ class ContractPaymentController extends Controller
                 'platform_fee' => $platformFee,
                 'creator_amount' => $creatorAmount,
                 'payment_method' => 'credit_card',
-                'status' => 'paid',
+                'status' => 'pending',
                 'transaction_id' => $transaction->id,
             ]);
 
@@ -460,7 +460,6 @@ class ContractPaymentController extends Controller
 
             $transaction = $this->paymentService->recordContractTransaction($user, $contract, $intent);
             $this->paymentService->recordContractJobPayment($contract, $transaction);
-            $this->paymentService->updateCreatorBalance($contract);
             $this->paymentService->activateContract($contract);
 
             DB::commit();

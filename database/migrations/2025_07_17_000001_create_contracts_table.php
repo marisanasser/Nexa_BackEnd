@@ -20,7 +20,7 @@ return new class extends Migration {
             $table->integer('estimated_days');
             $table->json('requirements')->nullable();
             $table->enum('status', ['pending', 'active', 'completed', 'cancelled', 'disputed', 'payment_failed'])->default('active');
-            $table->timestamp('started_at');
+            $table->timestamp('started_at')->nullable();
             $table->timestamp('expected_completion_at');
             $table->timestamp('completed_at')->nullable();
             $table->timestamp('cancelled_at')->nullable();

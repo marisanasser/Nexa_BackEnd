@@ -63,6 +63,7 @@ class CampaignTimeline extends Model
     public const array STATUSES = [
         'pending' => 'Pendente',
         'approved' => 'Aprovado',
+        'rejected' => 'Rejeitado',
         'delayed' => 'Atrasado',
         'completed' => 'Concluído',
     ];
@@ -100,6 +101,7 @@ class CampaignTimeline extends Model
     protected $appends = [
         'can_upload_file',
         'can_be_approved',
+        'can_be_rejected',
         'can_request_approval',
         'can_justify_delay',
         'can_be_extended',
@@ -136,6 +138,11 @@ class CampaignTimeline extends Model
         return 'approved' === $this->status;
     }
 
+    public function isRejected(): bool
+    {
+        return 'rejected' === $this->status;
+    }
+
     public function isDelayed(): bool
     {
         return 'delayed' === $this->status || $this->is_delayed;
@@ -148,7 +155,7 @@ class CampaignTimeline extends Model
 
     public function isOverdue(): bool
     {
-        return $this->deadline?->isPast() && !$this->isCompleted();
+        return $this->deadline?->isPast() && !in_array($this->status, ['approved', 'completed'], true);
     }
 
     public function getDaysUntilDeadline(): int
@@ -217,17 +224,54 @@ class CampaignTimeline extends Model
 
     public function canBeApproved(): bool
     {
-        return $this->isPending() && $this->file_path;
+        if (!$this->isPending() || !$this->isDependencySatisfied()) {
+            return false;
+        }
+
+        if ($this->isSubmissionMilestone()) {
+            return !empty($this->file_path);
+        }
+
+        if ($this->isApprovalMilestone()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function canBeRejected(): bool
+    {
+        if (!$this->isPending() || !$this->isDependencySatisfied()) {
+            return false;
+        }
+
+        if ($this->isSubmissionMilestone()) {
+            return !empty($this->file_path);
+        }
+
+        if ($this->isApprovalMilestone()) {
+            return true;
+        }
+
+        return false;
     }
 
     public function canUploadFile(): bool
     {
-        return $this->isPending() && in_array($this->milestone_type, ['script_submission', 'video_submission']);
+        if (!$this->isSubmissionMilestone()) {
+            return false;
+        }
+
+        if (!in_array($this->status, ['pending', 'rejected'], true)) {
+            return false;
+        }
+
+        return $this->isDependencySatisfied();
     }
 
     public function canRequestApproval(): bool
     {
-        return $this->isPending() && in_array($this->milestone_type, ['script_approval', 'final_approval']);
+        return $this->isPending() && $this->isApprovalMilestone() && $this->isDependencySatisfied();
     }
 
     public function canJustifyDelay(): bool
@@ -258,6 +302,22 @@ class CampaignTimeline extends Model
         $this->update([
             'status' => 'approved',
             'comment' => $comment,
+            'completed_at' => now(),
+        ]);
+
+        return true;
+    }
+
+    public function markAsRejected(?string $comment = null): bool
+    {
+        if (!$this->canBeRejected()) {
+            return false;
+        }
+
+        $this->update([
+            'status' => 'rejected',
+            'comment' => $comment,
+            'completed_at' => null,
         ]);
 
         return true;
@@ -286,6 +346,9 @@ class CampaignTimeline extends Model
             'file_name' => $fileName,
             'file_size' => $fileSize,
             'file_type' => $fileType,
+            'status' => 'pending',
+            'comment' => null,
+            'completed_at' => null,
         ]);
 
         return true;
@@ -376,17 +439,22 @@ class CampaignTimeline extends Model
 
     public function getCanUploadFileAttribute(): bool
     {
-        return $this->isPending() && in_array($this->milestone_type, ['script_submission', 'video_submission']);
+        return $this->canUploadFile();
     }
 
     public function getCanBeApprovedAttribute(): bool
     {
-        return $this->isPending() && $this->file_path;
+        return $this->canBeApproved();
+    }
+
+    public function getCanBeRejectedAttribute(): bool
+    {
+        return $this->canBeRejected();
     }
 
     public function getCanRequestApprovalAttribute(): bool
     {
-        return $this->isPending() && in_array($this->milestone_type, ['script_approval', 'final_approval']);
+        return $this->canRequestApproval();
     }
 
     public function getCanJustifyDelayAttribute(): bool
@@ -396,11 +464,7 @@ class CampaignTimeline extends Model
 
     public function getCanBeExtendedAttribute(): bool
     {
-        try {
-            return $this->contract && $this->contract->getKey() === (auth()->id() ?? 0);
-        } catch (Exception $e) {
-            return false;
-        }
+        return $this->canBeExtended();
     }
 
     public function getIsExtendedAttribute(): bool
@@ -458,5 +522,39 @@ class CampaignTimeline extends Model
             ->with(['contract.creator', 'contract.brand'])
             ->get()
         ;
+    }
+
+    private function isSubmissionMilestone(): bool
+    {
+        return in_array($this->milestone_type, ['script_submission', 'video_submission'], true);
+    }
+
+    private function isApprovalMilestone(): bool
+    {
+        return in_array($this->milestone_type, ['script_approval', 'final_approval'], true);
+    }
+
+    private function isDependencySatisfied(): bool
+    {
+        return match ($this->milestone_type) {
+            'script_submission' => true,
+            'script_approval' => $this->isMilestoneDone($this->getMilestoneByType('script_submission')),
+            'video_submission' => $this->isMilestoneDone($this->getMilestoneByType('script_approval')),
+            'final_approval' => $this->isMilestoneDone($this->getMilestoneByType('video_submission')),
+            default => true,
+        };
+    }
+
+    private function isMilestoneDone(?self $milestone): bool
+    {
+        return $milestone && in_array($milestone->status, ['approved', 'completed'], true);
+    }
+
+    private function getMilestoneByType(string $milestoneType): ?self
+    {
+        return self::query()
+            ->where('contract_id', $this->contract_id)
+            ->where('milestone_type', $milestoneType)
+            ->first();
     }
 }
