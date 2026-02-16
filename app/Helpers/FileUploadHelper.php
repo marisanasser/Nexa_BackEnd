@@ -169,7 +169,8 @@ class FileUploadHelper
 
         // Check if we should use GCS for resolution
         // If we are in GCS mode, we might have relative paths that need to be resolved to GCS URLs
-        if (self::shouldUseGcs()) {
+        // BUT if the path starts with storage/ or /storage/, it was explicitly saved locally (e.g. fallback)
+        if (self::shouldUseGcs() && !str_starts_with($path, '/storage/') && !str_starts_with($path, 'storage/')) {
             $bucket = env('GOOGLE_CLOUD_STORAGE_BUCKET', 'nexa-uploads-prod');
             return "https://storage.googleapis.com/{$bucket}/" . ltrim($cleanPath, '/');
         }

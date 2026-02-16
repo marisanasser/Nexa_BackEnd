@@ -45,10 +45,10 @@ Route::post('/maintenance/check-password', [MaintenanceController::class, 'check
 Route::post('/maintenance/force-reset-password', [MaintenanceController::class, 'forceResetPassword']);
 Route::post('/maintenance/force-reset-password-public', [MaintenanceController::class, 'forceResetPasswordPublic']);
 
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';
 
 Route::get('/download/{path}', function ($path) {
-    $filePath = storage_path('app/public/'.$path);
+    $filePath = storage_path('app/public/' . $path);
 
     if (! file_exists($filePath)) {
         return response()->json(['error' => 'File not found'], 404);
@@ -68,6 +68,10 @@ Route::get('/download/{path}', function ($path) {
     ]);
 })->where('path', '.*');
 
+Route::get('/campaign-timeline/download-signed/{milestone}', [CampaignTimelineController::class, 'streamFileSigned'])
+    ->name('api.campaign-timeline.download-signed')
+    ->middleware('signed');
+
 Route::get('/guides', [GuideController::class, 'index']);
 Route::get('/guides/{guide}', [GuideController::class, 'show']);
 
@@ -81,7 +85,7 @@ Route::middleware(['auth:sanctum', 'user.status'])->prefix('student')->group(fun
 });
 
 Route::middleware(['auth:sanctum', 'user.status'])->group(function () {
-    
+
     Route::prefix('terms')->group(callback: function () {
         Route::get('/check', [TermController::class, 'check']);
         Route::post('/accept', [TermController::class, 'accept']);
@@ -162,7 +166,7 @@ Route::middleware(['auth:sanctum', 'user.status'])->group(function () {
         Route::post('/mark-read', [ChatController::class, 'markMessagesAsRead']);
         Route::post('/typing-status', [ChatController::class, 'updateTypingStatus']);
         Route::post('/rooms/{roomId}/send-guide-messages', [ChatController::class, 'sendGuideMessages']);
-        
+
         // Rotas para chats arquivados e relatórios de campanhas
         Route::prefix('archived')->group(function () {
             Route::get('/', [ArchivedChatController::class, 'index'])->middleware(['throttle:dashboard']);
@@ -195,7 +199,6 @@ Route::middleware(['auth:sanctum', 'throttle:notifications'])->group(function ()
     Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
     Route::get('/notifications/statistics', [NotificationController::class, 'statistics']);
-
 });
 
 Route::middleware(['auth:sanctum'])->group(function () {
@@ -303,6 +306,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::prefix('contracts')->group(function () {
         Route::get('/', [ContractController::class, 'index']);
         Route::get('/{id}', [ContractController::class, 'show'])->where('id', '[0-9]+');
+        Route::put('/{id}', [ContractController::class, 'update'])->where('id', '[0-9]+');
         Route::get('/chat-room/{roomId}', [ContractController::class, 'getContractsForChatRoom']);
         Route::post('/{id}/activate', [ContractController::class, 'activate'])->where('id', '[0-9]+');
         Route::post('/{id}/complete', [ContractController::class, 'complete'])->where('id', '[0-9]+');
@@ -317,6 +321,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/create-milestones', [CampaignTimelineController::class, 'createMilestones']);
         Route::post('/upload-file', [CampaignTimelineController::class, 'uploadFile']);
         Route::post('/approve-milestone', [CampaignTimelineController::class, 'approveMilestone']);
+        Route::post('/complete-contract', [CampaignTimelineController::class, 'completeContract']);
         Route::post('/reject-milestone', [CampaignTimelineController::class, 'rejectMilestone']);
         Route::post('/complete-milestone', [CampaignTimelineController::class, 'completeMilestone']);
         Route::post('/justify-delay', [CampaignTimelineController::class, 'justifyDelay']);
@@ -365,11 +370,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/payment-available', [PostContractWorkflowController::class, 'getContractsWithPaymentAvailable'])->middleware(['throttle:dashboard']);
         Route::get('/work-history', [PostContractWorkflowController::class, 'getWorkHistory'])->middleware(['throttle:dashboard']);
     });
-
 });
 
 Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
-    require __DIR__.'/api/admin.php';
+    require __DIR__ . '/api/admin.php';
 });
 
 Route::middleware(['auth:sanctum'])->group(function () {
@@ -417,6 +421,9 @@ Route::get('/debug-visibility', function () {
         }),
     ]);
 });
+
+Route::middleware('signed')->get('/campaign-timeline/download-signed/{milestone}', [CampaignTimelineController::class, 'streamFileSigned'])
+    ->name('api.campaign-timeline.download-signed');
 
 Route::get('/debug/password-reset-table', function () {
     try {

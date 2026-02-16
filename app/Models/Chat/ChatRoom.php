@@ -53,6 +53,11 @@ class ChatRoom extends Model
 {
     use HasFactory;
 
+    protected static function newFactory()
+    {
+        return \Database\Factories\ChatRoomFactory::new();
+    }
+
     // Status constants
     public const STATUS_ACTIVE = 'active';
     public const STATUS_COMPLETED = 'completed';
@@ -264,8 +269,8 @@ class ChatRoom extends Model
         $this->load(['campaign', 'brand', 'creator', 'messages', 'offers.contract']);
 
         $offers = $this->offers;
-        $contracts = $offers->map(fn ($offer) => $offer->contract)->filter();
-        
+        $contracts = $offers->map(fn($offer) => $offer->contract)->filter();
+
         $totalBudget = $offers->sum('budget');
         $totalPaid = $contracts->where('status', 'completed')->sum('creator_amount');
         $totalMessages = $this->messages->count();
@@ -369,7 +374,7 @@ class ChatRoom extends Model
                 'room_id' => $existingRoom->room_id,
                 'campaign_id' => $campaignId,
             ]);
-            
+
             // Retorna o existente para visualização (read-only)
             return $existingRoom;
         }

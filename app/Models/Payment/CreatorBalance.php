@@ -78,7 +78,7 @@ class CreatorBalance extends Model
 
     public function formattedTotalBalance(): string
     {
-        return 'R$ '.number_format($this->total_balance, 2, ',', '.');
+        return 'R$ ' . number_format($this->total_balance, 2, ',', '.');
     }
 
     public function getTotalBalanceAttribute(): float
@@ -88,7 +88,7 @@ class CreatorBalance extends Model
 
     public function formattedAvailableBalance(): string
     {
-        return 'R$ '.number_format((float) ($this->available_balance ?? 0), 2, ',', '.');
+        return 'R$ ' . number_format((float) ($this->available_balance ?? 0), 2, ',', '.');
     }
 
     public function getFormattedAvailableBalanceAttribute(): string
@@ -98,7 +98,7 @@ class CreatorBalance extends Model
 
     public function formattedPendingBalance(): string
     {
-        return 'R$ '.number_format((float) ($this->pending_balance ?? 0), 2, ',', '.');
+        return 'R$ ' . number_format((float) ($this->pending_balance ?? 0), 2, ',', '.');
     }
 
     public function getFormattedPendingBalanceAttribute(): string
@@ -108,7 +108,7 @@ class CreatorBalance extends Model
 
     public function formattedTotalEarned(): string
     {
-        return 'R$ '.number_format((float) ($this->total_earned ?? 0), 2, ',', '.');
+        return 'R$ ' . number_format((float) ($this->total_earned ?? 0), 2, ',', '.');
     }
 
     public function getFormattedTotalEarnedAttribute(): string
@@ -118,7 +118,7 @@ class CreatorBalance extends Model
 
     public function formattedTotalWithdrawn(): string
     {
-        return 'R$ '.number_format((float) ($this->total_withdrawn ?? 0), 2, ',', '.');
+        return 'R$ ' . number_format((float) ($this->total_withdrawn ?? 0), 2, ',', '.');
     }
 
     public function getFormattedTotalWithdrawnAttribute(): string
@@ -223,12 +223,12 @@ class CreatorBalance extends Model
 
     public function getFormattedEarningsThisMonthAttribute(): string
     {
-        return 'R$ '.number_format($this->earnings_this_month, 2, ',', '.');
+        return 'R$ ' . number_format($this->earnings_this_month, 2, ',', '.');
     }
 
     public function getFormattedEarningsThisYearAttribute(): string
     {
-        return 'R$ '.number_format($this->earnings_this_year, 2, ',', '.');
+        return 'R$ ' . number_format($this->earnings_this_year, 2, ',', '.');
     }
 
     public function getPendingWithdrawalsCountAttribute(): int
@@ -249,7 +249,7 @@ class CreatorBalance extends Model
 
     public function getFormattedPendingWithdrawalsAmountAttribute(): string
     {
-        return 'R$ '.number_format($this->pending_withdrawals_amount, 2, ',', '.');
+        return 'R$ ' . number_format($this->pending_withdrawals_amount, 2, ',', '.');
     }
 
     public function getRecentTransactions(int $limit = 10)
@@ -266,8 +266,7 @@ class CreatorBalance extends Model
     {
         $allPayments = $this->payments()
             ->with('contract')
-            ->get()
-        ;
+            ->get();
 
         $completedPayments = $allPayments->where('status', 'completed');
         $pendingPayments = $allPayments->where('status', 'pending');
@@ -276,38 +275,36 @@ class CreatorBalance extends Model
 
         $withdrawals = $this->withdrawals()
             ->whereIn('status', ['completed', 'processing'])
-            ->get()
-        ;
+            ->get();
 
         $totalWithdrawn = $withdrawals->sum('amount');
 
         $pendingBalance = $pendingPayments->sum('creator_amount');
 
         $availableFromCompleted = $completedPayments
-            ->filter(fn ($payment) => $payment->contract
-                       && 'payment_available' === $payment->contract->workflow_status)
-            ->sum('creator_amount')
-        ;
+            ->filter(fn($payment) => $payment->contract
+                && 'payment_available' === $payment->contract->workflow_status)
+            ->sum('creator_amount');
 
         $contractsWithAvailablePayment = Contract::where('creator_id', $this->creator_id)
             ->where('workflow_status', 'payment_available')
             ->where('status', 'completed')
-            ->get()
-        ;
+            ->get();
 
         foreach ($contractsWithAvailablePayment as $contract) {
-            $hasPaymentRecord = $allPayments->contains(fn ($payment) => $payment->contract_id === $contract->id);
+            $hasPaymentRecord = $allPayments->contains(fn($payment) => $payment->contract_id === $contract->id);
 
             if (!$hasPaymentRecord && $contract->creator_amount > 0) {
-                $availableFromCompleted += $contract->creator_amount;
+                $creatorAmount = (float) $contract->creator_amount;
+                $availableFromCompleted += $creatorAmount;
                 // Only modify totalEarned if it's not already counted via payments?
                 // The original logic just added it. Assuming integrity check logic.
-                $totalEarned += $contract->creator_amount;
+                $totalEarned += $creatorAmount;
 
                 Log::info('Found contract with payment_available but no payment record', [
                     'contract_id' => $contract->id,
                     'creator_id' => $this->creator_id,
-                    'creator_amount' => $contract->creator_amount,
+                    'creator_amount' => $creatorAmount,
                 ]);
             }
         }

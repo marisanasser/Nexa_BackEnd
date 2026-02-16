@@ -6,6 +6,7 @@ namespace App\Models\Payment;
 
 use App\Domain\Notification\Services\PaymentNotificationService;
 use App\Models\User\User;
+use App\Models\Payment\WithdrawalMethod;
 use Exception;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -80,20 +81,15 @@ class Withdrawal extends Model
     protected $fillable = [
         'creator_id',
         'amount',
-        'platform_fee',
-        'fixed_fee',
         'withdrawal_method',
         'withdrawal_details',
         'status',
-        'transaction_id',
         'processed_at',
-        'failure_reason',
+        'rejection_reason',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
-        'platform_fee' => 'decimal:2',
-        'fixed_fee' => 'decimal:2',
         'withdrawal_details' => 'array',
         'processed_at' => 'datetime',
     ];
@@ -470,8 +466,7 @@ class Withdrawal extends Model
             ->whereNotNull('transaction_id')
             ->orderBy('created_at', 'desc')
             ->get()
-            ->first(fn($jobPayment) => is_numeric($jobPayment->transaction_id))
-        ;
+            ->first(fn($jobPayment) => is_numeric($jobPayment->transaction_id));
 
         if ($jobPayment && is_numeric($jobPayment->transaction_id)) {
             $jobPayment->load('transaction');
@@ -499,8 +494,7 @@ class Withdrawal extends Model
             })
                 ->whereNotNull('stripe_charge_id')
                 ->orderBy('created_at', 'desc')
-                ->first()
-            ;
+                ->first();
 
             if ($contractTransaction && $contractTransaction->stripe_charge_id) {
                 Log::info('Found source charge from contract transaction', [
@@ -517,8 +511,7 @@ class Withdrawal extends Model
         $anyTransaction = Transaction::where('user_id', $creatorId)
             ->whereNotNull('stripe_charge_id')
             ->orderBy('created_at', 'desc')
-            ->first()
-        ;
+            ->first();
 
         if ($anyTransaction && $anyTransaction->stripe_charge_id) {
             Log::info('Found source charge from any creator transaction', [
@@ -705,8 +698,7 @@ class Withdrawal extends Model
                         ->orWhereJsonContains('metadata->withdrawal_id', $this->id)
                     ;
                 })
-                ->first()
-            ;
+                ->first();
 
             if ($existingTransaction) {
                 Log::info('Transaction record already exists for withdrawal', [

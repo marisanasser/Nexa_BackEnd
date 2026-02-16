@@ -284,6 +284,16 @@ class AdminCampaignController extends Controller
 
     private function transformCampaignData(Campaign $campaign): array
     {
+        $brandData = null;
+        if ($campaign->brand) {
+            $brandData = [
+                'id' => $campaign->brand->id,
+                'name' => $campaign->brand->name,
+                'company_name' => $campaign->brand->company_name,
+                'email' => $campaign->brand->email,
+            ];
+        }
+
         return [
             'id' => $campaign->id,
             'title' => $campaign->title,
@@ -292,12 +302,7 @@ class AdminCampaignController extends Controller
             'status' => $campaign->status,
             'is_active' => $campaign->is_active,
             'created_at' => $campaign->created_at->format('Y-m-d H:i:s'),
-            'brand' => [
-                'id' => $campaign->brand->id,
-                'name' => $campaign->brand->name,
-                'company_name' => $campaign->brand->company_name,
-                'email' => $campaign->brand->email,
-            ],
+            'brand' => $brandData,
             'applications_count' => $campaign->applications->count(),
         ];
     }

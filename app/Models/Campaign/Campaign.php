@@ -63,6 +63,9 @@ class Campaign extends Model
 {
     use HasFactory;
 
+    // Status constants
+    public const STATUS_ACTIVE = 'active';
+
     protected $fillable = [
         'brand_id',
         'title',
@@ -91,6 +94,7 @@ class Campaign extends Model
         'target_creator_types',
         'is_active',
         'is_featured',
+        'briefing',
     ];
 
     protected $casts = [
@@ -98,6 +102,7 @@ class Campaign extends Model
         'target_genders' => 'array',
         'target_creator_types' => 'array',
         'attach_file' => 'array',
+        'briefing' => 'array',
         'deadline' => 'date',
         'approved_at' => 'datetime',
         'is_active' => 'boolean',
@@ -245,9 +250,9 @@ class Campaign extends Model
     public function canReceiveBids(): bool
     {
         return $this->isApproved()
-               && $this->is_active
-               && $this->deadline >= now()->toDateString()
-               && $this->bids()->count() < $this->max_bids;
+            && $this->is_active
+            && $this->deadline >= now()->toDateString()
+            && $this->bids()->count() < $this->max_bids;
     }
 
     public function approve($adminId): bool

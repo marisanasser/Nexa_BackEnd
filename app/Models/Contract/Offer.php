@@ -45,6 +45,11 @@ class Offer extends Model
 {
     use HasFactory;
 
+    protected static function newFactory()
+    {
+        return \Database\Factories\OfferFactory::new();
+    }
+
     protected $fillable = [
         'brand_id',
         'creator_id',
@@ -151,7 +156,7 @@ class Offer extends Model
             if (!$existingContract) {
                 $platformFee = round($this->budget * 0.05, 2);
                 $creatorAmount = round($this->budget - $platformFee, 2);
-                
+
                 // Create the contract
                 $contract = Contract::create([
                     'offer_id' => $this->id,
@@ -163,7 +168,7 @@ class Offer extends Model
                     'estimated_days' => $this->estimated_days,
                     'requirements' => $this->requirements,
                     // Status should be pending until the brand funds it
-                    'status' => 'pending', 
+                    'status' => 'pending',
                     'workflow_status' => 'payment_pending',
                     'platform_fee' => $platformFee,
                     'creator_amount' => $creatorAmount,
@@ -221,7 +226,6 @@ class Offer extends Model
                     'due_date' => $contract->expected_completion_at,
                     'order' => 1,
                 ]);
-
             }
 
             // Avoid stale cached relation returning null right after contract creation.

@@ -240,6 +240,7 @@ class ContractController extends Controller
                             'creator_amount' => $contract->formatted_creator_amount,
                             'platform_fee' => $contract->formatted_platform_fee,
                             'estimated_days' => $contract->estimated_days,
+                            'briefing' => $contract->briefing,
                             'requirements' => $contract->requirements,
                             'status' => $contract->status,
                             'workflow_status' => $this->resolveWorkflowStatus($contract),
@@ -316,7 +317,7 @@ class ContractController extends Controller
         $user = $this->getAuthenticatedUser();
 
         try {
-            $contract = Contract::with(['brand:id,name,avatar_url', 'creator:id,name,avatar_url', 'offer'])
+            $contract = Contract::with(['brand:id,name,avatar_url', 'creator:id,name,avatar_url', 'offer.campaign'])
                 ->where(function ($query) use ($user) {
                     $query->where('brand_id', $user->id)
                         ->orWhere('creator_id', $user->id);
@@ -336,10 +337,15 @@ class ContractController extends Controller
                 'id' => $contract->id,
                 'title' => $contract->title,
                 'description' => $contract->description,
+                'campaign' => $contract->offer && $contract->offer->campaign ? [
+                    'id' => $contract->offer->campaign->id,
+                    'title' => $contract->offer->campaign->title,
+                ] : null,
                 'budget' => $contract->formatted_budget,
                 'creator_amount' => $contract->formatted_creator_amount,
                 'platform_fee' => $contract->formatted_platform_fee,
                 'estimated_days' => $contract->estimated_days,
+                'briefing' => $contract->briefing,
                 'requirements' => $contract->requirements,
                 'status' => $contract->status,
                 'workflow_status' => $this->resolveWorkflowStatus($contract),
@@ -404,6 +410,50 @@ class ContractController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to fetch contract',
+            ], 500);
+        }
+    }
+
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $user = $this->getAuthenticatedUser();
+
+        try {
+            $contract = Contract::where(function ($query) use ($user) {
+                $query->where('brand_id', $user->id)
+                    ->orWhere('creator_id', $user->id);
+            })
+                ->find($id);
+
+            if (! $contract) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contrato não encontrado ou acesso negado',
+                ], 404);
+            }
+
+            $validated = $request->validate([
+                'briefing' => 'nullable|array',
+                'requirements' => 'nullable|array',
+            ]);
+
+            $contract->update($validated);
+
+            return response()->json([
+                'success' => true,
+                'data' => $contract->refresh(),
+                'message' => 'Contrato atualizado com sucesso',
+            ]);
+        } catch (Exception $e) {
+            Log::error('Error updating contract', [
+                'user_id' => $user->id,
+                'contract_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update contract',
             ], 500);
         }
     }
@@ -504,6 +554,7 @@ class ContractController extends Controller
                             'creator_amount' => $contract->formatted_creator_amount,
                             'platform_fee' => $contract->formatted_platform_fee,
                             'estimated_days' => $contract->estimated_days,
+                            'briefing' => $contract->briefing,
                             'requirements' => $contract->requirements,
                             'status' => $contract->status,
                             'workflow_status' => $this->resolveWorkflowStatus($contract),
@@ -864,7 +915,7 @@ class ContractController extends Controller
                     $this->createOfferChatMessage($chatRoom, 'contract_terminated', [
                         'sender_id' => $user->id,
                         'message' => $request->reason ?
-                            'Contrato terminado pela marca. Motivo: '.$request->reason :
+                            'Contrato terminado pela marca. Motivo: ' . $request->reason :
                             'Contrato terminado pela marca.',
                         'offer_data' => [
                             'contract_id' => $contract->id,
@@ -1132,7 +1183,7 @@ class ContractController extends Controller
                     'material_sent' => '📦 Material enviado pela marca. Aguardando confirmação de recebimento.',
                     'product_sent' => '📦 Produto enviado pela marca. Aguardando confirmação de recebimento.',
                     'product_received' => '✅ Produto/Material recebido pelo criador. O prazo de produção começou!',
-                    default => 'Status de logística atualizado: '.$newStatus,
+                    default => 'Status de logística atualizado: ' . $newStatus,
                 };
 
                 $this->createSystemMessage($chatRoom, $messageText, [
@@ -1170,4 +1221,3 @@ class ContractController extends Controller
         }
     }
 }
-

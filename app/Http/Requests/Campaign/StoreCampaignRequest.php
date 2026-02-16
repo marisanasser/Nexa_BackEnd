@@ -6,6 +6,7 @@ namespace App\Http\Requests\Campaign;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
+
 class StoreCampaignRequest extends FormRequest
 {
     public function authorize(): bool
@@ -56,7 +57,8 @@ class StoreCampaignRequest extends FormRequest
                 // Check if it exists in input (POST/GET) but is not a valid file in FILES
                 if ($this->has($key)) {
                     $file = $this->file($key);
-                    // Short-circuit: if not instance, don't call isValid
+                    // Do not remove invalid files, let the validator handle them so the user gets an error message
+                    /*
                     if (!($file instanceof \Illuminate\Http\UploadedFile) || !$file->isValid()) {
                         $this->offsetUnset($key);
                         if ($this->files->has($key)) {
@@ -66,6 +68,7 @@ class StoreCampaignRequest extends FormRequest
                             $this->request->remove($key);
                         }
                     }
+                    */
                 }
             }
 
@@ -73,7 +76,7 @@ class StoreCampaignRequest extends FormRequest
             if ($this->has('attach_file')) {
                 $allFiles = $this->allFiles();
                 $files = $allFiles['attach_file'] ?? [];
-                
+
                 // If it's not an array of files, or empty, just remove the input entirely
                 if (!is_array($files)) {
                     // It might be in input as strings
@@ -110,9 +113,19 @@ class StoreCampaignRequest extends FormRequest
                 }
             }
         } catch (\Throwable $e) {
-          Log::error('Error in prepareForValidation: ' . $e->getMessage());
+            Log::error('Error in prepareForValidation: ' . $e->getMessage());
             // Intentionally swallow error to let validation proceed (and likely fail if data is bad)
         }
+    }
+
+    protected function failedValidation(\Illuminate\Contracts\Validation\Validator $validator)
+    {
+        Log::error('Campaign Validation Failed', [
+            'errors' => $validator->errors()->toArray(),
+            'input' => $this->all(),
+            'files' => $this->allFiles(),
+        ]);
+        parent::failedValidation($validator);
     }
 
     public function rules(): array
@@ -128,10 +141,10 @@ class StoreCampaignRequest extends FormRequest
             'category' => ['nullable', 'string', 'max:255'],
             'campaign_type' => ['nullable', 'string', 'max:255'],
             'image_url' => ['nullable', 'url', 'max:2048'],
-            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp,avif,svg', 'max:5120'],
-            'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp,avif,svg', 'max:5120'],
+            'image' => ['nullable', 'file', 'mimes:jpeg,png,jpg,gif,webp,avif,svg', 'max:5120'],
+            'logo' => ['nullable', 'file', 'mimes:jpeg,png,jpg,gif,webp,avif,svg', 'max:5120'],
             'attach_file' => ['nullable'],
-            'attach_file.*' => ['nullable', 'file', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar,jpg,jpeg,png,gif,webp,avif,svg', 'max:10240'],
+            'attach_file.*' => ['nullable', 'file', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar,jpg,jpeg,png,gif,webp,avif,svg,avi,mp4,mov,wmv', 'max:51200'],
             'deadline' => ['required', 'date'],
             'max_bids' => ['nullable', 'integer', 'min:1', 'max:100'],
             'min_age' => ['nullable', 'integer', 'min:18', 'max:100'],
@@ -165,8 +178,8 @@ class StoreCampaignRequest extends FormRequest
             'logo.mimes' => 'The logo must be a file of type: jpeg, png, jpg, gif, webp.',
             'logo.max' => 'The logo must not be larger than 5MB.',
             'attach_file.file' => 'The attach file must be a valid file.',
-            'attach_file.mimes' => 'The attach file must be a file of type: pdf, doc, docx, xls, xlsx, ppt, pptx, txt, zip, rar.',
-            'attach_file.max' => 'The attach file must not be larger than 10MB.',
+            'attach_file.mimes' => 'The attach file must be a file of type: pdf, doc, docx, xls, xlsx, ppt, pptx, txt, zip, rar, jpg, jpeg, png, gif, webp, avif, svg, avi, mp4, mov, wmv.',
+            'attach_file.max' => 'The attach file must not be larger than 50MB.',
             'max_bids.integer' => 'Maximum bids must be a valid number.',
             'max_bids.min' => 'Maximum bids must be at least 1.',
             'max_bids.max' => 'Maximum bids cannot exceed 100.',
@@ -189,8 +202,7 @@ class StoreCampaignRequest extends FormRequest
 
     public function attributes(): array
     {
-        return [
-        ];
+        return [];
     }
 
     public function withValidator($validator): void

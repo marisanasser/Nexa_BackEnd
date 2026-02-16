@@ -56,13 +56,20 @@ class AdminDashboardController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->limit(10)
                 ->get()
-                ->map(fn ($campaign) => [
-                    'id' => $campaign->id,
-                    'title' => $campaign->title,
-                    'brand' => $campaign->brand->company_name ?: $campaign->brand->name,
-                    'type' => $campaign->campaign_type ?: 'Vídeo',
-                    'value' => $campaign->budget ? (float) $campaign->budget : 0,
-                ])
+                ->map(function ($campaign) {
+                    $brandName = 'Desconhecido';
+                    if ($campaign->brand) {
+                        $brandName = $campaign->brand->company_name ?: $campaign->brand->name;
+                    }
+
+                    return [
+                        'id' => $campaign->id,
+                        'title' => $campaign->title,
+                        'brand' => $brandName,
+                        'type' => $campaign->campaign_type ?: 'Vídeo',
+                        'value' => $campaign->budget ? (float) $campaign->budget : 0,
+                    ];
+                })
             ;
 
             return response()->json([

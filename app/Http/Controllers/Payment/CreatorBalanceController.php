@@ -14,6 +14,8 @@ use App\Http\Controllers\Base\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+use Throwable;
+
 class CreatorBalanceController extends Controller
 {
     use HasApiResponses;
@@ -35,7 +37,7 @@ class CreatorBalanceController extends Controller
         }
 
         try {
-            $balance = $this->balanceService->ensureBalanceExists($user);
+            $balance = $this->balanceService->getOrCreateBalance($user);
             $summary = $this->balanceService->getBalanceSummary($user);
 
             // Get recent transactions manually for now as service doesn't have it yet encapsulated perfectly with exact format
@@ -46,21 +48,20 @@ class CreatorBalanceController extends Controller
                 ->orderBy('processed_at', 'desc')
                 ->limit(5)
                 ->get()
-                ->map(fn ($payment) => [
+                ->map(fn($payment) => [
                     'id' => $payment->id,
-                    'contract_title' => $payment->contract->title,
+                    'contract_title' => $payment->contract?->title ?? 'Contrato Removido',
                     'amount' => $payment->formatted_creator_amount,
                     'status' => $payment->status,
                     'processed_at' => $payment->processed_at?->format('Y-m-d H:i:s'),
-                ])
-            ;
+                ]);
 
-            $recentWithdrawals = collect($this->balanceService->getWithdrawalHistory($user, 5)->items())->map(fn ($withdrawal) => [
+            $recentWithdrawals = collect($this->balanceService->getWithdrawalHistory($user, 5)->items())->map(fn($withdrawal) => [
                 'id' => $withdrawal->id,
                 'amount' => $withdrawal->formatted_amount,
-                'method' => $withdrawal->withdrawal_method_label,
+                'method' => $withdrawal->withdrawal_method_label ?? $withdrawal->withdrawal_method,
                 'status' => $withdrawal->status,
-                'created_at' => $withdrawal->created_at->format('Y-m-d H:i:s'),
+                'created_at' => $withdrawal->created_at?->format('Y-m-d H:i:s'),
             ]);
 
             // Earnings stats (keep logic from model access)
@@ -93,10 +94,13 @@ class CreatorBalanceController extends Controller
                 'recent_transactions' => $recentTransactions,
                 'recent_withdrawals' => $recentWithdrawals,
             ], 'Balance retrieved successfully');
-        } catch (Exception $e) {
-            Log::error('Balance fetch error', ['error' => $e->getMessage()]);
+        } catch (Throwable $e) {
+            Log::error('Balance fetch error: ' . $e->getMessage(), [
+                'user_id' => $user->id,
+                'trace' => $e->getTraceAsString()
+            ]);
 
-            return $this->errorResponse('Failed to fetch balance', 500);
+            return $this->errorResponse('Failed to fetch balance: ' . $e->getMessage(), 500);
         }
     }
 
@@ -136,42 +140,40 @@ class CreatorBalanceController extends Controller
                 $earnings = $balance->payments()
                     ->with('contract:id,title')
                     ->where('status', 'completed')
-                    ->when($days < 365, fn ($q) => $q->where('processed_at', '>=', now()->subDays($days)))
+                    ->when($days < 365, fn($q) => $q->where('processed_at', '>=', now()->subDays($days)))
                     ->orderBy('processed_at', 'desc')
                     ->get()
-                    ->map(fn ($p) => [
+                    ->map(fn($p) => [
                         'type' => 'earning',
                         'id' => $p->id,
                         'amount' => $p->creator_amount,
                         'formatted_amount' => $p->formatted_creator_amount,
-                        'description' => 'Payment for: '.($p->contract->title ?? 'Contract'),
+                        'description' => 'Payment for: ' . ($p->contract->title ?? 'Contract'),
                         'date' => $p->processed_at->format('Y-m-d H:i:s'),
                         'status' => $p->status,
-                    ])
-                ;
+                    ]);
                 $history = array_merge($history, $earnings->toArray());
             }
 
             if ('all' === $type || 'withdrawals' === $type) {
                 $withdrawals = $balance->withdrawals()
-                    ->when($days < 365, fn ($q) => $q->where('created_at', '>=', now()->subDays($days)))
+                    ->when($days < 365, fn($q) => $q->where('created_at', '>=', now()->subDays($days)))
                     ->orderBy('created_at', 'desc')
                     ->get()
-                    ->map(fn ($w) => [
+                    ->map(fn($w) => [
                         'type' => 'withdrawal',
                         'id' => $w->id,
                         'amount' => -$w->amount,
-                        'formatted_amount' => '-'.$w->formatted_amount,
-                        'description' => 'Withdrawal via '.$w->withdrawal_method_label,
+                        'formatted_amount' => '-' . $w->formatted_amount,
+                        'description' => 'Withdrawal via ' . $w->withdrawal_method_label,
                         'date' => $w->created_at->format('Y-m-d H:i:s'),
                         'status' => $w->status,
-                    ])
-                ;
+                    ]);
                 $history = array_merge($history, $withdrawals->toArray());
             }
 
             // Sort by date desc
-            usort($history, fn ($a, $b) => strtotime($b['date']) - strtotime($a['date']));
+            usort($history, fn($a, $b) => strtotime($b['date']) - strtotime($a['date']));
 
             // Calc running balance
             $runningBalance = 0;
@@ -184,7 +186,7 @@ class CreatorBalanceController extends Controller
             foreach ($reversedHistory as &$item) {
                 $runningBalance += $item['amount'];
                 $item['running_balance'] = $runningBalance;
-                $item['formatted_running_balance'] = 'R$ '.number_format($runningBalance, 2, ',', '.');
+                $item['formatted_running_balance'] = 'R$ ' . number_format($runningBalance, 2, ',', '.');
             }
             $historyByDateDesc = array_reverse($reversedHistory);
 
@@ -200,7 +202,7 @@ class CreatorBalanceController extends Controller
                 ],
             ]);
         } catch (Exception $e) {
-            return $this->errorResponse('Failed to fetch history: '.$e->getMessage(), 500);
+            return $this->errorResponse('Failed to fetch history: ' . $e->getMessage(), 500);
         }
     }
 
@@ -243,7 +245,7 @@ class CreatorBalanceController extends Controller
             $paginator = $this->balanceService->getWorkHistory($user);
 
             // Transform logic from old controller
-            $paginator = $paginator->through(fn ($contract) => [
+            $paginator = $paginator->through(fn($contract) => [
                 'id' => $contract->id,
                 'title' => $contract->title,
                 'description' => $contract->description,

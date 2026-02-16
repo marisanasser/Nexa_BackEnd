@@ -35,6 +35,36 @@ use Laravel\Sanctum\HasApiTokens;
 /**
  * Class User
  * @package App\Models\User
+ *
+ * @property int $id
+ * @property string $name
+ * @property string $email
+ * @property string $role
+ * @property string|null $avatar_url
+ * @property string|null $bio
+ * @property string|null $company_name
+ * @property string|null $profession
+ * @property string|null $gender
+ * @property \Illuminate\Support\Carbon|null $birth_date
+ * @property string|null $creator_type
+ * @property string|null $instagram_handle
+ * @property string|null $tiktok_handle
+ * @property string|null $youtube_channel
+ * @property string|null $facebook_page
+ * @property string|null $twitter_handle
+ * @property string|null $industry
+ * @property string|null $niche
+ * @property array|null $niches
+ * @property string|null $state
+ * @property string|null $language
+ * @property array|null $languages
+ * @property bool $has_premium
+ * @property bool $student_verified
+ * @property \Illuminate\Support\Carbon|null $premium_expires_at
+ * @property \Illuminate\Support\Carbon|null $free_trial_expires_at
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property bool $is_admin
  */
 class User extends Authenticatable
 {
@@ -286,8 +316,8 @@ class User extends Authenticatable
         $halfStar = $this->average_rating - $fullStars >= 0.5;
         $emptyStars = 5 - $fullStars - ($halfStar ? 1 : 0);
 
-        return str_repeat('★', $fullStars).
-            ($halfStar ? '☆' : '').
+        return str_repeat('★', $fullStars) .
+            ($halfStar ? '☆' : '') .
             str_repeat('☆', $emptyStars);
     }
 
@@ -402,9 +432,9 @@ class User extends Authenticatable
                             $last4 = $bankAccount->last4 ?? '****';
                             $accountHolderName = $bankAccount->account_holder_name ?? '';
 
-                            $bankDisplayName = $bankName.' •••• '.$last4;
+                            $bankDisplayName = $bankName . ' •••• ' . $last4;
                             if ($accountHolderName) {
-                                $bankDisplayName .= ' ('.$accountHolderName.')';
+                                $bankDisplayName .= ' (' . $accountHolderName . ')';
                             }
 
                             $methods[] = [
@@ -544,7 +574,7 @@ class User extends Authenticatable
     public function getDisplayNameAttribute(): string
     {
         if ($this->isBrand() && $this->company_name) {
-            return $this->name.' ('.$this->company_name.')';
+            return $this->name . ' (' . $this->company_name . ')';
         }
 
         return $this->name;

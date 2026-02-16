@@ -67,6 +67,11 @@ class Contract extends Model
 {
     use HasFactory;
 
+    protected static function newFactory()
+    {
+        return \Database\Factories\ContractFactory::new();
+    }
+
     protected $fillable = [
         'offer_id',
         'brand_id',
@@ -76,6 +81,7 @@ class Contract extends Model
         'budget',
         'estimated_days',
         'requirements',
+        'briefing',
         'status',
         'started_at',
         'expected_completion_at',
@@ -98,6 +104,7 @@ class Contract extends Model
     protected $casts = [
         'budget' => 'decimal:2',
         'requirements' => 'array',
+        'briefing' => 'array',
         'started_at' => 'datetime',
         'expected_completion_at' => 'datetime',
         'completed_at' => 'datetime',
@@ -182,12 +189,11 @@ class Contract extends Model
                     })
                 ;
             })
-            ->get()
-        ;
+            ->get();
 
-        $fundedContracts = $contracts->filter(fn ($contract) => $contract->isFunded());
+        $fundedContracts = $contracts->filter(fn($contract) => $contract->isFunded());
 
-        $contractsNeedingFunding = $contracts->filter(fn ($contract) => $contract->needsFunding());
+        $contractsNeedingFunding = $contracts->filter(fn($contract) => $contract->needsFunding());
 
         return [
             'has_funded' => $fundedContracts->isNotEmpty(),
@@ -459,7 +465,7 @@ class Contract extends Model
         }
 
         $chatRoom = ChatRoom::find($this->offer->chat_room_id);
-        
+
         if (!$chatRoom) {
             Log::warning('Chat room not found for archiving', [
                 'contract_id' => $this->id,
@@ -473,7 +479,8 @@ class Contract extends Model
             $query->where('campaign_id', $chatRoom->campaign_id);
         })->get();
 
-        $allCompleted = $campaignContracts->every(fn ($contract) => 
+        $allCompleted = $campaignContracts->every(
+            fn($contract) =>
             in_array($contract->status, ['completed', 'cancelled', 'terminated'])
         );
 
@@ -526,8 +533,8 @@ class Contract extends Model
         }
 
         return ('pending' === $this->status && 'payment_pending' === $this->workflow_status)
-               || !$this->payment
-               || ($this->payment && in_array($this->payment->status, ['pending', 'failed']));
+            || !$this->payment
+            || ($this->payment && in_array($this->payment->status, ['pending', 'failed']));
     }
 
     public function isPaymentPending(): bool
@@ -595,8 +602,7 @@ class Contract extends Model
         DB::transaction(function () use ($creatorAmount, $platformFee): void {
             $jobPayment = JobPayment::where('contract_id', $this->id)
                 ->orderByDesc('id')
-                ->first()
-            ;
+                ->first();
 
             if (!$jobPayment) {
                 Log::warning('No escrow payment found while completing contract, creating fallback payment record', [
@@ -612,7 +618,7 @@ class Contract extends Model
                     ],
                     [
                         'user_id' => $this->brand_id,
-                        'stripe_payment_intent_id' => 'contract_escrow_'.$this->id,
+                        'stripe_payment_intent_id' => 'contract_escrow_' . $this->id,
                         'status' => 'paid',
                         'amount' => $this->budget,
                         'payment_data' => [
@@ -717,17 +723,17 @@ class Contract extends Model
 
     public function getFormattedBudgetAttribute(): string
     {
-        return 'R$ '.number_format((float) ($this->budget ?? 0), 2, ',', '.');
+        return 'R$ ' . number_format((float) ($this->budget ?? 0), 2, ',', '.');
     }
 
     public function getFormattedCreatorAmountAttribute(): string
     {
-        return 'R$ '.number_format((float) ($this->creator_amount ?? 0), 2, ',', '.');
+        return 'R$ ' . number_format((float) ($this->creator_amount ?? 0), 2, ',', '.');
     }
 
     public function getFormattedPlatformFeeAttribute(): string
     {
-        return 'R$ '.number_format((float) ($this->platform_fee ?? 0), 2, ',', '.');
+        return 'R$ ' . number_format((float) ($this->platform_fee ?? 0), 2, ',', '.');
     }
 
     public function getDaysUntilCompletionAttribute(): int
@@ -799,16 +805,16 @@ class Contract extends Model
             return;
         }
 
-        $allCompletedOrCancelled = $allContracts->every(fn ($contract) => in_array($contract->status, ['completed', 'cancelled']));
+        $allCompletedOrCancelled = $allContracts->every(fn($contract) => in_array($contract->status, ['completed', 'cancelled']));
 
         if ($allCompletedOrCancelled) {
             $campaign->complete();
-            
+
             // Log the automatic completion
             try {
                 app(\App\Domain\Campaign\Services\CampaignAuditService::class)->log(
-                    $campaign, 
-                    'campaign_auto_completed', 
+                    $campaign,
+                    'campaign_auto_completed',
                     ['reason' => 'All contracts completed and deadline passed/reached']
                 );
             } catch (Exception $e) {
@@ -925,7 +931,7 @@ class Contract extends Model
             return;
         }
 
-        $allCancelledOrTerminated = $allContracts->every(fn ($contract) => in_array($contract->status, ['cancelled', 'terminated']));
+        $allCancelledOrTerminated = $allContracts->every(fn($contract) => in_array($contract->status, ['cancelled', 'terminated']));
 
         if ($allCancelledOrTerminated) {
             $campaign->cancel();

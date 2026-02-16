@@ -47,7 +47,7 @@ class CampaignController extends Controller
 
             $query = Campaign::with(['brand', 'bids'])->withCount('applications');
 
-            error_log('Request'.json_encode($request));
+            error_log('Request' . json_encode($request));
 
             if ($user->isCreator() || $user->isStudent()) {
                 Log::info('Creator/Student listing campaigns', ['user_id' => $user->id, 'role' => $user->role]);
@@ -93,11 +93,28 @@ class CampaignController extends Controller
                 $query->where('deadline', '<=', $request->deadline_to);
             }
 
+            // Filters based on creator profile removed as per request to show all campaigns
+            /*
             if ($user->isCreator()) {
                 $creator = $user;
 
                 if ($creator->creator_type) {
-                    $query->whereJsonContains('target_creator_types', $creator->creator_type);
+                    $query->where(function ($q) use ($creator): void {
+                        $q->whereNull('target_creator_types')
+                            ->orWhereJsonLength('target_creator_types', 0)
+                        ;
+
+                        if ('both' === $creator->creator_type) {
+                            $q->orWhereJsonContains('target_creator_types', 'ugc')
+                                ->orWhereJsonContains('target_creator_types', 'influencer')
+                                ->orWhereJsonContains('target_creator_types', 'both')
+                            ;
+                        } else {
+                            $q->orWhereJsonContains('target_creator_types', $creator->creator_type)
+                                ->orWhereJsonContains('target_creator_types', 'both')
+                            ;
+                        }
+                    });
                 }
 
                 if ($creator->birth_date) {
@@ -122,12 +139,8 @@ class CampaignController extends Controller
                     });
                 }
 
-                if ('influencer' === $creator->creator_type || 'both' === $creator->creator_type) {
-                    if (!$creator->instagram_handle) {
-                        $query->whereRaw('1 = 0');
-                    }
-                }
             }
+            */
 
             if ($request->has('search')) {
                 $search = $request->search;
@@ -171,7 +184,7 @@ class CampaignController extends Controller
                 ->header('Expires', '0')
             ;
         } catch (Exception $e) {
-            Log::error('Failed to retrieve campaigns: '.$e->getMessage());
+            Log::error('Failed to retrieve campaigns: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -216,8 +229,7 @@ class CampaignController extends Controller
 
             $campaigns = $query->orderBy('is_featured', 'desc')
                 ->orderBy('created_at', 'desc')
-                ->get()
-            ;
+                ->get();
 
             return response()->json([
                 'success' => true,
@@ -228,7 +240,7 @@ class CampaignController extends Controller
                 ->header('Expires', '0')
             ;
         } catch (Exception $e) {
-            Log::error('Failed to retrieve all campaigns: '.$e->getMessage());
+            Log::error('Failed to retrieve all campaigns: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -281,7 +293,7 @@ class CampaignController extends Controller
                 ],
             ]);
         } catch (Exception $e) {
-            Log::error('Failed to retrieve pending campaigns: '.$e->getMessage());
+            Log::error('Failed to retrieve pending campaigns: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -302,8 +314,7 @@ class CampaignController extends Controller
             }
 
             $query = Campaign::with(['brand', 'approvedBy', 'bids'])
-                ->where('brand_id', $user->id)
-            ;
+                ->where('brand_id', $user->id);
 
             if ($request->has('status')) {
                 $query->where('status', $request->status);
@@ -327,7 +338,7 @@ class CampaignController extends Controller
                 ],
             ]);
         } catch (Exception $e) {
-            Log::error('Failed to retrieve user campaigns: '.$e->getMessage());
+            Log::error('Failed to retrieve user campaigns: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -348,7 +359,7 @@ class CampaignController extends Controller
                 return response()->json([
                     'success' => false,
                     'error' => 'Invalid status',
-                    'message' => 'Status must be one of: '.implode(', ', $validStatuses),
+                    'message' => 'Status must be one of: ' . implode(', ', $validStatuses),
                 ], 400);
             }
 
@@ -451,7 +462,7 @@ class CampaignController extends Controller
                 ->header('Expires', '0')
             ;
         } catch (Exception $e) {
-            Log::error('Failed to retrieve campaigns: '.$e->getMessage());
+            Log::error('Failed to retrieve campaigns: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -542,7 +553,7 @@ class CampaignController extends Controller
                 'data' => $campaign->load(['brand', 'bids']),
             ], 201);
         } catch (Exception $e) {
-            Log::error('Failed to create campaign: '.$e->getMessage());
+            Log::error('Failed to create campaign: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -581,7 +592,7 @@ class CampaignController extends Controller
                 'data' => $campaign,
             ]);
         } catch (Exception $e) {
-            Log::error('Failed to retrieve campaign: '.$e->getMessage());
+            Log::error('Failed to retrieve campaign: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -693,7 +704,7 @@ class CampaignController extends Controller
                 'message' => 'Campaign deleted successfully',
             ]);
         } catch (Exception $e) {
-            Log::error('Failed to delete campaign: '.$e->getMessage());
+            Log::error('Failed to delete campaign: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -757,7 +768,7 @@ class CampaignController extends Controller
                 'data' => $statistics,
             ]);
         } catch (Exception $e) {
-            Log::error('Failed to retrieve statistics: '.$e->getMessage());
+            Log::error('Failed to retrieve statistics: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -796,7 +807,7 @@ class CampaignController extends Controller
                 'data' => $campaign->load(['brand', 'approvedBy']),
             ]);
         } catch (Exception $e) {
-            Log::error('Failed to approve campaign: '.$e->getMessage());
+            Log::error('Failed to approve campaign: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -846,7 +857,7 @@ class CampaignController extends Controller
                 'errors' => $e->errors(),
             ], 422);
         } catch (Exception $e) {
-            Log::error('Failed to reject campaign: '.$e->getMessage());
+            Log::error('Failed to reject campaign: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -876,8 +887,7 @@ class CampaignController extends Controller
                 $query->where('campaign_id', $campaign->id);
             })
                 ->whereIn('status', ['pending', 'active'])
-                ->get()
-            ;
+                ->get();
 
             $refundedAmount = 0;
             $refundedContracts = [];
@@ -929,7 +939,7 @@ class CampaignController extends Controller
             return response()->json($response);
         } catch (Exception $e) {
             DB::rollBack();
-            Log::error('Failed to archive campaign: '.$e->getMessage(), [
+            Log::error('Failed to archive campaign: ' . $e->getMessage(), [
                 'campaign_id' => $campaign->id ?? null,
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -974,7 +984,7 @@ class CampaignController extends Controller
                 'data' => $campaign->load(['brand']),
             ]);
         } catch (Exception $e) {
-            Log::error('Failed to toggle campaign active status: '.$e->getMessage());
+            Log::error('Failed to toggle campaign active status: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -1002,7 +1012,7 @@ class CampaignController extends Controller
                 'data' => $campaign,
             ]);
         } catch (Exception $e) {
-            Log::error('Failed to toggle campaign featured status: '.$e->getMessage());
+            Log::error('Failed to toggle campaign featured status: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -1024,8 +1034,7 @@ class CampaignController extends Controller
 
             $favorite = CampaignFavorite::where('creator_id', $user->id)
                 ->where('campaign_id', $campaign->id)
-                ->first()
-            ;
+                ->first();
 
             if ($favorite) {
                 $favorite->delete();
@@ -1049,7 +1058,7 @@ class CampaignController extends Controller
                 ],
             ]);
         } catch (Exception $e) {
-            Log::error('Failed to toggle campaign favorite status: '.$e->getMessage());
+            Log::error('Failed to toggle campaign favorite status: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -1072,8 +1081,7 @@ class CampaignController extends Controller
             $favorites = CampaignFavorite::where('creator_id', $user->id)
                 ->with(['campaign.brand', 'campaign.bids'])
                 ->get()
-                ->pluck('campaign')
-            ;
+                ->pluck('campaign');
 
             return response()->json([
                 'success' => true,
@@ -1081,7 +1089,7 @@ class CampaignController extends Controller
                 'count' => $favorites->count(),
             ]);
         } catch (Exception $e) {
-            Log::error('Failed to fetch favorite campaigns: '.$e->getMessage());
+            Log::error('Failed to fetch favorite campaigns: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -1099,14 +1107,12 @@ class CampaignController extends Controller
         try {
             $transaction = Transaction::where('contract_id', $contract->id)
                 ->where('status', 'paid')
-                ->first()
-            ;
+                ->first();
 
             if (!$transaction) {
                 $transaction = Transaction::where('status', 'paid')
                     ->whereJsonContains('payment_data->contract_id', (string) $contract->id)
-                    ->first()
-                ;
+                    ->first();
             }
 
             if ($transaction && $transaction->stripe_payment_intent_id) {
@@ -1196,8 +1202,7 @@ class CampaignController extends Controller
     {
         $jobPayment = JobPayment::where('contract_id', $contract->id)
             ->where('status', '!=', 'refunded')
-            ->first()
-        ;
+            ->first();
 
         if ($jobPayment) {
             if ('completed' === $jobPayment->status) {
@@ -1240,7 +1245,7 @@ class CampaignController extends Controller
                         'user_id' => $brand->id,
                         'type' => 'campaign_cancelled',
                         'title' => 'Campanha Cancelada - Reembolso Processado',
-                        'message' => "Sua campanha '{$campaign->title}' foi cancelada. Um reembolso de R$ ".number_format($refundedAmount, 2, ',', '.').' foi processado para '.count($refundedContracts).' contrato(s).',
+                        'message' => "Sua campanha '{$campaign->title}' foi cancelada. Um reembolso de R$ " . number_format($refundedAmount, 2, ',', '.') . ' foi processado para ' . count($refundedContracts) . ' contrato(s).',
                         'data' => [
                             'campaign_id' => $campaign->id,
                             'campaign_title' => $campaign->title,
@@ -1325,9 +1330,20 @@ class CampaignController extends Controller
         ]);
 
         $fields = [
-            'title', 'description', 'budget', 'requirements', 'remuneration_type',
-            'target_states', 'target_genders', 'target_creator_types',
-            'min_age', 'max_age', 'category', 'campaign_type', 'deadline', 'status',
+            'title',
+            'description',
+            'budget',
+            'requirements',
+            'remuneration_type',
+            'target_states',
+            'target_genders',
+            'target_creator_types',
+            'min_age',
+            'max_age',
+            'category',
+            'campaign_type',
+            'deadline',
+            'status',
         ];
 
         $data = [];
@@ -1342,7 +1358,7 @@ class CampaignController extends Controller
             $data = $request->only($fields);
         }
 
-        $data = array_filter($data, fn ($v) => !is_null($v));
+        $data = array_filter($data, fn($v) => !is_null($v));
 
         if (isset($data['deadline']) && is_string($data['deadline'])) {
             try {
@@ -1471,7 +1487,7 @@ class CampaignController extends Controller
             return [];
         }
 
-        $boundary = '--'.trim($matches[1]);
+        $boundary = '--' . trim($matches[1]);
         $parts = explode($boundary, $rawContent);
         $parsedData = [];
 
@@ -1608,9 +1624,20 @@ class CampaignController extends Controller
         ]);
 
         $fields = [
-            'title', 'description', 'budget', 'requirements', 'remuneration_type',
-            'target_states', 'target_genders', 'target_creator_types',
-            'min_age', 'max_age', 'category', 'campaign_type', 'deadline', 'status',
+            'title',
+            'description',
+            'budget',
+            'requirements',
+            'remuneration_type',
+            'target_states',
+            'target_genders',
+            'target_creator_types',
+            'min_age',
+            'max_age',
+            'category',
+            'campaign_type',
+            'deadline',
+            'status',
         ];
 
         $data = [];
@@ -1625,7 +1652,7 @@ class CampaignController extends Controller
             $data = $request->only($fields);
         }
 
-        $data = array_filter($data, fn ($v) => !is_null($v));
+        $data = array_filter($data, fn($v) => !is_null($v));
 
         if (isset($data['deadline']) && is_string($data['deadline'])) {
             try {

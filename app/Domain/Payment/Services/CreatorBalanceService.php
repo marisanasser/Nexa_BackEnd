@@ -28,8 +28,7 @@ class CreatorBalanceService
 
     public function __construct(
         private readonly ?StripeWrapper $stripe = null
-    ) {
-    }
+    ) {}
 
     /**
      * Get or create creator balance.
@@ -119,10 +118,9 @@ class CreatorBalanceService
             $withdrawal = Withdrawal::create([
                 'creator_id' => $creator->id,
                 'amount' => $amount,
-                'method' => $withdrawalMethod,
-                'details' => $withdrawalDetails,
+                'withdrawal_method' => $withdrawalMethod,
+                'withdrawal_details' => $withdrawalDetails,
                 'status' => 'pending',
-                'requested_at' => now(),
             ]);
 
             Log::info('Withdrawal requested', [

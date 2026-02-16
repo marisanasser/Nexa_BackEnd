@@ -19,6 +19,8 @@ use Throwable;
 
 class ProfileController extends Controller
 {
+    use \App\Domain\Shared\Traits\HasAuthenticatedUser;
+
     public function show(): JsonResponse
     {
         try {
@@ -71,20 +73,20 @@ class ProfileController extends Controller
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to retrieve profile: '.$e->getMessage(),
+                'message' => 'Failed to retrieve profile: ' . $e->getMessage(),
             ], 500);
         }
     }
 
     public function update(Request $request): JsonResponse
     {
-        error_log('Content-Type: '.$request->header('Content-Type'));
-        error_log('Request method: '.$request->method());
-        error_log('Request role: '.$request->input('role'));
-        error_log('Request state: '.$request->input('state'));
-        error_log('Request all data: '.json_encode($request->all()));
-        error_log('Request files: '.json_encode($request->allFiles()));
-        error_log('Raw content length: '.strlen($request->getContent()));
+        error_log('Content-Type: ' . $request->header('Content-Type'));
+        error_log('Request method: ' . $request->method());
+        error_log('Request role: ' . $request->input('role'));
+        error_log('Request state: ' . $request->input('state'));
+        error_log('Request all data: ' . json_encode($request->all()));
+        error_log('Request files: ' . json_encode($request->allFiles()));
+        error_log('Raw content length: ' . strlen($request->getContent()));
 
         try {
             $user = $this->getAuthenticatedUser();
@@ -99,12 +101,12 @@ class ProfileController extends Controller
             $contentType = $request->header('Content-Type');
             $isMultipart = str_contains($contentType, 'multipart/form-data');
 
-            error_log('Is multipart: '.($isMultipart ? 'true' : 'false'));
+            error_log('Is multipart: ' . ($isMultipart ? 'true' : 'false'));
 
             if ($isMultipart && empty($request->all()) && !empty($request->getContent())) {
                 error_log('Attempting manual multipart parsing');
                 $parsedData = $this->parseMultipartData($request);
-                error_log('Manually parsed data: '.json_encode($parsedData));
+                error_log('Manually parsed data: ' . json_encode($parsedData));
 
                 foreach ($parsedData as $key => $value) {
                     if ('avatar' !== $key) {
@@ -125,6 +127,43 @@ class ProfileController extends Controller
                     'niche' => $normalizedNiches[0] ?? null,
                 ]);
             }
+
+            // Handle project_links JSON string from FormData
+            if ($request->has('project_links')) {
+                $links = $request->input('project_links');
+                error_log('Received project_links type: ' . gettype($links));
+
+                if (is_string($links)) {
+                    error_log('Received project_links string: ' . substr($links, 0, 100) . '...');
+                    $decodedLinks = json_decode($links, true);
+
+                    if (json_last_error() !== JSON_ERROR_NONE) {
+                        error_log('JSON decode error: ' . json_last_error_msg());
+                        // Try stripslashes (sometimes needed for double-encoded JSON)
+                        $decodedLinks = json_decode(stripslashes($links), true);
+                    }
+
+                    if (is_array($decodedLinks)) {
+                        error_log('Successfully decoded project_links to array count: ' . count($decodedLinks));
+                        $request->merge(['project_links' => $decodedLinks]);
+                    } else {
+                        error_log('Failed to decode project_links, resetting to empty array');
+                        $request->merge(['project_links' => []]);
+                    }
+                } elseif (is_array($links)) {
+                    error_log('Received project_links as array count: ' . count($links));
+                }
+            } else {
+                // Ensure it's not present if not sent, or handle as empty if required
+            }
+
+            // Ensure project_links is an array for validation
+            if ($request->has('project_links') && !is_array($request->input('project_links'))) {
+                $request->merge(['project_links' => []]);
+            }
+
+            // DEBUG: Log project_links in request right before validation
+            error_log('Request project_links before validation: ' . json_encode($request->input('project_links')));
 
             $validationRules = [
                 'name' => 'sometimes|string|max:255',
@@ -155,7 +194,7 @@ class ProfileController extends Controller
                 'categories' => 'sometimes|nullable|string',
                 'avatar' => 'sometimes|nullable|image|mimes:jpeg,png,jpg,gif,webp|max:10240',
                 'project_links' => 'sometimes|array',
-                'project_links.*.url' => 'required|url',
+                'project_links.*.url' => 'required_with:project_links|url',
                 'project_links.*.title' => 'nullable|string|max:255',
             ];
 
@@ -276,9 +315,11 @@ class ProfileController extends Controller
             }
 
             unset($data['categories']);
-            
+
             // project_links belongs to portfolio, not user table
+            $projectLinks = null;
             if (array_key_exists('project_links', $data)) {
+                $projectLinks = $data['project_links'];
                 unset($data['project_links']);
             }
 
@@ -286,20 +327,28 @@ class ProfileController extends Controller
 
             // Sync with Portfolio (Bidirectional sync for Bio)
             try {
-                if ($user->portfolio) {
+                $portfolio = $user->portfolio;
+                if (!$portfolio) {
+                    $portfolio = $user->portfolio()->create([
+                        'user_id' => $user->id,
+                        'title' => $user->name . "'s Portfolio",
+                    ]);
+                }
+
+                if ($portfolio) {
                     $portfolioData = [];
                     // Sync Bio if present
                     if (array_key_exists('bio', $data)) {
-                         $portfolioData['bio'] = $data['bio'];
+                        $portfolioData['bio'] = $data['bio'];
                     }
 
                     // Sync Project Links if present
-                    if (array_key_exists('project_links', $data)) {
-                        $portfolioData['project_links'] = $data['project_links'];
+                    if ($projectLinks !== null) {
+                        $portfolioData['project_links'] = $projectLinks;
                     }
-                    
+
                     if (!empty($portfolioData)) {
-                        $user->portfolio->update($portfolioData);
+                        $portfolio->update($portfolioData);
                         Log::info('Synced User profile changes to Portfolio', [
                             'user_id' => $user->id,
                             'fields' => array_keys($portfolioData)
@@ -312,6 +361,17 @@ class ProfileController extends Controller
             }
 
             $user->refresh();
+            $user->load('portfolio');
+
+            $avatarUrl = FileUploadHelper::resolveUrl($user->avatar_url);
+            // Ensure absolute URL
+            if ($avatarUrl && !str_starts_with($avatarUrl, 'http')) {
+                if (!str_contains($avatarUrl, 'storage/')) {
+                    $avatarUrl = asset('storage/' . ltrim($avatarUrl, '/'));
+                } else {
+                    $avatarUrl = asset($avatarUrl);
+                }
+            }
 
             return response()->json([
                 'success' => true,
@@ -320,7 +380,7 @@ class ProfileController extends Controller
                     'name' => $user->name,
                     'email' => $user->email,
                     'role' => $user->role,
-                    'avatar' => $user->avatar_url,
+                    'avatar' => $avatarUrl,
                     'bio' => $user->bio,
                     'company_name' => $user->company_name,
                     'profession' => $user->profession,
@@ -336,6 +396,7 @@ class ProfileController extends Controller
                     'niches' => $this->normalizeNiches($user->niches, $user->niche),
                     'niche' => $this->primaryNiche($user->niches, $user->niche),
                     'location' => $user->state,
+                    'state' => $user->state,
                     'language' => $user->language,
                     'languages' => $user->languages ?: ($user->language ? [$user->language] : []),
                     'categories' => ['General'],
@@ -345,13 +406,14 @@ class ProfileController extends Controller
                     'free_trial_expires_at' => $user->free_trial_expires_at,
                     'created_at' => $user->created_at,
                     'updated_at' => $user->updated_at,
+                    'portfolio' => $user->portfolio,
                 ],
                 'message' => 'Profile updated successfully',
             ]);
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update profile: '.$e->getMessage(),
+                'message' => 'Failed to update profile: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -427,7 +489,7 @@ class ProfileController extends Controller
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Falha ao remover avatar: '.$e->getMessage(),
+                'message' => 'Falha ao remover avatar: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -467,36 +529,29 @@ class ProfileController extends Controller
                 FileUploadHelper::delete($user->avatar_url);
             }
 
-            $avatarFile = $request->file('avatar');
-            $avatarUrl = FileUploadHelper::upload($avatarFile, 'avatars');
-            if ($avatarUrl) {
-                $user->avatar_url = $avatarUrl;
-                $user->save();
-            }
+            $avatarUrl = FileUploadHelper::upload($request->file('avatar'), 'avatars');
+            $user->avatar_url = $avatarUrl;
+            $user->save();
 
-            // Sync with Portfolio
-            try {
-                if ($user->portfolio) {
-                    $user->portfolio->profile_picture = $avatarUrl;
-                    $user->portfolio->save();
+            $resolvedAvatarUrl = FileUploadHelper::resolveUrl($user->avatar_url);
+            // Ensure absolute URL
+            if ($resolvedAvatarUrl && !str_starts_with($resolvedAvatarUrl, 'http')) {
+                if (!str_contains($resolvedAvatarUrl, 'storage/')) {
+                    $resolvedAvatarUrl = asset('storage/' . ltrim($resolvedAvatarUrl, '/'));
+                } else {
+                    $resolvedAvatarUrl = asset($resolvedAvatarUrl);
                 }
-            } catch (Throwable $e) {
-                // Ignore sync errors
             }
 
             return response()->json([
                 'success' => true,
                 'message' => 'Avatar atualizado com sucesso',
-                'profile' => [
-                    'id' => $user->id,
-                    'avatar' => FileUploadHelper::resolveUrl($user->avatar_url),
-                    'avatar_url' => FileUploadHelper::resolveUrl($user->avatar_url),
-                ],
+                'avatar_url' => $resolvedAvatarUrl,
             ]);
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Falha ao enviar avatar: '.$e->getMessage(),
+                'message' => 'Falha ao enviar avatar: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -550,8 +605,8 @@ class ProfileController extends Controller
                 FileUploadHelper::delete($user->avatar_url);
             }
 
-            $filename = 'avatar_'.$user->id.'_'.time().'.'.$ext;
-            $tempPath = sys_get_temp_dir().'/'.$filename;
+            $filename = 'avatar_' . $user->id . '_' . time() . '.' . $ext;
+            $tempPath = sys_get_temp_dir() . '/' . $filename;
             file_put_contents($tempPath, $binary);
 
             $uploadedFile = new UploadedFile(
@@ -563,11 +618,11 @@ class ProfileController extends Controller
             );
 
             $avatarUrl = FileUploadHelper::upload($uploadedFile, 'avatars');
-            
+
             if ($avatarUrl) {
                 $user->avatar_url = $avatarUrl;
                 $user->save();
-                
+
                 // Sync with Portfolio
                 try {
                     if ($user->portfolio) {
@@ -594,7 +649,7 @@ class ProfileController extends Controller
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Falha ao enviar avatar: '.$e->getMessage(),
+                'message' => 'Falha ao enviar avatar: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -604,11 +659,12 @@ class ProfileController extends Controller
         $rawContent = $request->getContent();
         $contentType = $request->header('Content-Type');
 
-        if (!preg_match('/boundary=(.+)$/', $contentType, $matches)) {
+        // Better boundary extraction handling optional quotes and extra params
+        if (!preg_match('/boundary="?([^";]+)"?/', $contentType, $matches)) {
             return [];
         }
 
-        $boundary = '--'.trim($matches[1]);
+        $boundary = '--' . $matches[1];
         $parts = explode($boundary, $rawContent);
         $parsedData = [];
 
