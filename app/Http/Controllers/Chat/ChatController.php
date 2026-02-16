@@ -155,7 +155,7 @@ class ChatController extends Controller
                 'other_user' => [
                     'id' => $otherUser->id,
                     'name' => $otherUser->name,
-                    'avatar' => $otherUser->avatar_url,
+                    'avatar' => $otherUser->avatar,
                     'online' => $otherUser->onlineStatus?->is_online ?? false,
                 ],
                 'last_message' => $lastMessage ? [
@@ -702,7 +702,7 @@ class ChatController extends Controller
             'formatted_file_size' => $message->formatted_file_size,
             'sender_id' => $message->sender_id,
             'sender_name' => $message->sender ? $message->sender->name : 'Unknown User',
-            'sender_avatar' => $message->sender ? $message->sender->avatar_url : null,
+            'sender_avatar' => $message->sender ? $message->sender->avatar : null,
             'is_sender' => $forceIsSender ?: ($message->sender_id === $user->id),
             'is_read' => $message->is_read,
             'read_at' => $message->read_at?->toISOString(),
@@ -843,7 +843,7 @@ class ChatController extends Controller
                     'sender' => [
                         'id' => $chatRoom->brand->id,
                         'name' => $chatRoom->brand->name,
-                        'avatar_url' => $chatRoom->brand->avatar_url,
+                        'avatar_url' => $chatRoom->brand->avatar,
                     ],
                 ],
             ]);

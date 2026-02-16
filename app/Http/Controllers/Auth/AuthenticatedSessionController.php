@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auth;
 
+use App\Helpers\FileUploadHelper;
 use Illuminate\Support\Facades\Log;
 
 use App\Http\Controllers\Base\Controller;
@@ -74,7 +75,7 @@ class AuthenticatedSessionController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'role' => $user->role,
-                'avatar_url' => $user->avatar_url,
+                'avatar_url' => FileUploadHelper::resolveUrl($user->avatar_url),
                 'student_verified' => $user->student_verified,
                 'has_premium' => $user->has_premium,
             ],

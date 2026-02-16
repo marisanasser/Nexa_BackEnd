@@ -205,7 +205,7 @@ class ConnectionController extends Controller
                 'other_user' => [
                     'id' => $otherUser->id,
                     'name' => $otherUser->name,
-                    'avatar' => $otherUser->avatar_url,
+                    'avatar' => $otherUser->avatar,
                     'online' => $otherUser->onlineStatus?->is_online ?? false,
                 ],
                 'last_message' => $lastMessage ? [
@@ -272,7 +272,7 @@ class ConnectionController extends Controller
                 'formatted_file_size' => $message->formatted_file_size,
                 'sender_id' => $message->sender_id,
                 'sender_name' => $message->sender->name,
-                'sender_avatar' => $message->sender->avatar_url,
+                'sender_avatar' => $message->sender->avatar,
                 'is_sender' => $message->sender_id === $user->id,
                 'is_read' => $message->is_read,
                 'read_at' => $message->read_at?->toISOString(),
@@ -376,7 +376,7 @@ class ConnectionController extends Controller
                 'formatted_file_size' => $message->formatted_file_size,
                 'sender_id' => $message->sender_id,
                 'sender_name' => $message->sender->name,
-                'sender_avatar' => $message->sender->avatar_url,
+                'sender_avatar' => $message->sender->avatar,
                 'is_sender' => true,
                 'is_read' => false,
                 'created_at' => $message->created_at->format('Y-m-d H:i:s'),

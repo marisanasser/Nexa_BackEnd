@@ -73,7 +73,7 @@ class NewMessage implements ShouldBroadcastNow
             'message' => $this->message->message,
             'senderId' => $this->message->sender_id,
             'senderName' => $sender ? $sender->name : 'Unknown User',
-            'senderAvatar' => $sender ? $sender->avatar_url : null,
+            'senderAvatar' => $sender ? $sender->avatar : null,
             'messageType' => $this->message->message_type,
             'fileData' => $this->message->file_path ? [
                 'file_path' => $this->message->file_path,

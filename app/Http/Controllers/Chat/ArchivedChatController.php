@@ -42,7 +42,7 @@ class ArchivedChatController extends Controller
                 'other_user' => [
                     'id' => $otherUser?->id,
                     'name' => $otherUser?->name,
-                    'avatar' => $otherUser?->avatar_url,
+                    'avatar' => $otherUser?->avatar,
                 ],
                 'archived_at' => $room->archived_at?->toISOString(),
                 'closure_reason' => $room->closure_reason,
@@ -143,7 +143,7 @@ class ArchivedChatController extends Controller
                 'sender' => [
                     'id' => $message->sender_id,
                     'name' => $message->sender?->name,
-                    'avatar' => $message->sender?->avatar_url,
+                    'avatar' => $message->sender?->avatar,
                 ],
                 'message' => $message->message,
                 'message_type' => $message->message_type,

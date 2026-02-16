@@ -161,17 +161,17 @@ class FileUploadHelper
             return $path;
         }
 
-        // If it starts with /storage/ or storage/, it's a local path
-        $cleanPath = ltrim($path, '/');
+        // Normalize common local-style paths to object key form.
+        $cleanPath = ltrim(trim($path), '/');
         if (str_starts_with($cleanPath, 'storage/')) {
             $cleanPath = substr($cleanPath, 8);
         }
 
-        // Check if we should use GCS for resolution
-        // If we are in GCS mode, we might have relative paths that need to be resolved to GCS URLs
-        // BUT if the path starts with storage/ or /storage/, it was explicitly saved locally (e.g. fallback)
-        if (self::shouldUseGcs() && !str_starts_with($path, '/storage/') && !str_starts_with($path, 'storage/')) {
+        // In GCS mode (Cloud Run/prod), uploaded files live in the bucket even when
+        // legacy rows still store `/storage/...` paths.
+        if (self::shouldUseGcs()) {
             $bucket = env('GOOGLE_CLOUD_STORAGE_BUCKET', 'nexa-uploads-prod');
+
             return "https://storage.googleapis.com/{$bucket}/" . ltrim($cleanPath, '/');
         }
 
