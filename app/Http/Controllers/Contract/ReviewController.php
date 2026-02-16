@@ -19,6 +19,13 @@ use Illuminate\Support\Facades\Validator;
 
 class ReviewController extends Controller
 {
+    public function storeByContract(Request $request, int $contractId): JsonResponse
+    {
+        $request->merge(['contract_id' => $contractId]);
+
+        return $this->store($request);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [

@@ -177,8 +177,8 @@ class Offer extends Model
                     'created_at' => now(),
                 ]);
 
-                // Create the standard full timeline for the campaign
-                // This ensures the flow matches the real-world process: Script -> Approval -> Video -> Final Approval
+                // Create the standard timeline for the campaign.
+                // Approval happens directly on the submission milestones.
                 $startDate = now();
                 $totalDays = $this->estimated_days ?? 7;
 
@@ -191,25 +191,11 @@ class Offer extends Model
                         'deadline' => $startDate->copy()->addDays((int) ceil($totalDays * 0.25)),
                     ],
                     [
-                        'milestone_type' => 'script_approval',
-                        'title' => 'Aprovação do Roteiro',
-                        'description' => 'Aprovação do roteiro pela marca.',
-                        'status' => 'pending',
-                        'deadline' => $startDate->copy()->addDays((int) ceil($totalDays * 0.35)),
-                    ],
-                    [
                         'milestone_type' => 'video_submission',
                         'title' => 'Envio de Imagem e Vídeo',
                         'description' => 'Enviar o conteúdo final de imagem e vídeo.',
                         'status' => 'pending',
                         'deadline' => $startDate->copy()->addDays((int) ceil($totalDays * 0.85)),
-                    ],
-                    [
-                        'milestone_type' => 'final_approval',
-                        'title' => 'Aprovação Final',
-                        'description' => 'Aprovação final do vídeo pela marca.',
-                        'status' => 'pending',
-                        'deadline' => $startDate->copy()->addDays($totalDays),
                     ],
                 ];
 

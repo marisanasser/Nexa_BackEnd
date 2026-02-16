@@ -9,6 +9,7 @@ use App\Domain\Shared\Traits\HasAuthenticatedUser;
 use App\Http\Controllers\Base\Controller;
 use App\Http\Resources\Payment\WithdrawalCollection;
 use App\Http\Resources\Payment\WithdrawalResource;
+use App\Models\Payment\BankAccount;
 use App\Models\Payment\Withdrawal;
 use App\Models\Payment\WithdrawalMethod;
 use App\Models\User\User;
@@ -396,6 +397,24 @@ class WithdrawalController extends Controller
      */
     private function validateWithdrawalMethod(User $user, string $withdrawalMethodCode): array
     {
+        if (!WithdrawalMethod::isAllowedCreatorMethodCode($withdrawalMethodCode)) {
+            return [
+                'valid' => false,
+                'message' => 'Método de saque inválido. Use apenas PIX ou Dados Bancários.',
+            ];
+        }
+
+        if (
+            WithdrawalMethod::isBankDetailsMethodCode($withdrawalMethodCode)
+            && !BankAccount::where('user_id', $user->id)->exists()
+        ) {
+            return [
+                'valid' => false,
+                'message' => 'Cadastre seus dados bancários antes de solicitar saque por Dados Bancários.',
+                'action_required' => 'bank_account_setup',
+            ];
+        }
+
         $withdrawalMethod = WithdrawalMethod::findByCode($withdrawalMethodCode);
         $dynamicMethod = null;
 

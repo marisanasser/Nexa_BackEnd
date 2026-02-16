@@ -4,13 +4,19 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Campaign;
 
+use App\Domain\Notification\Services\ContractNotificationService;
+use App\Events\Chat\NewMessage;
+use App\Events\Contract\ContractCompleted;
+use App\Events\Contract\ContractUpdated;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
 use App\Http\Controllers\Base\Controller;
+use App\Helpers\FileUploadHelper;
 use App\Models\Campaign\CampaignTimeline;
+use App\Models\Chat\ChatRoom;
+use App\Models\Chat\Message;
 use App\Models\Contract\Contract;
-use App\Domain\Notification\Services\ContractNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -55,18 +61,45 @@ class CampaignTimelineController extends Controller
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
+        if (! $contract->canBeCompleted()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Contrato não pode ser finalizado no estado atual.',
+            ], 400);
+        }
+
         try {
-            $contract->complete();
+            $completed = $contract->complete();
+            if (! $completed) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contrato não pôde ser finalizado.',
+                ], 400);
+            }
+
+            $contract = $contract->fresh();
+
+            try {
+                event(new ContractCompleted($contract, $contract->offer?->chatRoom, (int) Auth::id()));
+            } catch (\Throwable $broadcastException) {
+                Log::error('Failed to broadcast ContractCompleted event from timeline', [
+                    'contract_id' => $contract->id,
+                    'user_id' => Auth::id(),
+                    'error' => $broadcastException->getMessage(),
+                    'exception' => get_class($broadcastException),
+                ]);
+            }
 
             return response()->json([
                 'success' => true,
                 'message' => 'Contrato finalizado com sucesso',
-                'data' => $contract->fresh(),
+                'data' => $contract,
             ]);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Failed to complete contract from timeline', [
                 'contract_id' => $contract->id,
                 'error' => $e->getMessage(),
+                'exception' => get_class($e),
                 'trace' => $e->getTraceAsString(),
             ]);
 
@@ -104,22 +137,10 @@ class CampaignTimelineController extends Controller
                 'deadline' => $startDate->copy()->addDays(ceil($totalDays * 0.25)),
             ],
             [
-                'milestone_type' => 'script_approval',
-                'title' => 'Aprovação do Roteiro',
-                'description' => 'Aprovar o roteiro enviado',
-                'deadline' => $startDate->copy()->addDays(ceil($totalDays * 0.35)),
-            ],
-            [
                 'milestone_type' => 'video_submission',
                 'title' => 'Envio de Imagem e Vídeo',
                 'description' => 'Enviar o conteúdo final de imagem e vídeo',
                 'deadline' => $startDate->copy()->addDays(ceil($totalDays * 0.85)),
-            ],
-            [
-                'milestone_type' => 'final_approval',
-                'title' => 'Aprovação Final',
-                'description' => 'Aprovar o vídeo final',
-                'deadline' => $startDate->copy()->addDays($totalDays),
             ],
         ];
 
@@ -128,6 +149,8 @@ class CampaignTimelineController extends Controller
             foreach ($milestones as $milestone) {
                 $createdMilestones[] = $contract->timeline()->create($milestone);
             }
+
+            $this->broadcastContractUpdate($contract, 'milestones_created');
 
             return response()->json([
                 'success' => true,
@@ -179,11 +202,25 @@ class CampaignTimelineController extends Controller
         $fileSize = $file->getSize();
         $fileType = $file->getMimeType();
 
-        $filePath = $file->store('timeline-files', $this->getStorageDiskName());
+        try {
+            $filePath = FileUploadHelper::upload($file, 'timeline-files');
+        } catch (Exception $e) {
+            Log::error('Timeline file upload exception', [
+                'milestone_id' => $milestone->id,
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Falha ao salvar arquivo no armazenamento',
+            ], 500);
+        }
+
         if (!is_string($filePath) || '' === trim($filePath)) {
             Log::error('Timeline file upload failed to return a valid path', [
                 'milestone_id' => $milestone->id,
-                'disk' => $this->getStorageDiskName(),
+                'user_id' => Auth::id(),
             ]);
 
             return response()->json([
@@ -193,6 +230,9 @@ class CampaignTimelineController extends Controller
         }
 
         $milestone->uploadFile($filePath, $fileName, $fileSize, $fileType);
+        $milestone->refresh();
+        $this->handleCreatorMilestoneSubmission($contract, $milestone);
+        $this->broadcastContractUpdate($contract, 'milestone_file_uploaded', $milestone);
 
         return response()->json([
             'success' => true,
@@ -231,16 +271,20 @@ class CampaignTimelineController extends Controller
                 ]);
             }
 
+            $milestone->refresh();
+            $this->broadcastContractUpdate($contract, 'milestone_approved', $milestone);
+
             return response()->json([
                 'success' => true,
                 'data' => $milestone->fresh(),
                 'message' => 'Milestone aprovado com sucesso',
             ]);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Failed to approve milestone', [
                 'milestone_id' => $milestone->id,
                 'user_id' => Auth::id(),
                 'error' => $e->getMessage(),
+                'exception' => get_class($e),
             ]);
 
             return response()->json([
@@ -272,6 +316,8 @@ class CampaignTimelineController extends Controller
         }
 
         $milestone->markAsCompleted();
+        $milestone->refresh();
+        $this->broadcastContractUpdate($contract, 'milestone_completed', $milestone);
 
         return response()->json([
             'success' => true,
@@ -299,6 +345,8 @@ class CampaignTimelineController extends Controller
         }
 
         $milestone->justifyDelay($request->justification);
+        $milestone->refresh();
+        $this->broadcastContractUpdate($contract, 'milestone_delay_justified', $milestone);
 
         return response()->json([
             'success' => true,
@@ -326,6 +374,8 @@ class CampaignTimelineController extends Controller
         }
 
         $milestone->markAsDelayed($request->justification);
+        $milestone->refresh();
+        $this->broadcastContractUpdate($contract, 'milestone_marked_delayed', $milestone);
 
         return response()->json([
             'success' => true,
@@ -505,6 +555,8 @@ class CampaignTimelineController extends Controller
             $request->extension_reason,
             Auth::id()
         );
+        $milestone->refresh();
+        $this->broadcastContractUpdate($contract, 'milestone_extended', $milestone);
 
         return response()->json([
             'success' => true,
@@ -577,16 +629,20 @@ class CampaignTimelineController extends Controller
                 ]);
             }
 
+            $milestone->refresh();
+            $this->broadcastContractUpdate($contract, 'milestone_rejected', $milestone);
+
             return response()->json([
                 'success' => true,
                 'data' => $milestone->fresh(),
                 'message' => 'Milestone rejeitado com sucesso',
             ]);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Failed to reject milestone', [
                 'milestone_id' => $milestone->id,
                 'user_id' => Auth::id(),
                 'error' => $e->getMessage(),
+                'exception' => get_class($e),
             ]);
 
             return response()->json([
@@ -595,5 +651,111 @@ class CampaignTimelineController extends Controller
             ], 500);
         }
     }
-}
 
+    private function handleCreatorMilestoneSubmission(Contract $contract, CampaignTimeline $milestone): void
+    {
+        if (
+            'creator' !== Auth::user()->role
+            || !in_array($milestone->milestone_type, ['script_submission', 'video_submission'], true)
+        ) {
+            return;
+        }
+
+        try {
+            ContractNotificationService::notifyBrandOfMilestoneSubmission($milestone);
+        } catch (Exception $notificationError) {
+            Log::error('Failed to send milestone submission notification to brand', [
+                'milestone_id' => $milestone->id,
+                'contract_id' => $contract->id,
+                'error' => $notificationError->getMessage(),
+            ]);
+        }
+
+        $this->sendMilestoneSubmissionSystemMessage($contract, $milestone);
+    }
+
+    private function sendMilestoneSubmissionSystemMessage(Contract $contract, CampaignTimeline $milestone): void
+    {
+        try {
+            $contract->loadMissing('offer.chatRoom');
+            $chatRoom = $contract->offer?->chatRoom;
+
+            if (!$chatRoom instanceof ChatRoom) {
+                Log::warning('No chat room found when sending milestone submission system message', [
+                    'contract_id' => $contract->id,
+                    'milestone_id' => $milestone->id,
+                ]);
+
+                return;
+            }
+
+            $messageText = match ($milestone->milestone_type) {
+                'script_submission' => 'Voce recebeu o roteiro da campanha para avaliar.',
+                'video_submission' => 'Voce recebeu uma gravacao/conteudo da campanha para avaliar.',
+                default => "Voce recebeu um novo envio para avaliar: {$milestone->title}.",
+            };
+
+            $payload = [
+                'message_type' => 'milestone_submission',
+                'contract_id' => $contract->id,
+                'milestone_id' => $milestone->id,
+                'milestone_type' => $milestone->milestone_type,
+                'milestone_title' => $milestone->title,
+                'file_name' => $milestone->file_name,
+                'submitted_by' => 'creator',
+                'submitted_at' => now()->toISOString(),
+            ];
+
+            $systemMessage = Message::create([
+                'chat_room_id' => $chatRoom->id,
+                'sender_id' => null,
+                'message' => $messageText,
+                'message_type' => 'system',
+                'offer_data' => $payload,
+                'is_system_message' => true,
+            ]);
+
+            $chatRoom->update(['last_message_at' => now()]);
+
+            event(new NewMessage($systemMessage, $chatRoom, $payload));
+        } catch (\Throwable $e) {
+            Log::error('Failed to send milestone submission system message', [
+                'contract_id' => $contract->id,
+                'milestone_id' => $milestone->id,
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
+        }
+    }
+
+    private function broadcastContractUpdate(
+        Contract $contract,
+        string $updateType,
+        ?CampaignTimeline $milestone = null
+    ): void {
+        try {
+            $contract->loadMissing('offer.chatRoom');
+
+            event(new ContractUpdated(
+                $contract->fresh(),
+                $contract->offer?->chatRoom,
+                (int) Auth::id(),
+                [
+                    'update_type' => $updateType,
+                    'milestone_id' => $milestone?->id,
+                    'milestone_type' => $milestone?->milestone_type,
+                    'milestone_status' => $milestone?->status,
+                ]
+            ));
+        } catch (\Throwable $broadcastException) {
+            Log::error('Failed to broadcast ContractUpdated event from timeline action', [
+                'contract_id' => $contract->id,
+                'update_type' => $updateType,
+                'milestone_id' => $milestone?->id,
+                'user_id' => Auth::id(),
+                'error' => $broadcastException->getMessage(),
+                'exception' => get_class($broadcastException),
+            ]);
+        }
+    }
+}

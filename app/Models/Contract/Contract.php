@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models\Contract;
 
+use App\Events\Chat\NewMessage;
 use App\Domain\Notification\Services\AdminNotificationService;
 use App\Domain\Notification\Services\ContractNotificationService;
 use App\Domain\Notification\Services\PaymentNotificationService;
@@ -406,7 +407,7 @@ class Contract extends Model
             }
         }
 
-        $moveSuccess = $balance->movePendingToAvailable($this->creator_amount);
+        $moveSuccess = $balance->movePendingToAvailable((float) $this->creator_amount);
 
         if (!$moveSuccess) {
             Log::error('Failed to move payment from pending to available balance', [
@@ -428,7 +429,7 @@ class Contract extends Model
             ]);
         }
 
-        $balance->addEarning($this->creator_amount);
+        $balance->addEarning((float) $this->creator_amount);
 
         $this->update([
             'workflow_status' => 'payment_available',
@@ -488,6 +489,8 @@ class Contract extends Model
             $archived = $chatRoom->archive(ChatRoom::CLOSURE_PAYMENT_COMPLETED);
 
             if ($archived) {
+                $this->sendChatClosureMessage($chatRoom, ChatRoom::STATUS_ARCHIVED);
+
                 Log::info('Chat room archived after payment completion', [
                     'contract_id' => $this->id,
                     'chat_room_id' => $chatRoom->id,
@@ -499,9 +502,81 @@ class Contract extends Model
         }
 
         // Se ainda há contratos pendentes, apenas marca como completo
-        $chatRoom->markAsCompleted(ChatRoom::CLOSURE_CONTRACT_COMPLETED);
+        $markedAsCompleted = $chatRoom->markAsCompleted(ChatRoom::CLOSURE_CONTRACT_COMPLETED);
 
-        return true;
+        if ($markedAsCompleted) {
+            $this->sendChatClosureMessage($chatRoom, ChatRoom::STATUS_COMPLETED);
+        }
+
+        return $markedAsCompleted;
+    }
+
+    private function sendChatClosureMessage(ChatRoom $chatRoom, string $chatStatus): void
+    {
+        try {
+            if ($this->hasChatClosureMessage($chatRoom, $chatStatus)) {
+                return;
+            }
+
+            $messageText = ChatRoom::STATUS_ARCHIVED === $chatStatus
+                ? '✅ O contrato foi finalizado com sucesso. A campanha foi encerrada formalmente e esta conversa foi arquivada. Este chat agora está disponível apenas para leitura.'
+                : '✅ O contrato foi finalizado com sucesso. Esta conversa foi encerrada e permanece apenas para leitura, sem novas interações para esta campanha.';
+
+            $payload = [
+                'message_type' => 'chat_closure',
+                'contract_id' => $this->id,
+                'chat_status' => $chatStatus,
+                'closure_reason' => $chatRoom->closure_reason,
+                'read_only' => true,
+            ];
+
+            $systemMessage = Message::create([
+                'chat_room_id' => $chatRoom->id,
+                'sender_id' => null,
+                'message' => $messageText,
+                'message_type' => 'system',
+                'offer_data' => $payload,
+                'is_system_message' => true,
+            ]);
+
+            $chatRoom->update(['last_message_at' => now()]);
+
+            event(new NewMessage($systemMessage, $chatRoom, $payload));
+        } catch (\Throwable $e) {
+            Log::error('Failed to send chat closure system message', [
+                'contract_id' => $this->id,
+                'chat_room_id' => $chatRoom->id,
+                'chat_status' => $chatStatus,
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
+        }
+    }
+
+    private function hasChatClosureMessage(ChatRoom $chatRoom, string $chatStatus): bool
+    {
+        $recentSystemMessages = Message::query()
+            ->where('chat_room_id', $chatRoom->id)
+            ->where('message_type', 'system')
+            ->latest('id')
+            ->limit(30)
+            ->get();
+
+        return $recentSystemMessages->contains(function (Message $message) use ($chatStatus): bool {
+            $payload = $message->offer_data;
+            if (is_string($payload)) {
+                $decodedPayload = json_decode($payload, true);
+                $payload = is_array($decodedPayload) ? $decodedPayload : null;
+            }
+
+            if (! is_array($payload)) {
+                return false;
+            }
+
+            return ($payload['message_type'] ?? null) === 'chat_closure'
+                && (int) ($payload['contract_id'] ?? 0) === (int) $this->id
+                && ($payload['chat_status'] ?? null) === $chatStatus;
+        });
     }
 
     public function hasPaymentProcessed(): bool
@@ -677,12 +752,39 @@ class Contract extends Model
             ]);
         });
 
-        ContractNotificationService::notifyCreatorOfContractCompleted($this);
-        PaymentNotificationService::notifyCreatorOfPaymentAvailable($this);
+        $this->refresh();
 
-        // Archive chat after payment release to keep campaign history consistent.
-        $this->archiveChatRoom();
-        $this->checkAndCompleteCampaign();
+        try {
+            ContractNotificationService::notifyCreatorOfContractCompleted($this);
+        } catch (\Throwable $e) {
+            Log::error('Failed to dispatch contract completion notification', [
+                'contract_id' => $this->id,
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
+        }
+
+        try {
+            PaymentNotificationService::notifyCreatorOfPaymentAvailable($this);
+        } catch (\Throwable $e) {
+            Log::error('Failed to dispatch payment available notification', [
+                'contract_id' => $this->id,
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
+        }
+
+        // Side effects cannot block successful contract completion/payment release.
+        try {
+            $this->archiveChatRoom();
+            $this->checkAndCompleteCampaign();
+        } catch (\Throwable $e) {
+            Log::error('Failed post-completion side effects', [
+                'contract_id' => $this->id,
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
+        }
 
         return true;
     }
@@ -878,7 +980,7 @@ class Contract extends Model
                 $balance = CreatorBalance::where('creator_id', $contract->creator_id)->first();
                 if ($balance) {
                     $balance->refresh();
-                    $moveSuccess = $balance->movePendingToAvailable($payment->creator_amount);
+                    $moveSuccess = $balance->movePendingToAvailable((float) $payment->creator_amount);
 
                     if ($moveSuccess) {
                         Log::info('Moved payment to available balance for contract on campaign completion', [
@@ -888,7 +990,7 @@ class Contract extends Model
                             'creator_amount' => $payment->creator_amount,
                         ]);
                     } else {
-                        $balance->increment('available_balance', $payment->creator_amount);
+                        $balance->increment('available_balance', (float) $payment->creator_amount);
                         $balance->refresh();
 
                         Log::info('Added payment directly to available balance for contract on campaign completion (fallback)', [

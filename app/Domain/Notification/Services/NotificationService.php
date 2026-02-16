@@ -6,7 +6,6 @@ namespace App\Domain\Notification\Services;
 
 use App\Events\User\NotificationSent;
 use App\Models\Common\Notification;
-use Exception;
 use Illuminate\Support\Facades\Log;
 
 class NotificationService
@@ -21,11 +20,12 @@ class NotificationService
                 'user_id' => $userId,
                 'notification_id' => $notification->id,
             ]);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Failed to dispatch notification broadcast event', [
                 'user_id' => $userId,
                 'notification_id' => $notification->id,
                 'error' => $e->getMessage(),
+                'exception' => get_class($e),
                 'trace' => $e->getTraceAsString(),
             ]);
         }

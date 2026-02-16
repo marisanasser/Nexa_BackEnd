@@ -343,6 +343,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/reviews', [ReviewController::class, 'store']);
+        Route::post('/contracts/{contractId}/review', [ReviewController::class, 'storeByContract'])->where('contractId', '[0-9]+');
         Route::get('/reviews', [ReviewController::class, 'index'])->middleware(['throttle:dashboard']);
         Route::get('/reviews/{id}', [ReviewController::class, 'show'])->where('id', '[0-9]+');
         Route::put('/reviews/{id}', [ReviewController::class, 'update'])->where('id', '[0-9]+');

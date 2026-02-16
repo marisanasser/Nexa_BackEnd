@@ -536,7 +536,7 @@ class CampaignTimeline extends Model
 
         if (!$this->isDependencySatisfied()) {
             $dependencyName = match ($this->milestone_type) {
-                'video_submission' => 'Aprovação do Roteiro',
+                'video_submission' => 'Envio do Roteiro aprovado',
                 default => 'Etapa anterior',
             };
             return "A etapa anterior ({$dependencyName}) precisa ser concluída antes de enviar este arquivo.";
@@ -560,10 +560,20 @@ class CampaignTimeline extends Model
         return match ($this->milestone_type) {
             'script_submission' => true,
             'script_approval' => $this->isMilestoneDone($this->getMilestoneByType('script_submission')),
-            'video_submission' => $this->isMilestoneDone($this->getMilestoneByType('script_approval')),
+            'video_submission' => $this->isScriptReadyForVideoSubmission(),
             'final_approval' => $this->isMilestoneDone($this->getMilestoneByType('video_submission')),
             default => true,
         };
+    }
+
+    /**
+     * Supports both the new simplified flow (script approved directly on submission)
+     * and legacy contracts that still have a separate script_approval milestone.
+     */
+    private function isScriptReadyForVideoSubmission(): bool
+    {
+        return $this->isMilestoneDone($this->getMilestoneByType('script_submission'))
+            || $this->isMilestoneDone($this->getMilestoneByType('script_approval'));
     }
 
     private function isMilestoneDone(?self $milestone): bool

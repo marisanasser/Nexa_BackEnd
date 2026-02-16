@@ -38,6 +38,10 @@ class WithdrawalMethod extends Model
 {
     use HasFactory;
 
+    public const METHOD_PIX = 'pix';
+    public const METHOD_BANK_TRANSFER = 'bank_transfer';
+    public const METHOD_PAGARME_BANK_TRANSFER = 'pagarme_bank_transfer';
+
     protected $fillable = [
         'code',
         'name',
@@ -76,6 +80,30 @@ class WithdrawalMethod extends Model
             ->where('is_active', true)
             ->first()
         ;
+    }
+
+    /**
+     * Creator withdrawal methods allowed in the product.
+     *
+     * @return array<int, string>
+     */
+    public static function allowedCreatorMethodCodes(): array
+    {
+        return [
+            self::METHOD_PIX,
+            self::METHOD_PAGARME_BANK_TRANSFER,
+            self::METHOD_BANK_TRANSFER,
+        ];
+    }
+
+    public static function isAllowedCreatorMethodCode(string $code): bool
+    {
+        return in_array($code, self::allowedCreatorMethodCodes(), true);
+    }
+
+    public static function isBankDetailsMethodCode(string $code): bool
+    {
+        return in_array($code, [self::METHOD_PAGARME_BANK_TRANSFER, self::METHOD_BANK_TRANSFER], true);
     }
 
     public function formattedFee(): string

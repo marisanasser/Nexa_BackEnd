@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Payment;
 
+use App\Models\Payment\BankAccount;
 use App\Models\Payment\CreatorBalance;
 use App\Models\Payment\WithdrawalMethod;
 use Illuminate\Foundation\Http\FormRequest;
@@ -134,6 +135,27 @@ class StoreWithdrawalRequest extends FormRequest
         $user = $this->user();
         $withdrawalMethodCode = $this->string('withdrawal_method')->toString();
 
+        if (!WithdrawalMethod::isAllowedCreatorMethodCode($withdrawalMethodCode)) {
+            $validator->errors()->add(
+                'withdrawal_method',
+                'Método de saque inválido. Use apenas PIX ou Dados Bancários.'
+            );
+
+            return;
+        }
+
+        if (
+            WithdrawalMethod::isBankDetailsMethodCode($withdrawalMethodCode)
+            && !BankAccount::where('user_id', $user->id)->exists()
+        ) {
+            $validator->errors()->add(
+                'withdrawal_method',
+                'Cadastre seus dados bancários antes de solicitar saque por Dados Bancários.'
+            );
+
+            return;
+        }
+
         $withdrawalMethod = WithdrawalMethod::findByCode($withdrawalMethodCode);
 
         if (!$withdrawalMethod) {
@@ -151,13 +173,6 @@ class StoreWithdrawalRequest extends FormRequest
             }
         }
 
-        // Check if Stripe methods require Stripe account
-        if (str_contains($withdrawalMethodCode, 'stripe') && !$user->stripe_account_id) {
-            $validator->errors()->add(
-                'withdrawal_method',
-                'Você precisa configurar sua conta Stripe antes de usar este método de saque.'
-            );
-        }
     }
 
     /**

@@ -18,6 +18,11 @@ class ChatNotificationService
             $chatRoom = $message->chatRoom;
             $sender = $message->sender;
 
+            // System messages do not have a concrete sender and should not trigger peer notifications.
+            if (! $chatRoom || ! $sender) {
+                return;
+            }
+
             $recipientId = $chatRoom->brand_id === $sender->id ? $chatRoom->creator_id : $chatRoom->brand_id;
 
             $messagePreview = strlen($message->message) > 50
@@ -47,6 +52,10 @@ class ChatNotificationService
         try {
             $chatRoom = $message->directChatRoom;
             $sender = $message->sender;
+
+            if (! $chatRoom || ! $sender) {
+                return;
+            }
 
             $recipientId = $chatRoom->brand_id === $sender->id ? $chatRoom->creator_id : $chatRoom->brand_id;
 

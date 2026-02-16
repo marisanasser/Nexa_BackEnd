@@ -29,7 +29,6 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\Log;
 use Laravel\Sanctum\HasApiTokens;
 
 /**
@@ -385,92 +384,50 @@ class User extends Authenticatable
 
     public function getWithdrawalMethods()
     {
-        $methods = WithdrawalMethod::getActiveMethods()
-            ->map(function ($method) {
-                return [
-                    'id' => $method->code,
-                    'name' => $method->name,
-                    'description' => $method->description,
-                    'min_amount' => (float) $method->min_amount,
-                    'max_amount' => (float) $method->max_amount,
-                    'processing_time' => $method->processing_time,
-                    'fee' => (float) $method->fee,
-                    'required_fields' => $method->getRequiredFields(),
-                    'field_config' => $method->getFieldConfig(),
-                ];
-            })
-            ->filter(function ($method) {
+        $activeMethodsByCode = WithdrawalMethod::getActiveMethods()->keyBy('code');
+        $methods = [];
 
-                if (($method['id'] === 'stripe_card' || $method['id'] === 'stripe_connect') && $this->stripe_account_id) {
-                    return false;
-                }
-
-                return true;
-            })
-            ->values()
-            ->toArray();
-
-        if ($this->stripe_account_id) {
-            try {
-                $stripeSecret = config('services.stripe.secret');
-                if ($stripeSecret) {
-                    \Stripe\Stripe::setApiKey($stripeSecret);
-
-                    $stripeAccount = \Stripe\Account::retrieve($this->stripe_account_id);
-
-                    if ($stripeAccount->payouts_enabled) {
-
-                        $externalAccounts = \Stripe\Account::allExternalAccounts(
-                            $this->stripe_account_id,
-                            ['object' => 'bank_account', 'limit' => 1]
-                        );
-
-                        if (! empty($externalAccounts->data)) {
-                            $bankAccount = $externalAccounts->data[0];
-
-                            $bankName = $bankAccount->bank_name ?? 'Banco';
-                            $last4 = $bankAccount->last4 ?? '****';
-                            $accountHolderName = $bankAccount->account_holder_name ?? '';
-
-                            $bankDisplayName = $bankName . ' •••• ' . $last4;
-                            if ($accountHolderName) {
-                                $bankDisplayName .= ' (' . $accountHolderName . ')';
-                            }
-
-                            $methods[] = [
-                                'id' => 'stripe_connect_bank_account',
-                                'name' => $bankDisplayName,
-                                'description' => 'Conta bancária cadastrada na sua conta Stripe Connect',
-                                'min_amount' => 10.00,
-                                'max_amount' => 10000.00,
-                                'processing_time' => '1-3 dias úteis',
-                                'fee' => 0.00,
-                                'required_fields' => [],
-                                'field_config' => [],
-                                'stripe_account_id' => $this->stripe_account_id,
-                                'bank_account_id' => $bankAccount->id,
-                                'bank_name' => $bankName,
-                                'bank_last4' => $last4,
-                                'account_holder_name' => $accountHolderName,
-                                'country' => $bankAccount->country ?? 'BR',
-                                'currency' => $bankAccount->currency ?? 'brl',
-                            ];
-                        }
-                    }
-                }
-            } catch (Exception $e) {
-
-                Log::warning('Failed to retrieve Stripe Connect bank account for withdrawal methods', [
-                    'user_id' => $this->id,
-                    'stripe_account_id' => $this->stripe_account_id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
+        $pixMethod = $activeMethodsByCode->get(WithdrawalMethod::METHOD_PIX);
+        if ($pixMethod instanceof WithdrawalMethod) {
+            $methods[] = $this->formatWithdrawalMethodPayload(
+                $pixMethod,
+                'PIX',
+                'Transferencia instantanea via chave PIX.'
+            );
         }
 
-        return collect($methods);
+        $bankTransferMethod =
+            $activeMethodsByCode->get(WithdrawalMethod::METHOD_PAGARME_BANK_TRANSFER)
+            ?? $activeMethodsByCode->get(WithdrawalMethod::METHOD_BANK_TRANSFER);
+
+        if ($bankTransferMethod instanceof WithdrawalMethod) {
+            $methods[] = $this->formatWithdrawalMethodPayload(
+                $bankTransferMethod,
+                'Dados Bancarios',
+                'Transferencia para a conta bancaria cadastrada.'
+            );
+        }
+
+        return collect($methods)->values();
     }
 
+    private function formatWithdrawalMethodPayload(
+        WithdrawalMethod $method,
+        ?string $name = null,
+        ?string $description = null
+    ): array {
+        return [
+            'id' => $method->code,
+            'name' => $name ?? $method->name,
+            'description' => $description ?? $method->description,
+            'min_amount' => (float) $method->min_amount,
+            'max_amount' => (float) $method->max_amount,
+            'processing_time' => $method->processing_time,
+            'fee' => (float) $method->fee,
+            'required_fields' => $method->getRequiredFields(),
+            'field_config' => $method->getFieldConfig(),
+        ];
+    }
     public function activeSubscription(): HasOne
     {
         return $this->hasOne(Subscription::class)->where('status', 'active');
