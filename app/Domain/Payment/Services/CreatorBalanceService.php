@@ -255,8 +255,8 @@ class CreatorBalanceService
         $customerId = $this->ensureStripeCustomer($user);
 
         $frontendUrl = (string) config('app.frontend_url', 'http://localhost:5173');
-        $successUrl = "$frontendUrl/creator/payment-method?payment_method=connected&session_id={CHECKOUT_SESSION_ID}";
-        $cancelUrl = "$frontendUrl/creator/payment-method?payment_method=cancelled";
+        $successUrl = "$frontendUrl/dashboard/payment-methods?setup_success=true&session_id={CHECKOUT_SESSION_ID}";
+        $cancelUrl = "$frontendUrl/dashboard/payment-methods?setup_canceled=true";
 
         $sessionParams = [
             'customer' => $customerId,

@@ -127,7 +127,8 @@ class SetupStripePrices extends Command
 
     private function createPrice(SubscriptionPlan $plan, string $productId): Price
     {
-        $priceInCents = (int) round($plan->price * 100);
+        $monthlyPrice = (float) $plan->monthly_price;
+        $priceInCents = (int) round($monthlyPrice * 100);
 
         return Price::create([
             'product' => $productId,
@@ -140,7 +141,7 @@ class SetupStripePrices extends Command
             'metadata' => [
                 'plan_id' => $plan->id,
                 'duration_months' => $plan->duration_months,
-                'monthly_price' => $plan->price,
+                'monthly_price' => $monthlyPrice,
             ],
         ]);
     }

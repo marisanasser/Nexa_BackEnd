@@ -129,6 +129,17 @@ class SubscriptionService
                 return null;
             }
 
+            if (!$plan) {
+                $priceId = $stripeSubscription->items->data[0]->price->id ?? null;
+                if ($priceId) {
+                    $plan = SubscriptionPlan::where('stripe_price_id', $priceId)->first();
+                }
+            }
+
+            if ($plan) {
+                $this->ensureFixedTermCancellation($stripeSubscription, $plan, (int) $user->id, 'subscription-sync');
+            }
+
             return $this->updateOrCreateSubscription($stripeSubscription, $user, $plan);
         } catch (Exception $e) {
             Log::error('Failed to sync subscription', [
@@ -325,35 +336,16 @@ class SubscriptionService
                     // Missing fields handled by DB defaults or nullable
                 ]);
 
-                // Handle fixed duration plans (e.g. 1 year) that don't auto-renew indefinitely logic
-                // Assuming plan->duration_months exists and logic is desired
-                if (isset($plan->duration_months) && $plan->duration_months > 1) {
-                    $cancelAt = Carbon::now()->addMonths($plan->duration_months)->timestamp;
-
-                    try {
-                        $this->stripeWrapper->updateSubscription($stripeSubscriptionId, [
-                            'cancel_at' => $cancelAt,
-                        ]);
-                        Log::info('Set cancel_at for subscription from invoice', [
-                            'subscription_id' => $stripeSubscriptionId,
-                            'cancel_at' => $cancelAt,
-                        ]);
-                    } catch (Exception $e) {
-                        Log::error('Failed to set cancel_at for subscription from invoice', [
-                            'subscription_id' => $stripeSubscriptionId,
-                            'error' => $e->getMessage(),
-                        ]);
-                    }
-                }
+                $this->ensureFixedTermCancellation($stripeSub, $plan, (int) $user->id, 'invoice-paid');
 
                 $subscription = Subscription::create([
                     'user_id' => $user->id,
-                    'plan_id' => $plan->id, // column name usually plan_id based on syncSubscription
+                    'subscription_plan_id' => $plan->id,
                     'status' => 'active',
                     'amount_paid' => $plan->price,
                     'payment_method' => 'stripe',
                     'transaction_id' => $transaction->id,
-                    'auto_renew' => true,
+                    'auto_renew' => $plan->duration_months <= 1,
                     'stripe_subscription_id' => $stripeSubscriptionId,
                     'stripe_latest_invoice_id' => $invoiceId,
                     'stripe_status' => $stripeSub->status ?? 'active',
@@ -435,17 +427,40 @@ class SubscriptionService
         ?SubscriptionPlan $plan = null
     ): Subscription {
         $status = $this->mapStripeStatus($stripeSubscription->status);
+        $invoiceId = null;
+
+        if (isset($stripeSubscription->latest_invoice)) {
+            if (is_object($stripeSubscription->latest_invoice)) {
+                $invoiceId = $stripeSubscription->latest_invoice->id ?? null;
+            } elseif (is_string($stripeSubscription->latest_invoice)) {
+                $invoiceId = $stripeSubscription->latest_invoice;
+            }
+        }
+
+        $currentPeriodStart = isset($stripeSubscription->current_period_start)
+            ? Carbon::createFromTimestamp((int) $stripeSubscription->current_period_start)
+            : null;
+        $currentPeriodEnd = isset($stripeSubscription->current_period_end)
+            ? Carbon::createFromTimestamp((int) $stripeSubscription->current_period_end)
+            : null;
+        $unitAmount = $stripeSubscription->items->data[0]->price->unit_amount ?? 0;
+        $amountPaid = $plan ? (float) $plan->price : ((float) $unitAmount / 100);
+        $isFixedTerm = $plan && (int) $plan->duration_months > 1;
+        $autoRenew = !$isFixedTerm && !$stripeSubscription->cancel_at_period_end && empty($stripeSubscription->cancel_at);
 
         $subscription = Subscription::updateOrCreate(
             ['stripe_subscription_id' => $stripeSubscription->id],
             [
                 'user_id' => $user->id,
-                'plan_id' => $plan?->id,
+                'subscription_plan_id' => $plan?->id,
                 'status' => $status,
-                'stripe_price_id' => $stripeSubscription->items->data[0]->price->id ?? null,
-                'current_period_start' => Carbon::createFromTimestamp($stripeSubscription->current_period_start),
-                'current_period_end' => Carbon::createFromTimestamp($stripeSubscription->current_period_end),
-                'cancel_at_period_end' => $stripeSubscription->cancel_at_period_end,
+                'starts_at' => $currentPeriodStart,
+                'expires_at' => $currentPeriodEnd,
+                'amount_paid' => $amountPaid,
+                'payment_method' => 'stripe',
+                'auto_renew' => $autoRenew,
+                'stripe_latest_invoice_id' => $invoiceId,
+                'stripe_status' => $stripeSubscription->status,
             ]
         );
 
@@ -476,6 +491,64 @@ class SubscriptionService
             'trialing' => 'trialing',
             default => 'inactive',
         };
+    }
+
+    /**
+     * Ensures fixed-term plans stop renewing automatically after the contracted duration.
+     */
+    private function ensureFixedTermCancellation(
+        \Stripe\Subscription $stripeSubscription,
+        SubscriptionPlan $plan,
+        int $userId,
+        string $context
+    ): void {
+        $durationMonths = (int) ($plan->duration_months ?? 1);
+        if ($durationMonths <= 1) {
+            return;
+        }
+
+        $currentPeriodStart = isset($stripeSubscription->current_period_start)
+            ? Carbon::createFromTimestamp((int) $stripeSubscription->current_period_start)
+            : Carbon::now();
+
+        $targetCancelAt = $currentPeriodStart->copy()->addMonths($durationMonths)->timestamp;
+        $existingCancelAt = isset($stripeSubscription->cancel_at)
+            ? (int) $stripeSubscription->cancel_at
+            : null;
+
+        if ($existingCancelAt) {
+            $deltaSeconds = abs($existingCancelAt - $targetCancelAt);
+            if ($deltaSeconds <= 3600) {
+                return;
+            }
+        }
+
+        try {
+            $this->stripeWrapper->updateSubscription($stripeSubscription->id, [
+                'cancel_at' => $targetCancelAt,
+            ]);
+
+            Log::info('Configured fixed-term cancel_at on Stripe subscription', [
+                'context' => $context,
+                'user_id' => $userId,
+                'plan_id' => $plan->id,
+                'duration_months' => $durationMonths,
+                'stripe_subscription_id' => $stripeSubscription->id,
+                'cancel_at' => $targetCancelAt,
+                'cancel_at_date' => Carbon::createFromTimestamp($targetCancelAt)->toDateTimeString(),
+                'previous_cancel_at' => $existingCancelAt,
+            ]);
+        } catch (Exception $e) {
+            Log::warning('Failed to configure fixed-term cancel_at on Stripe subscription', [
+                'context' => $context,
+                'user_id' => $userId,
+                'plan_id' => $plan->id,
+                'duration_months' => $durationMonths,
+                'stripe_subscription_id' => $stripeSubscription->id,
+                'target_cancel_at' => $targetCancelAt,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

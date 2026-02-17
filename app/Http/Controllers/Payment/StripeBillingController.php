@@ -214,7 +214,7 @@ class StripeBillingController extends Controller
                 'amount_paid' => $plan->price,
                 'payment_method' => 'stripe',
                 'transaction_id' => $localTx->id,
-                'auto_renew' => true,
+                'auto_renew' => $plan->duration_months <= 1,
                 'stripe_subscription_id' => $stripeSub->id,
                 'stripe_latest_invoice_id' => $initialInvoiceId,
                 'stripe_status' => $stripeSub->status ?? 'incomplete',
@@ -398,6 +398,13 @@ class StripeBillingController extends Controller
     public function getCheckoutUrl(Request $request): JsonResponse
     {
         try {
+            if (empty(config('services.stripe.secret'))) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Stripe is not configured',
+                ], 500);
+            }
+
             $user = $this->getAuthenticatedUser();
             if (!$user) {
                 return response()->json([
@@ -416,13 +423,6 @@ class StripeBillingController extends Controller
                     'success' => false,
                     'message' => 'Plan not found or inactive',
                 ], 404);
-            }
-
-            if (empty($plan->stripe_price_id)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Stripe price not configured for this plan',
-                ], 400);
             }
 
             if (!$user->stripe_customer_id) {
@@ -451,29 +451,40 @@ class StripeBillingController extends Controller
 
             $frontendUrl = config('app.frontend_url', 'http://localhost:5000');
 
-            $checkoutSession = Session::create([
+            $lineItem = $this->buildCheckoutLineItem($plan);
+
+            $checkoutPayload = [
                 'customer' => $customer->id,
                 'payment_method_types' => ['card'],
-                'line_items' => [[
-                    'price' => $plan->stripe_price_id,
-                    'quantity' => 1,
-                ]],
+                'line_items' => [$lineItem],
                 'mode' => 'subscription',
                 'locale' => 'pt-BR',
-                'success_url' => $frontendUrl.'/creator/subscription?success=true&session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url' => $frontendUrl.'/creator/subscription?canceled=true',
+                'success_url' => $frontendUrl.'/dashboard/subscription?success=true&session_id={CHECKOUT_SESSION_ID}',
+                'cancel_url' => $frontendUrl.'/dashboard/subscription?canceled=true',
                 'metadata' => [
                     'user_id' => $user->id,
                     'plan_id' => $plan->id,
                     'plan_name' => $plan->name,
                     'duration_months' => $plan->duration_months,
                 ],
-            ]);
+            ];
+
+            $checkoutSession = Session::create($checkoutPayload);
 
             return response()->json([
                 'success' => true,
                 'url' => $checkoutSession->url,
             ]);
+        } catch (InvalidRequestException $e) {
+            Log::warning('Stripe rejected checkout payload', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Stripe checkout validation failed: '.$e->getMessage(),
+            ], 400);
         } catch (Exception $e) {
             Log::error('Error creating checkout URL', [
                 'user_id' => auth()->id(),
@@ -486,6 +497,60 @@ class StripeBillingController extends Controller
                 'message' => 'Error creating checkout URL. Please try again.',
             ], 500);
         }
+    }
+
+    /**
+     * Build a Checkout line item for subscriptions.
+     *
+     * Priority:
+     * 1) Reuse configured Stripe price ID when present.
+     * 2) Fallback to inline recurring price_data using monthly amount derived from plan totals.
+     */
+    private function buildCheckoutLineItem(SubscriptionPlan $plan): array
+    {
+        if (!empty($plan->stripe_price_id)) {
+            return [
+                'price' => $plan->stripe_price_id,
+                'quantity' => 1,
+            ];
+        }
+
+        $duration = max(1, (int) $plan->duration_months);
+        $monthlyAmount = (float) $plan->price / $duration;
+        $unitAmount = max(1, (int) round($monthlyAmount * 100));
+        $productData = [
+            'name' => $plan->name,
+            'metadata' => [
+                'plan_id' => (string) $plan->id,
+                'duration_months' => (string) $duration,
+            ],
+        ];
+
+        if (!empty($plan->description)) {
+            $productData['description'] = $plan->description;
+        }
+
+        Log::warning('Checkout fallback using inline price_data because stripe_price_id is missing', [
+            'plan_id' => $plan->id,
+            'plan_name' => $plan->name,
+            'duration_months' => $plan->duration_months,
+            'plan_total_price' => $plan->price,
+            'calculated_monthly_price' => $monthlyAmount,
+            'unit_amount_cents' => $unitAmount,
+        ]);
+
+        return [
+            'price_data' => [
+                'currency' => 'brl',
+                'product_data' => $productData,
+                'recurring' => [
+                    'interval' => 'month',
+                    'interval_count' => 1,
+                ],
+                'unit_amount' => $unitAmount,
+            ],
+            'quantity' => 1,
+        ];
     }
 
     public function createSubscriptionFromCheckout(Request $request): JsonResponse
@@ -584,6 +649,8 @@ class StripeBillingController extends Controller
                 ], 404);
             }
 
+            $this->ensureFixedTermCancellation($stripeSub, $plan, (int) $user->id, 'private-checkout-success');
+
             $paymentSuccessful = false;
             $invoiceStatus = null;
             $paymentIntentStatus = null;
@@ -662,7 +729,7 @@ class StripeBillingController extends Controller
                 'amount_paid' => $plan->price,
                 'payment_method' => 'stripe',
                 'transaction_id' => $transaction->id,
-                'auto_renew' => true,
+                'auto_renew' => $plan->duration_months <= 1,
                 'stripe_subscription_id' => $stripeSubscriptionId,
                 'stripe_latest_invoice_id' => $invoiceId,
                 'stripe_status' => $stripeSub->status ?? 'active',
@@ -855,6 +922,8 @@ class StripeBillingController extends Controller
                 ], 404);
             }
 
+            $this->ensureFixedTermCancellation($stripeSub, $plan, (int) $user->id, 'public-checkout-success');
+
             $paymentSuccessful = false;
             $invoiceStatus = null;
             $paymentIntentStatus = null;
@@ -933,7 +1002,7 @@ class StripeBillingController extends Controller
                 'amount_paid' => $plan->price,
                 'payment_method' => 'stripe',
                 'transaction_id' => $transaction->id,
-                'auto_renew' => true,
+                'auto_renew' => $plan->duration_months <= 1,
                 'stripe_subscription_id' => $stripeSubscriptionId,
                 'stripe_latest_invoice_id' => $invoiceId,
                 'stripe_status' => $stripeSub->status ?? 'active',
@@ -1036,7 +1105,16 @@ class StripeBillingController extends Controller
             }
         }
 
-        if (!$user->hasPremiumAccess() && $user->stripe_customer_id) {
+        $hasFixedTermAutoRenewMismatch = Subscription::where('user_id', $user->id)
+            ->where('status', Subscription::STATUS_ACTIVE)
+            ->where('auto_renew', true)
+            ->whereHas('plan', function ($query): void {
+                $query->where('duration_months', '>', 1);
+            })
+            ->exists()
+        ;
+
+        if (($hasFixedTermAutoRenewMismatch || !$user->hasPremiumAccess()) && $user->stripe_customer_id) {
             try {
                 $this->syncSubscriptionsFromStripe($user);
 
@@ -1141,6 +1219,11 @@ class StripeBillingController extends Controller
                 'expand' => ['latest_invoice.payment_intent'],
             ]);
 
+            $plan = $localSub->plan;
+            if ($plan) {
+                $this->ensureFixedTermCancellation($stripeSub, $plan, (int) $localSub->user_id, 'pending-sync');
+            }
+
             Log::info('Stripe subscription retrieved for sync', [
                 'subscription_id' => $localSub->id,
                 'stripe_subscription_id' => $stripeSub->id,
@@ -1171,6 +1254,7 @@ class StripeBillingController extends Controller
                         'status' => Subscription::STATUS_ACTIVE,
                         'starts_at' => $currentPeriodStart,
                         'expires_at' => $currentPeriodEnd,
+                        'auto_renew' => $plan ? ($plan->duration_months <= 1) : $localSub->auto_renew,
                         'stripe_status' => $stripeSub->status,
                         'stripe_latest_invoice_id' => $invoiceId,
                     ]);
@@ -1274,6 +1358,11 @@ class StripeBillingController extends Controller
                 $existingSub = Subscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
 
                 if ($existingSub) {
+                    $existingPlan = $existingSub->plan;
+                    if ($existingPlan) {
+                        $this->ensureFixedTermCancellation($stripeSub, $existingPlan, (int) $user->id, 'full-sync-existing');
+                    }
+
                     Log::info('Subscription already exists in database', [
                         'user_id' => $user->id,
                         'subscription_id' => $existingSub->id,
@@ -1311,6 +1400,8 @@ class StripeBillingController extends Controller
 
                     continue;
                 }
+
+                $this->ensureFixedTermCancellation($stripeSub, $plan, (int) $user->id, 'full-sync');
 
                 $paymentSuccessful = false;
                 $invoiceStatus = null;
@@ -1409,7 +1500,7 @@ class StripeBillingController extends Controller
                     'amount_paid' => $plan->price,
                     'payment_method' => 'stripe',
                     'transaction_id' => $transaction->id,
-                    'auto_renew' => true,
+                    'auto_renew' => $plan->duration_months <= 1,
                     'stripe_subscription_id' => $stripeSubscriptionId,
                     'stripe_latest_invoice_id' => $invoiceId,
                     'stripe_status' => $stripeSub->status ?? 'active',
@@ -1457,6 +1548,64 @@ class StripeBillingController extends Controller
             ]);
 
             throw $e;
+        }
+    }
+
+    /**
+     * Ensures fixed-term plans (e.g. 6/12 months) stop renewing in Stripe after the committed duration.
+     */
+    private function ensureFixedTermCancellation(
+        StripeSubscription $stripeSubscription,
+        SubscriptionPlan $plan,
+        int $userId,
+        string $context
+    ): void {
+        $durationMonths = (int) ($plan->duration_months ?? 1);
+        if ($durationMonths <= 1) {
+            return;
+        }
+
+        $currentPeriodStart = isset($stripeSubscription->current_period_start)
+            ? Carbon::createFromTimestamp((int) $stripeSubscription->current_period_start)
+            : Carbon::now();
+
+        $targetCancelAt = $currentPeriodStart->copy()->addMonths($durationMonths)->timestamp;
+        $existingCancelAt = isset($stripeSubscription->cancel_at)
+            ? (int) $stripeSubscription->cancel_at
+            : null;
+
+        if ($existingCancelAt) {
+            $deltaSeconds = abs($existingCancelAt - $targetCancelAt);
+            if ($deltaSeconds <= 3600) {
+                return;
+            }
+        }
+
+        try {
+            StripeSubscription::update($stripeSubscription->id, [
+                'cancel_at' => $targetCancelAt,
+            ]);
+
+            Log::info('Configured Stripe fixed-term cancellation for subscription', [
+                'context' => $context,
+                'user_id' => $userId,
+                'plan_id' => $plan->id,
+                'duration_months' => $durationMonths,
+                'stripe_subscription_id' => $stripeSubscription->id,
+                'cancel_at' => $targetCancelAt,
+                'cancel_at_date' => Carbon::createFromTimestamp($targetCancelAt)->toDateTimeString(),
+                'previous_cancel_at' => $existingCancelAt,
+            ]);
+        } catch (Exception $e) {
+            Log::warning('Could not configure Stripe fixed-term cancellation for subscription', [
+                'context' => $context,
+                'user_id' => $userId,
+                'plan_id' => $plan->id,
+                'duration_months' => $durationMonths,
+                'stripe_subscription_id' => $stripeSubscription->id,
+                'target_cancel_at' => $targetCancelAt,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 }
