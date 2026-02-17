@@ -14,6 +14,7 @@ use App\Http\Controllers\Base\Controller;
 use App\Models\Campaign\CampaignApplication;
 use App\Models\Chat\ChatRoom;
 use App\Models\Chat\Message;
+use App\Models\Contract\Contract;
 use App\Models\Contract\Offer;
 use App\Models\Payment\BrandPaymentMethod;
 use App\Models\User\User;
@@ -39,6 +40,7 @@ class OfferController extends Controller
             'chat_room_id' => 'required|string',
             'budget' => 'required|numeric|min:10|max:10000000',
             'estimated_days' => 'required|integer|min:1|max:365',
+            'confirm_milestone_reset' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -914,6 +916,32 @@ class OfferController extends Controller
                 'message' => 'You already have a pending offer for this creator. Please wait for them to respond or cancel the existing offer.',
                 'existing_offer_id' => $existingOffer->id,
             ], 400);
+        }
+
+        $originalOffer = Offer::where('chat_room_id', $chatRoom->id)
+            ->orderBy('created_at', 'asc')
+            ->first();
+
+        if ($originalOffer && (float) $request->budget < (float) $originalOffer->budget) {
+            return response()->json([
+                'success' => false,
+                'message' => 'O valor da nova oferta não pode ser menor que o valor da oferta original.',
+                'minimum_budget' => (float) $originalOffer->budget,
+                'minimum_budget_formatted' => $originalOffer->formatted_budget,
+                'original_offer_id' => $originalOffer->id,
+            ], 422);
+        }
+
+        $hasExistingContract = Contract::whereHas('offer', function ($query) use ($chatRoom): void {
+            $query->where('chat_room_id', $chatRoom->id);
+        })->exists();
+
+        if ($hasExistingContract && ! $request->boolean('confirm_milestone_reset')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Confirmação obrigatória: ao criar uma nova oferta, o fluxo de milestones será reiniciado e deverá ser preenchido novamente do zero.',
+                'requires_milestone_reset_confirmation' => true,
+            ], 422);
         }
 
         return [$creator, $chatRoom];
