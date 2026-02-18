@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Review model for contract reviews.
@@ -51,6 +52,7 @@ class Review extends Model
     ];
 
     protected $casts = [
+        'rating' => 'integer',
         'rating_categories' => 'array',
         'is_public' => 'boolean',
     ];
@@ -205,7 +207,7 @@ class Review extends Model
         static::created(function ($review): void {
             try {
                 ContractNotificationService::notifyUserOfNewReview($review);
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 Log::error('Failed to notify user of new review', [
                     'review_id' => $review->id,
                     'error' => $e->getMessage(),
@@ -214,7 +216,7 @@ class Review extends Model
 
             try {
                 $review->updateCreatorAverageRating();
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 Log::error('Failed to update creator average rating', [
                     'review_id' => $review->id,
                     'error' => $e->getMessage(),
@@ -239,18 +241,21 @@ class Review extends Model
             ->where('is_public', true)
         ;
 
-        $averageRating = $publicReviews->avg('rating');
+        $averageRatingRaw = $publicReviews->avg('rating');
+        $averageRating = null !== $averageRatingRaw ? (float) $averageRatingRaw : null;
         $totalReviews = $publicReviews->count();
 
+        $roundedAverage = null !== $averageRating ? round($averageRating, 1) : null;
+
         $creator->update([
-            'average_rating' => $averageRating ? round($averageRating, 1) : null,
+            'average_rating' => $roundedAverage,
             'total_reviews' => $totalReviews,
         ]);
 
         Log::info('Updated creator review stats', [
             'creator_id' => $creator->id,
             'total_reviews' => $totalReviews,
-            'average_rating' => $averageRating ? round($averageRating, 1) : null,
+            'average_rating' => $roundedAverage,
         ]);
     }
 }

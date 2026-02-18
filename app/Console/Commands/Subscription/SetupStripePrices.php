@@ -108,21 +108,23 @@ class SetupStripePrices extends Command
 
     private function createOrRetrieveProduct(SubscriptionPlan $plan): Product
     {
-        if ($plan->stripe_product_id) {
-            try {
-                return Product::retrieve($plan->stripe_product_id);
-            } catch (Exception $e) {
-            }
-        }
-
-        return Product::create([
+        $payload = [
             'name' => $plan->name,
-            'description' => $plan->description,
+            'description' => $this->buildStripeProductDescription($plan),
             'metadata' => [
                 'plan_id' => $plan->id,
                 'duration_months' => $plan->duration_months,
             ],
-        ]);
+        ];
+
+        if ($plan->stripe_product_id) {
+            try {
+                return Product::update($plan->stripe_product_id, $payload);
+            } catch (Exception $e) {
+            }
+        }
+
+        return Product::create($payload);
     }
 
     private function createPrice(SubscriptionPlan $plan, string $productId): Price
@@ -145,4 +147,27 @@ class SetupStripePrices extends Command
             ],
         ]);
     }
+
+    private function buildStripeProductDescription(SubscriptionPlan $plan): string
+    {
+        $duration = max(1, (int) $plan->duration_months);
+        $monthlyAmount = (float) $plan->price / $duration;
+        $monthlyFormatted = number_format($monthlyAmount, 2, ',', '.');
+        $totalFormatted = number_format((float) $plan->price, 2, ',', '.');
+        $baseDescription = trim((string) ($plan->description ?? ''));
+
+        if ($duration <= 1) {
+            $commitment = "Assinatura mensal recorrente de R$ {$monthlyFormatted}.";
+        } else {
+            $commitment = "Compromisso de {$duration} meses: {$duration}x de R$ {$monthlyFormatted} (total estimado de R$ {$totalFormatted}).";
+        }
+
+        if ('' === $baseDescription) {
+            return $commitment;
+        }
+
+        return "{$baseDescription} {$commitment}";
+    }
 }
+
+

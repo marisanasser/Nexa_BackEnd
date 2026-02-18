@@ -469,6 +469,15 @@ class StripeBillingController extends Controller
                 ],
             ];
 
+            $checkoutDisclosure = $this->buildCheckoutDisclosureText($plan);
+            if (null !== $checkoutDisclosure) {
+                $checkoutPayload['custom_text'] = [
+                    'submit' => [
+                        'message' => $checkoutDisclosure,
+                    ],
+                ];
+            }
+
             $checkoutSession = Session::create($checkoutPayload);
 
             return response()->json([
@@ -551,6 +560,23 @@ class StripeBillingController extends Controller
             ],
             'quantity' => 1,
         ];
+    }
+
+    /**
+     * Build disclosure text shown on Stripe Checkout so fixed-term commitments are explicit.
+     */
+    private function buildCheckoutDisclosureText(SubscriptionPlan $plan): ?string
+    {
+        $duration = max(1, (int) $plan->duration_months);
+        $monthlyAmount = (float) $plan->price / $duration;
+        $monthlyFormatted = number_format($monthlyAmount, 2, ',', '.');
+        $totalFormatted = number_format((float) $plan->price, 2, ',', '.');
+
+        if ($duration <= 1) {
+            return "Assinatura mensal recorrente de R$ {$monthlyFormatted}.";
+        }
+
+        return "Compromisso de {$duration} meses: {$duration}x de R$ {$monthlyFormatted} (total estimado de R$ {$totalFormatted}).";
     }
 
     public function createSubscriptionFromCheckout(Request $request): JsonResponse

@@ -38,9 +38,9 @@ class WithdrawalMethod extends Model
 {
     use HasFactory;
 
-    public const METHOD_PIX = 'pix';
-    public const METHOD_BANK_TRANSFER = 'bank_transfer';
-    public const METHOD_PAGARME_BANK_TRANSFER = 'pagarme_bank_transfer';
+    public const METHOD_STRIPE_CONNECT = 'stripe_connect';
+    public const METHOD_STRIPE_CONNECT_BANK_ACCOUNT = 'stripe_connect_bank_account';
+    public const METHOD_STRIPE_CARD = 'stripe_card';
 
     protected $fillable = [
         'code',
@@ -90,9 +90,9 @@ class WithdrawalMethod extends Model
     public static function allowedCreatorMethodCodes(): array
     {
         return [
-            self::METHOD_PIX,
-            self::METHOD_PAGARME_BANK_TRANSFER,
-            self::METHOD_BANK_TRANSFER,
+            self::METHOD_STRIPE_CONNECT,
+            self::METHOD_STRIPE_CONNECT_BANK_ACCOUNT,
+            self::METHOD_STRIPE_CARD,
         ];
     }
 
@@ -103,7 +103,8 @@ class WithdrawalMethod extends Model
 
     public static function isBankDetailsMethodCode(string $code): bool
     {
-        return in_array($code, [self::METHOD_PAGARME_BANK_TRANSFER, self::METHOD_BANK_TRANSFER], true);
+        // Legacy helper kept for compatibility: no non-Stripe bank methods are allowed anymore.
+        return false;
     }
 
     public function formattedFee(): string

@@ -387,25 +387,33 @@ class User extends Authenticatable
         $activeMethodsByCode = WithdrawalMethod::getActiveMethods()->keyBy('code');
         $methods = [];
 
-        $pixMethod = $activeMethodsByCode->get(WithdrawalMethod::METHOD_PIX);
-        if ($pixMethod instanceof WithdrawalMethod) {
-            $methods[] = $this->formatWithdrawalMethodPayload(
-                $pixMethod,
-                'PIX',
-                'Transferencia instantanea via chave PIX.'
-            );
-        }
+        $stripeMethod =
+            $activeMethodsByCode->get(WithdrawalMethod::METHOD_STRIPE_CONNECT)
+            ?? $activeMethodsByCode->get(WithdrawalMethod::METHOD_STRIPE_CONNECT_BANK_ACCOUNT)
+            ?? $activeMethodsByCode->get(WithdrawalMethod::METHOD_STRIPE_CARD);
 
-        $bankTransferMethod =
-            $activeMethodsByCode->get(WithdrawalMethod::METHOD_PAGARME_BANK_TRANSFER)
-            ?? $activeMethodsByCode->get(WithdrawalMethod::METHOD_BANK_TRANSFER);
-
-        if ($bankTransferMethod instanceof WithdrawalMethod) {
-            $methods[] = $this->formatWithdrawalMethodPayload(
-                $bankTransferMethod,
-                'Dados Bancarios',
-                'Transferencia para a conta bancaria cadastrada.'
+        if ($stripeMethod instanceof WithdrawalMethod) {
+            $payload = $this->formatWithdrawalMethodPayload(
+                $stripeMethod,
+                'Stripe',
+                'Saque processado via Stripe para sua conta conectada.'
             );
+            $payload['stripe_account_id'] = $this->stripe_account_id;
+            $methods[] = $payload;
+        } else {
+            // Fallback for environments without seeded Stripe withdrawal methods.
+            $methods[] = [
+                'id' => WithdrawalMethod::METHOD_STRIPE_CONNECT,
+                'name' => 'Stripe',
+                'description' => 'Saque processado via Stripe para sua conta conectada.',
+                'min_amount' => 10.0,
+                'max_amount' => 100000.0,
+                'processing_time' => '1-2 dias uteis',
+                'fee' => 0.0,
+                'required_fields' => [],
+                'field_config' => [],
+                'stripe_account_id' => $this->stripe_account_id,
+            ];
         }
 
         return collect($methods)->values();
@@ -423,7 +431,7 @@ class User extends Authenticatable
             'min_amount' => (float) $method->min_amount,
             'max_amount' => (float) $method->max_amount,
             'processing_time' => $method->processing_time,
-            'fee' => (float) $method->fee,
+            'fee' => 0.0,
             'required_fields' => $method->getRequiredFields(),
             'field_config' => $method->getFieldConfig(),
         ];

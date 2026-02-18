@@ -134,7 +134,7 @@ class StoreCampaignRequest extends FormRequest
             'title' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string', 'max:5000'],
             'budget' => ['required_if:remuneration_type,paga', 'nullable', 'numeric', 'min:0', 'max:999999.99'],
-            'remuneration_type' => ['required', 'in:paga,permuta'],
+            'remuneration_type' => ['required', 'in:paga'],
             'status' => ['nullable', 'string', 'in:pending,approved,rejected,completed,cancelled'],
             'requirements' => ['nullable', 'string', 'max:5000'],
             'target_states' => ['nullable'],

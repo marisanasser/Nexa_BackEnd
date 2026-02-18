@@ -14,7 +14,7 @@ class PaymentSimulator
 {
     public static function isSimulationMode(): bool
     {
-        return config('services.pagarme.simulation_mode', false);
+        return (bool) config('services.stripe.simulation_mode', false);
     }
 
     public static function simulateSubscriptionPayment(array $requestData, User $user, SubscriptionPlan $subscriptionPlan): array
@@ -33,7 +33,7 @@ class PaymentSimulator
 
         $transaction = Transaction::create([
             'user_id' => $user->id,
-            'pagarme_transaction_id' => $transactionId,
+            'stripe_payment_intent_id' => $transactionId,
             'status' => 'paid',
             'amount' => $subscriptionPlan->price,
             'payment_method' => 'credit_card',
@@ -98,7 +98,7 @@ class PaymentSimulator
 
         $transaction = Transaction::create([
             'user_id' => $user->id,
-            'pagarme_transaction_id' => $transactionId,
+            'stripe_payment_intent_id' => $transactionId,
             'status' => 'paid',
             'amount' => $requestData['amount'],
             'payment_method' => 'account_balance',
@@ -139,7 +139,7 @@ class PaymentSimulator
 
         $transaction = Transaction::create([
             'user_id' => $user->id,
-            'pagarme_transaction_id' => $transactionId,
+            'stripe_payment_intent_id' => $transactionId,
             'status' => 'paid',
             'amount' => $requestData['amount'],
             'payment_method' => 'credit_card',
@@ -168,7 +168,7 @@ class PaymentSimulator
         ];
     }
 
-    public static function simulateWithdrawalProcessing(int $withdrawalId, string $method = 'bank_transfer'): array
+    public static function simulateWithdrawalProcessing(int $withdrawalId, string $method = 'stripe_connect'): array
     {
         Log::info('SIMULATION: Processing withdrawal', [
             'withdrawal_id' => $withdrawalId,
@@ -176,9 +176,9 @@ class PaymentSimulator
         ]);
 
         $delay = match ($method) {
-            'pix' => 200000,
-            'bank_transfer' => 500000,
-            'pagarme_bank_transfer' => 300000,
+            'stripe_connect' => 300000,
+            'stripe_connect_bank_account' => 350000,
+            'stripe_card' => 250000,
             default => 400000,
         };
 

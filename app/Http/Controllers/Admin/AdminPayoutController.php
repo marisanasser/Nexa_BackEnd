@@ -120,7 +120,7 @@ class AdminPayoutController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            $status = 'Withdrawal not found' === $e->getMessage() ? 404 : 500;
+            $status = 'Withdrawal not found' === $e->getMessage() ? 404 : 422;
 
             return response()->json([
                 'success' => false,

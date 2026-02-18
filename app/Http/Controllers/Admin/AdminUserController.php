@@ -27,8 +27,8 @@ class AdminUserController extends Controller
     public function index(Request $request): JsonResponse
     {
         $request->validate([
-            'role' => 'nullable|in:creator,brand',
-            'status' => 'nullable|in:active,blocked,removed,pending',
+            'role' => 'nullable|in:creator,brand,admin',
+            'status' => 'nullable|in:active,blocked,removed,pending,unverified',
             'search' => 'nullable|string|max:255',
             'per_page' => 'nullable|integer|min:1|max:100',
             'page' => 'nullable|integer|min:1',
@@ -70,11 +70,21 @@ class AdminUserController extends Controller
             ->paginate($perPage, ['*'], 'page', $page)
         ;
 
-        $transformedUsers = collect($users->items())->map(fn ($user) => $this->transformUserData($user));
+        $transformedUsers = collect($users->items())
+            ->map(fn ($user) => $this->transformUserData($user))
+            ->values();
 
         return response()->json([
             'success' => true,
-            'data' => $transformedUsers,
+            // Keep nested pagination for backward compatibility with existing admin frontend.
+            'data' => [
+                'data' => $transformedUsers,
+                'current_page' => $users->currentPage(),
+                'last_page' => $users->lastPage(),
+                'per_page' => $users->perPage(),
+                'total' => $users->total(),
+            ],
+            // Also expose top-level pagination for newer consumers.
             'pagination' => [
                 'current_page' => $users->currentPage(),
                 'last_page' => $users->lastPage(),
@@ -170,6 +180,7 @@ class AdminUserController extends Controller
             'blocked' => $query->where('email_verified_at', '=', null),
             'removed' => $query->where('deleted_at', '!=', null),
             'pending' => $query->where('email_verified_at', '=', null),
+            'unverified' => $query->where('email_verified_at', '=', null),
             default => null,
         };
     }
@@ -210,6 +221,11 @@ class AdminUserController extends Controller
     private function transformUserData(User $user): array
     {
         $isCreator = 'creator' === $user->role;
+        $accountStatus = $this->getAccountStatus($user);
+        $isActive = null !== $user->email_verified_at && 'Removido' !== $accountStatus;
+        $timeOnPlatform = $this->getUserTimeStatus($user);
+        $displayName = $user->company_name ?: $user->name;
+        $profileImage = $user->avatar ?: $user->avatar_url;
 
         if ($isCreator) {
             $status = 'Criador';
@@ -223,14 +239,23 @@ class AdminUserController extends Controller
             return [
                 'id' => $user->id,
                 'name' => $user->name,
+                'role' => $user->role,
                 'email' => $user->email,
+                'profile_image' => $profileImage,
+                'is_active' => $isActive,
+                'last_login_at' => null,
                 'status' => $status,
                 'statusColor' => $statusColor,
-                'time' => $this->getUserTimeStatus($user),
+                'time' => $timeOnPlatform,
+                'time_on_platform' => $timeOnPlatform,
                 'campaigns' => ($user->applied_campaigns ?? 0).' aplicadas / '.($user->approved_campaigns ?? 0).' aprovadas',
-                'accountStatus' => $this->getAccountStatus($user),
+                'accountStatus' => $accountStatus,
+                'account_status' => $accountStatus,
                 'created_at' => $user->created_at,
                 'email_verified_at' => $user->email_verified_at,
+                'total_campaigns' => (int) ($user->created_campaigns ?? 0),
+                'total_applications' => (int) ($user->applied_campaigns ?? 0),
+                'company_name' => null,
                 'has_premium' => $user->has_premium,
                 'student_verified' => $user->student_verified,
                 'premium_expires_at' => $user->premium_expires_at,
@@ -249,15 +274,26 @@ class AdminUserController extends Controller
 
         return [
             'id' => $user->id,
+            'name' => $displayName,
+            'role' => $user->role,
             'company' => $user->company_name ?: $user->name,
             'brandName' => $user->company_name ?: $user->name,
+            'company_name' => $user->company_name ?: $user->name,
             'email' => $user->email,
+            'profile_image' => $profileImage,
+            'is_active' => $isActive,
+            'last_login_at' => null,
             'status' => $status,
             'statusColor' => $statusColor,
+            'time' => $timeOnPlatform,
+            'time_on_platform' => $timeOnPlatform,
             'campaigns' => $user->created_campaigns,
-            'accountStatus' => $this->getAccountStatus($user),
+            'accountStatus' => $accountStatus,
+            'account_status' => $accountStatus,
             'created_at' => $user->created_at,
             'email_verified_at' => $user->email_verified_at,
+            'total_campaigns' => (int) ($user->created_campaigns ?? 0),
+            'total_applications' => (int) ($user->applied_campaigns ?? 0),
             'has_premium' => $user->has_premium,
             'premium_expires_at' => $user->premium_expires_at,
             'free_trial_expires_at' => $user->free_trial_expires_at,

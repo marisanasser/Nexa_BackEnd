@@ -59,16 +59,16 @@ class ChatRoom extends Model
     }
 
     // Status constants
-    public const STATUS_ACTIVE = 'active';
-    public const STATUS_COMPLETED = 'completed';
-    public const STATUS_ARCHIVED = 'archived';
+    public const string STATUS_ACTIVE = 'active';
+    public const string STATUS_COMPLETED = 'completed';
+    public const string STATUS_ARCHIVED = 'archived';
 
     // Closure reasons
-    public const CLOSURE_CAMPAIGN_COMPLETED = 'campaign_completed';
-    public const CLOSURE_CAMPAIGN_CANCELLED = 'campaign_cancelled';
-    public const CLOSURE_CONTRACT_COMPLETED = 'contract_completed';
-    public const CLOSURE_CONTRACT_CANCELLED = 'contract_cancelled';
-    public const CLOSURE_PAYMENT_COMPLETED = 'payment_completed';
+    public const string CLOSURE_CAMPAIGN_COMPLETED = 'campaign_completed';
+    public const string CLOSURE_CAMPAIGN_CANCELLED = 'campaign_cancelled';
+    public const string CLOSURE_CONTRACT_COMPLETED = 'contract_completed';
+    public const string CLOSURE_CONTRACT_CANCELLED = 'contract_cancelled';
+    public const string CLOSURE_PAYMENT_COMPLETED = 'payment_completed';
 
     protected $fillable = [
         'campaign_id',

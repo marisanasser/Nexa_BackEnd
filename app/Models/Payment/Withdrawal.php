@@ -81,9 +81,13 @@ class Withdrawal extends Model
     protected $fillable = [
         'creator_id',
         'amount',
+        'platform_fee',
+        'fixed_fee',
         'withdrawal_method',
         'withdrawal_details',
         'status',
+        'transaction_id',
+        'failure_reason',
         'processed_at',
         'rejection_reason',
     ];
@@ -233,13 +237,8 @@ class Withdrawal extends Model
 
     public function getPercentageFeeAttribute(): float
     {
-        $withdrawalMethodCode = (string) $this->withdrawal_method;
-        $withdrawalMethod = WithdrawalMethod::findByCode($withdrawalMethodCode);
-        if (!$withdrawalMethod) {
-            return 0;
-        }
-
-        return (float) $withdrawalMethod->fee;
+        // Withdrawal fees are disabled by business rule.
+        return 0;
     }
 
     public function getPercentageFeeAmountAttribute(): float
@@ -249,17 +248,17 @@ class Withdrawal extends Model
 
     public function getPlatformFeeAmountAttribute(): float
     {
-        return ((float) $this->amount * (float) $this->platform_fee) / 100;
+        return 0;
     }
 
     public function totalFees(): float
     {
-        return (float) $this->percentage_fee_amount + (float) $this->platform_fee_amount + (float) $this->fixed_fee;
+        return 0;
     }
 
     public function netAmount(): float
     {
-        return (float) $this->amount - $this->totalFees();
+        return (float) $this->amount;
     }
 
     public function getTotalFeesAttribute(): float
@@ -376,6 +375,15 @@ class Withdrawal extends Model
     public function getWithdrawalMethodLabelAttribute(): string
     {
         switch ($this->withdrawal_method) {
+            case 'stripe_connect':
+                return 'Stripe Connect';
+
+            case 'stripe_connect_bank_account':
+                return 'Stripe Conta Bancaria';
+
+            case 'stripe_card':
+                return 'Stripe Card';
+
             case 'bank_transfer':
                 return 'Transferência Bancária';
 
@@ -436,6 +444,7 @@ class Withdrawal extends Model
         switch ($this->withdrawal_method) {
             case 'stripe_connect':
             case 'stripe_connect_bank_account':
+            case 'stripe_card':
                 $this->processStripeConnectWithdrawal();
 
                 break;
@@ -530,7 +539,7 @@ class Withdrawal extends Model
                 if ($stripeSecret) {
                     Stripe::setApiKey($stripeSecret);
 
-                    $requiredAmount = (int) round(($this->amount - 5.00) * 100);
+                    $requiredAmount = (int) round(((float) $this->amount) * 100);
 
                     $charges = Charge::all([
                         'limit' => 10,
@@ -607,35 +616,34 @@ class Withdrawal extends Model
 
         Stripe::setApiKey($stripeSecret);
 
-        $netAmount = max(0, $this->amount - 5.00);
-        $amountInCents = (int) round($netAmount * 100);
+        $amountInCents = (int) round(((float) $this->amount) * 100);
         if ($amountInCents <= 0) {
             throw new Exception('Valor líquido inválido para transferência.');
         }
 
         $sourceChargeId = $this->findSourceChargeForCreator($this->creator_id);
 
-        if (!$sourceChargeId) {
-            Log::warning('No source charge found for withdrawal', [
-                'withdrawal_id' => $this->id,
-                'creator_id' => $this->creator_id,
-            ]);
-
-            throw new Exception('Não foi possível encontrar uma transação de origem válida para o saque. Entre em contato com o suporte.');
-        }
-
         $transferParams = [
             'amount' => $amountInCents,
             'currency' => 'brl',
             'destination' => $creator->stripe_account_id,
-            'source_transaction' => $sourceChargeId,
             'metadata' => [
                 'withdrawal_id' => (string) $this->id,
                 'creator_id' => (string) $this->creator_id,
                 'gross_amount' => (string) $this->amount,
-                'fixed_fee' => '5.00',
+                'fees_disabled' => 'true',
             ],
         ];
+
+        if ($sourceChargeId) {
+            $transferParams['source_transaction'] = $sourceChargeId;
+        } else {
+            Log::warning('No source charge found for withdrawal, attempting transfer from platform balance', [
+                'withdrawal_id' => $this->id,
+                'creator_id' => $this->creator_id,
+                'amount' => $this->amount,
+            ]);
+        }
 
         $transfer = Transfer::create($transferParams);
 
@@ -733,7 +741,7 @@ class Withdrawal extends Model
             $stripePaymentIntentId = null;
             $stripeChargeId = null;
 
-            if ('stripe_connect' === $this->withdrawal_method || 'stripe_card' === $this->withdrawal_method) {
+            if (in_array($this->withdrawal_method, ['stripe_connect', 'stripe_connect_bank_account', 'stripe_card'], true)) {
                 $paymentMethod = 'stripe_withdrawal';
 
                 if ($this->transaction_id && str_starts_with($this->transaction_id, 'tr_')) {

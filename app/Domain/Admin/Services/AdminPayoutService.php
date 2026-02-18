@@ -76,7 +76,21 @@ class AdminPayoutService
             throw new Exception('Withdrawal not found');
         }
 
+        if ('completed' === $withdrawal->status) {
+            return [
+                'withdrawal_id' => $withdrawal->id,
+                'status' => $withdrawal->status,
+                'transaction_id' => $withdrawal->transaction_id,
+            ];
+        }
+
+        if ('pending' !== $withdrawal->status) {
+            throw new Exception("Withdrawal cannot be processed in status: {$withdrawal->status}");
+        }
+
         if ($withdrawal->process()) {
+            $withdrawal->refresh();
+
             Log::info('Admin processed withdrawal', [
                 'withdrawal_id' => $withdrawal->id,
                 'admin_id' => Auth::id(),
@@ -85,7 +99,15 @@ class AdminPayoutService
             return [
                 'withdrawal_id' => $withdrawal->id,
                 'status' => $withdrawal->status,
+                'transaction_id' => $withdrawal->transaction_id,
             ];
+        }
+
+        $withdrawal->refresh();
+        $failureReason = $withdrawal->failure_reason;
+
+        if (is_string($failureReason) && '' !== trim($failureReason)) {
+            throw new Exception($failureReason);
         }
 
         throw new Exception('Failed to process withdrawal');

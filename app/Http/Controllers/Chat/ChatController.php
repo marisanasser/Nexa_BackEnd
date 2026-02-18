@@ -537,18 +537,20 @@ class ChatController extends Controller
             if ($user->isBrand()) {
 
                 $brandMessage = "🎉 **Parabéns pela parceria iniciada!**\n\n".
-                    "Você acaba de conectar com uma criadora talentosa da nossa plataforma. Para garantir o melhor resultado possível, é essencial orientar com detalhamento e clareza.\n\n".
-                    "**📋 Próximos Passos Importantes:**\n\n".
-                    "• **Saldo:** Insira o valor da campanha na aba \"Saldo\" da plataforma\n".
-                    "• **Pagamento:** Libere o pagamento após aprovar o conteúdo final\n".
-                    "• **Briefing:** Reforce os pontos principais com a criadora\n".
-                    "• **Ajustes:** Até 2 pedidos de ajustes por vídeo são permitidos\n\n".
-                    "**🔒 Regras de Segurança (ANTI-FRAUDE):**\n\n".
-                    "✅ **Comunicação:** Exclusivamente pelo chat da NEXA. O uso de WhatsApp, Telegram ou e-mail pessoal é **estritamente proibido** e pode levar ao banimento.\n".
-                    "❌ **Pagamentos por fora:** Qualquer tentativa de pagamento direto é insegura e viola nossos Termos de Uso.\n".
-                    "⚠️ **Garantia:** Apenas pagamentos feitos via NEXA são garantidos e reembolsáveis.\n".
-                    "🚫 **Dados:** O envio de telefone/email será bloqueado automaticamente pelo sistema.\n\n".
-                    'A NEXA está aqui para facilitar conexões seguras e profissionais! 💼✨';
+                    "Você acabou de conectar com uma creator da NEXA. Para garantir o melhor resultado possível, siga o fluxo oficial da campanha.\n\n".
+                    "**📋 Próximos passos obrigatórios:**\n\n".
+                    "• **Saldo:** Adicione o valor da campanha na aba \"Saldo\" antes de avançar\n".
+                    "• **Briefing:** Envie briefing claro e completo para iniciar roteiro e gravação\n".
+                    "• **Roteiro:** Aprove em até **7 dias úteis** (o roteiro é enviado em até 3 dias úteis após o briefing)\n".
+                    "• **Conteúdo final:** Faça a validação final em até **7 dias úteis**\n".
+                    "• **Ajustes:** São permitidas até **3 correções** por conteúdo, dentro do roteiro aprovado\n".
+                    "• **Pagamento:** Libere o pagamento somente após a aprovação final\n\n".
+                    "**🔒 Regras de segurança (ANTI-FRAUDE):**\n\n".
+                    "✅ **Comunicação oficial:** Exclusivamente no chat da NEXA\n".
+                    "❌ **Pagamento por fora:** É proibido e viola os Termos de Uso\n".
+                    "⚠️ **Garantia:** Apenas pagamentos feitos pela NEXA possuem garantia e suporte\n".
+                    "🚫 **Dados pessoais:** Compartilhamento de telefone, e-mail ou contato externo é bloqueado pelo sistema\n\n".
+                    "A NEXA garante rastreabilidade e segurança para as duas partes. 💼";
 
                 Message::create([
                     'chat_room_id' => $room->id,
@@ -560,21 +562,20 @@ class ChatController extends Controller
             } else {
 
                 $creatorMessage = "🎉 **Parabéns! Você foi aprovada!**\n\n".
-                    "Estamos muito felizes em contar com você! Mostre toda sua criatividade, comprometimento e qualidade para representar bem a marca e nossa plataforma.\n\n".
-                    "**📋 Checklist de Sucesso:**\n\n".
-                    "• **Endereço:** Confirme seu endereço de envio o quanto antes\n".
-                    "• **Roteiro:** Entregue em até 5 dias úteis\n".
-                    "• **Briefing:** Siga todas as orientações da marca\n".
-                    "• **Aprovação:** Aguarde aprovação do roteiro antes de gravar\n".
-                    "• **Conteúdo:** Entregue o vídeo final em até 5 dias úteis após aprovação\n".
-                    "• **Qualidade:** Vídeo profissional, até 2 ajustes permitidos\n".
-                    "• **Comunicação:** Mantenha retorno rápido no chat\n\n".
-                    "**🔒 Regras Importantes (ANTI-FRAUDE):**\n\n".
-                    "✅ **Chat:** Comunicação exclusivamente pela NEXA. Não leve a conversa para WhatsApp/Email.\n".
-                    "❌ **Pagamento Seguro:** Nunca aceite pagamentos por fora. A NEXA garante seu recebimento apenas dentro da plataforma.\n".
-                    "⚠️ **Dados:** O compartilhamento de contato pessoal é proibido e monitorado.\n".
-                    "🚫 **Risco:** Negociações externas não têm suporte da NEXA em caso de calote.\n\n".
-                    'Estamos aqui para garantir a melhor experiência! Boa campanha! 💼💡';
+                    "Agora siga os prazos e regras da campanha para garantir aprovação e pagamento sem atrasos.\n\n".
+                    "**📋 Checklist da campanha:**\n\n".
+                    "• **Endereço:** Confirme seus dados de envio antes da marca despachar produto\n".
+                    "• **Roteiro:** Envie em até **3 dias úteis** após receber briefing\n".
+                    "• **Ajuste de roteiro:** Quando solicitado, corrija em até **48 horas úteis**\n".
+                    "• **Conteúdo final:** Entregue em até **7 dias úteis** após aprovação do roteiro (com produto em mãos)\n".
+                    "• **Correções:** A marca pode solicitar até **3 correções**; cada uma com prazo de até **3 dias úteis**\n".
+                    "• **Comunicação:** Responda mensagens da marca/NEXA em até **8 horas**\n\n".
+                    "**🔒 Regras importantes (ANTI-FRAUDE):**\n\n".
+                    "✅ **Chat oficial:** Toda comunicação deve acontecer pela NEXA\n".
+                    "❌ **Pagamento externo:** Nunca aceite pagamento por fora\n".
+                    "⚠️ **Proteção:** A NEXA só garante campanhas e pagamentos feitos dentro da plataforma\n".
+                    "🚫 **Contato pessoal:** Telefone, e-mail e links externos são bloqueados e monitorados\n\n".
+                    "Boa campanha! Conte com a NEXA para um processo seguro e profissional. 💼";
 
                 Message::create([
                     'chat_room_id' => $room->id,

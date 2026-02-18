@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Domain\Payment\Actions;
 
-use App\Models\Payment\BankAccount;
 use App\Models\Payment\CreatorBalance;
 use App\Models\Payment\Withdrawal;
 use App\Models\Payment\WithdrawalMethod;
@@ -79,8 +78,6 @@ class CreateWithdrawalAction
                 $withdrawal = Withdrawal::create([
                     'creator_id' => $user->id,
                     'amount' => $amount,
-                    'platform_fee' => 5.00,
-                    'fixed_fee' => 5.00,
                     'withdrawal_method' => $withdrawalMethodCode,
                     'withdrawal_details' => $enrichedDetails,
                     'status' => 'pending',
@@ -198,11 +195,12 @@ class CreateWithdrawalAction
     ): array {
         // Add method info
         if ($withdrawalMethod) {
-            $withdrawalDetails['method_fee_percentage'] = $withdrawalMethod->fee;
+            // Fees are intentionally disabled for creator withdrawals.
+            $withdrawalDetails['method_fee_percentage'] = 0;
             $withdrawalDetails['method_name'] = $withdrawalMethod->name;
             $withdrawalDetails['method_code'] = $withdrawalMethod->code;
         } elseif ($dynamicMethod) {
-            $withdrawalDetails['method_fee_percentage'] = $dynamicMethod['fee'] ?? 0;
+            $withdrawalDetails['method_fee_percentage'] = 0;
             $withdrawalDetails['method_name'] = $dynamicMethod['name'] ?? $withdrawalMethodCode;
             $withdrawalDetails['method_code'] = $withdrawalMethodCode;
         }
@@ -215,11 +213,6 @@ class CreateWithdrawalAction
             if ('stripe_connect_bank_account' === $withdrawalMethodCode) {
                 $withdrawalDetails = $this->addStripeBankAccountDetails($user, $withdrawalDetails);
             }
-        }
-
-        // Add Pagar.me bank account details
-        if ('pagarme_bank_transfer' === $withdrawalMethodCode) {
-            $withdrawalDetails = $this->addPagarMeBankAccountDetails($user, $withdrawalDetails);
         }
 
         return $withdrawalDetails;
@@ -257,26 +250,4 @@ class CreateWithdrawalAction
         return $details;
     }
 
-    /**
-     * Add Pagar.me bank account details to withdrawal.
-     */
-    private function addPagarMeBankAccountDetails(User $user, array $details): array
-    {
-        $bankAccount = BankAccount::where('user_id', $user->id)->first();
-
-        if ($bankAccount) {
-            $details = [
-                ...$details,
-                'bank_code' => $bankAccount->bank_code,
-                'agencia' => $bankAccount->agencia,
-                'agencia_dv' => $bankAccount->agencia_dv,
-                'conta' => $bankAccount->conta,
-                'conta_dv' => $bankAccount->conta_dv,
-                'cpf' => $bankAccount->cpf,
-                'name' => $bankAccount->name,
-            ];
-        }
-
-        return $details;
-    }
 }

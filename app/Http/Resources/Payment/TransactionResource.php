@@ -23,7 +23,7 @@ class TransactionResource extends JsonResource
     public function toArray(Request $request): array
     {
         $paymentData = $this->resource->payment_data ?? [];
-        $pagarmeTransactionId = $paymentData['pagarme_transaction_id']
+        $transactionReference = $paymentData['pagarme_transaction_id']
             ?? $paymentData['transaction_id']
             ?? $this->resource->stripe_payment_intent_id
             ?? $this->resource->stripe_charge_id
@@ -47,7 +47,7 @@ class TransactionResource extends JsonResource
 
         return [
             'id' => $this->resource->id,
-            'pagarme_transaction_id' => $pagarmeTransactionId ?? '',
+            'transaction_reference' => $transactionReference ?? '',
             'status' => $this->resource->status,
             'amount' => (string) $this->resource->amount,
             'payment_method' => $this->resource->payment_method ?? '',
