@@ -45,6 +45,8 @@ class OtpController extends Controller
         $key = "otp_{$type}_{$contact}";
 
         Cache::put($key, $code, 600);
+        $otpSent = true;
+        $otpError = null;
 
         try {
             $defaultMailer = config('mail.default');
@@ -71,15 +73,25 @@ class OtpController extends Controller
                 Log::info("WhatsApp OTP for {$contact}: {$code}");
             }
         } catch (Exception $e) {
+            $otpSent = false;
+            $otpError = $e->getMessage();
             Log::error('Failed to send OTP', [
                 'contact' => $contact,
                 'type' => $type,
-                'error' => $e->getMessage(),
+                'error' => $otpError,
                 'mailer' => config('mail.default'),
                 'from_address' => config('mail.from.address'),
                 'smtp_host' => env('MAIL_HOST'),
                 'ses_region' => env('AWS_SES_REGION', env('AWS_DEFAULT_REGION')),
             ]);
+        }
+
+        if ('email' === $type && ! $otpSent) {
+            return response()->json([
+                'message' => 'Nao foi possivel enviar o codigo no momento. Tente novamente em instantes.',
+                'success' => false,
+                'error' => app()->environment('production') ? null : $otpError,
+            ], 503);
         }
 
         Log::info("OTP generated for {$type} {$contact}: {$code}");
@@ -88,6 +100,7 @@ class OtpController extends Controller
 
         return response()->json([
             'message' => 'Código de verificação gerado.',
+            'success' => true,
             'dev_code' => $debug ? $code : null,
         ]);
     }
