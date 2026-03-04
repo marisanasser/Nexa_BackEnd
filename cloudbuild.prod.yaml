@@ -9,15 +9,34 @@ steps:
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', 'gcr.io/nexa-teste-1/nexa-backend:latest']
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-  entrypoint: 'gcloud'
-  args: [
-    'run', 'deploy', 'nexa-backend-prod',
-    '--image', 'gcr.io/nexa-teste-1/nexa-backend:latest',
-    '--region', 'southamerica-east1',
-    '--platform', 'managed',
-    '--allow-unauthenticated',
-    '--update-env-vars',
-    'APP_ENV=production,APP_DEBUG=false,MAIL_MAILER=ses,MAIL_FROM_ADDRESS=no-reply@nexacreators.com.br,MAIL_FROM_NAME=Nexa,AWS_DEFAULT_REGION=sa-east-1,AWS_SES_REGION=sa-east-1,QUEUE_CONNECTION=sync,BROADCAST_DRIVER=reverb,REVERB_APP_KEY=nexa_reverb_key,REVERB_APP_SECRET=nexa_reverb_secret,REVERB_APP_ID=123456,REVERB_HOST=chat-prod-1044548850970.southamerica-east1.run.app,REVERB_PORT=443,REVERB_SCHEME=https,FILESYSTEM_DISK=gcs,GOOGLE_CLOUD_PROJECT_ID=nexa-teste-1,GOOGLE_CLOUD_STORAGE_BUCKET=nexa-uploads-prod,GOOGLE_REDIRECT_URI=https://www.nexacreators.com/auth/google/callback,GOOGLE_CLIENT_ID=1044548850970-auiak0hiqdauc2b75snlerqqfp9na5o2.apps.googleusercontent.com,GOOGLE_CLIENT_SECRET=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,SANCTUM_STATEFUL_DOMAINS=nexacreators.com;www.nexacreators.com;localhost;localhost:3000;127.0.0.1;127.0.0.1:8000;nexa-frontend-prod-1044548850970.southamerica-east1.run.app'
-  ]
+  entrypoint: 'bash'
+  secretEnv:
+  - 'AWS_ACCESS_KEY_ID'
+  - 'AWS_SECRET_ACCESS_KEY'
+  - 'STRIPE_SECRET_KEY'
+  - 'GOOGLE_CLIENT_ID'
+  - 'GOOGLE_CLIENT_SECRET'
+  args:
+  - '-c'
+  - >
+    gcloud run deploy nexa-backend-prod
+    --image gcr.io/nexa-teste-1/nexa-backend:latest
+    --region southamerica-east1
+    --platform managed
+    --allow-unauthenticated
+    --update-env-vars
+    "APP_ENV=production,APP_DEBUG=false,APP_URL=https://www.nexacreators.com,FRONTEND_URL=https://www.nexacreators.com,APP_FRONTEND_URL=https://www.nexacreators.com,SESSION_DOMAIN=nexacreators.com,SESSION_SECURE_COOKIE=true,MAIL_MAILER=ses,MAIL_FROM_ADDRESS=no-reply@nexacreators.com,MAIL_FROM_NAME=Nexa,AWS_ACCESS_KEY_ID=$$AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY=$$AWS_SECRET_ACCESS_KEY,AWS_DEFAULT_REGION=sa-east-1,AWS_SES_REGION=sa-east-1,STRIPE_SECRET_KEY=$$STRIPE_SECRET_KEY,STRIPE_SECRET=$$STRIPE_SECRET_KEY,STRIPE_PUBLISHABLE_KEY=pk_live_51S0WysA91THu9AMObmYWnfojvQRtylZPhIetncmmibQei4JqzFowEfh0qkhXWbdhqiCrUUX93N69NrIcLLcC1T4c00HhdUIlL9,STRIPE_KEY=pk_live_51S0WysA91THu9AMObmYWnfojvQRtylZPhIetncmmibQei4JqzFowEfh0qkhXWbdhqiCrUUX93N69NrIcLLcC1T4c00HhdUIlL9,QUEUE_CONNECTION=sync,BROADCAST_DRIVER=reverb,REVERB_APP_KEY=nexa_reverb_key,REVERB_APP_SECRET=nexa_reverb_secret,REVERB_APP_ID=123456,REVERB_HOST=chat-prod-1044548850970.southamerica-east1.run.app,REVERB_PORT=443,REVERB_SCHEME=https,FILESYSTEM_DISK=gcs,GOOGLE_CLOUD_PROJECT_ID=nexa-teste-1,GOOGLE_CLOUD_STORAGE_BUCKET=nexa-uploads-prod,GOOGLE_REDIRECT_URI=https://www.nexacreators.com/auth/google/callback,GOOGLE_CLIENT_ID=$$GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET=$$GOOGLE_CLIENT_SECRET,SANCTUM_STATEFUL_DOMAINS=nexacreators.com;www.nexacreators.com;localhost;localhost:3000;127.0.0.1;127.0.0.1:8000;nexa-frontend-prod-1044548850970.southamerica-east1.run.app;nexa-frontend-prod-bwld7w5onq-rj.a.run.app"
+availableSecrets:
+  secretManager:
+  - versionName: projects/nexa-teste-1/secrets/backend-aws-access-key-id/versions/latest
+    env: 'AWS_ACCESS_KEY_ID'
+  - versionName: projects/nexa-teste-1/secrets/backend-aws-secret-access-key/versions/latest
+    env: 'AWS_SECRET_ACCESS_KEY'
+  - versionName: projects/nexa-teste-1/secrets/stripe-live-secret-key/versions/latest
+    env: 'STRIPE_SECRET_KEY'
+  - versionName: projects/nexa-teste-1/secrets/backend-google-client-id/versions/latest
+    env: 'GOOGLE_CLIENT_ID'
+  - versionName: projects/nexa-teste-1/secrets/backend-google-client-secret/versions/latest
+    env: 'GOOGLE_CLIENT_SECRET'
 images:
 - 'gcr.io/nexa-teste-1/nexa-backend:latest'
