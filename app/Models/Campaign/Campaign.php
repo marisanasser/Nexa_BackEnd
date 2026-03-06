@@ -386,21 +386,40 @@ class Campaign extends Model
             return null;
         }
 
-        if (is_array($value)) {
-            return $value;
-        }
+        $attachments = null;
 
-        if (is_string($value)) {
+        if (is_array($value)) {
+            $attachments = $value;
+        } elseif (is_string($value)) {
             $decoded = json_decode($value, true);
 
-            if (null === $decoded && JSON_ERROR_NONE === json_last_error()) {
-                return null;
+            if (JSON_ERROR_NONE === json_last_error()) {
+                if (is_array($decoded)) {
+                    $attachments = $decoded;
+                } elseif (is_string($decoded) && '' !== trim($decoded)) {
+                    $attachments = [$decoded];
+                }
+            } elseif ('' !== trim($value)) {
+                $attachments = [$value];
             }
-
-            return is_array($decoded) ? $decoded : (null !== $decoded ? [$decoded] : null);
         }
 
-        return null;
+        if (!$attachments || !is_array($attachments)) {
+            return null;
+        }
+
+        $resolvedAttachments = array_values(array_filter(array_map(
+            static function ($attachment) {
+                if (!is_string($attachment) || '' === trim($attachment)) {
+                    return null;
+                }
+
+                return \App\Helpers\FileUploadHelper::resolveUrl($attachment);
+            },
+            $attachments
+        )));
+
+        return !empty($resolvedAttachments) ? $resolvedAttachments : null;
     }
 
     public function getRejectionReasonAttribute()
