@@ -32,7 +32,7 @@ class AdminStudentController extends Controller
     public function index(Request $request): JsonResponse
     {
         $request->validate([
-            'status' => 'nullable|in:active,expired,premium',
+            'status' => 'nullable|in:active,expired,premium,blocked',
             'search' => 'nullable|string|max:255',
             'per_page' => 'nullable|integer|min:1|max:100',
             'page' => 'nullable|integer|min:1',
@@ -62,18 +62,21 @@ class AdminStudentController extends Controller
         ;
 
         $transformedStudents = collect($students->items())->map(fn ($student) => $this->transformStudentData($student));
+        $pagination = [
+            'current_page' => $students->currentPage(),
+            'last_page' => $students->lastPage(),
+            'per_page' => $students->perPage(),
+            'total' => $students->total(),
+            'from' => $students->firstItem(),
+            'to' => $students->lastItem(),
+        ];
 
         return response()->json([
             'success' => true,
-            'data' => $transformedStudents,
-            'pagination' => [
-                'current_page' => $students->currentPage(),
-                'last_page' => $students->lastPage(),
-                'per_page' => $students->perPage(),
-                'total' => $students->total(),
-                'from' => $students->firstItem(),
-                'to' => $students->lastItem(),
-            ],
+            'data' => array_merge($pagination, [
+                'data' => $transformedStudents->values(),
+            ]),
+            'pagination' => $pagination,
         ]);
     }
 
@@ -414,6 +417,7 @@ class AdminStudentController extends Controller
                 ;
             })->where('has_premium', false),
             'premium' => $query->where('has_premium', true),
+            'blocked' => $query->whereNull('email_verified_at'),
             default => null,
         };
     }
@@ -515,13 +519,17 @@ class AdminStudentController extends Controller
             'email' => $student->email,
             'academic_email' => $student->academic_email ?? null,
             'institution' => $student->institution ?? null,
+            'institution_name' => $student->institution ?? null,
             'course_name' => $student->course_name ?? null,
             'student_verified' => $student->student_verified,
+            'student_verified_at' => $student->student_verified ? ($student->updated_at ?? $student->created_at) : null,
             'student_expires_at' => $student->student_expires_at,
             'free_trial_expires_at' => $student->free_trial_expires_at,
+            'trial_ends_at' => $trialExpiresAt,
             'has_premium' => $student->has_premium,
             'created_at' => $student->created_at,
             'email_verified_at' => $student->email_verified_at,
+            'is_active' => null !== $student->email_verified_at,
             'status' => $status,
             'trial_status' => $trialStatus,
             'days_remaining' => $daysRemaining,
