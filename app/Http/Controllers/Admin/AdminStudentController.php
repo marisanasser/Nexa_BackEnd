@@ -85,6 +85,7 @@ class AdminStudentController extends Controller
         $request->validate([
             'status' => 'nullable|in:pending,approved,rejected',
             'per_page' => 'nullable|integer|min:1|max:100',
+            'page' => 'nullable|integer|min:1',
         ]);
 
         $query = StudentVerificationRequest::query()
@@ -98,11 +99,24 @@ class AdminStudentController extends Controller
             $query->where('status', $request->status);
         }
 
-        $requests = $query->orderBy('created_at', 'desc')->paginate($request->per_page ?? 10);
+        $requests = $query
+            ->orderBy('created_at', 'desc')
+            ->paginate($request->per_page ?? 10, ['*'], 'page', $request->input('page', 1))
+        ;
 
         return response()->json([
             'success' => true,
-            'data' => $requests,
+            'data' => collect($requests->items())
+                ->map(fn (StudentVerificationRequest $studentRequest): array => $this->transformVerificationRequestData($studentRequest))
+                ->values(),
+            'pagination' => [
+                'current_page' => $requests->currentPage(),
+                'last_page' => $requests->lastPage(),
+                'per_page' => $requests->perPage(),
+                'total' => $requests->total(),
+                'from' => $requests->firstItem(),
+                'to' => $requests->lastItem(),
+            ],
         ]);
     }
 
@@ -203,6 +217,7 @@ class AdminStudentController extends Controller
     {
         $request->validate([
             'review_notes' => 'nullable|string|max:1000',
+            'reason' => 'nullable|string|max:1000',
         ]);
 
         $svr = StudentVerificationRequest::findOrFail($id);
@@ -211,18 +226,19 @@ class AdminStudentController extends Controller
         }
 
         $user = $svr->user;
+        $reviewNotes = $request->input('review_notes', $request->input('reason'));
 
         $svr->update([
             'status' => 'rejected',
             'reviewed_by' => auth()->id(),
             'reviewed_at' => now(),
-            'review_notes' => $request->review_notes,
+            'review_notes' => $reviewNotes,
         ]);
 
         if ($user) {
             try {
                 UserNotificationService::notifyUserOfStudentVerificationRejection($user, [
-                    'rejection_reason' => $request->review_notes,
+                    'rejection_reason' => $reviewNotes,
                     'rejected_at' => now()->toISOString(),
                 ]);
             } catch (Exception $e) {
@@ -421,6 +437,52 @@ class AdminStudentController extends Controller
         $student->delete();
 
         return 'Student removed successfully';
+    }
+
+    private function transformVerificationRequestData(StudentVerificationRequest $studentRequest): array
+    {
+        $user = $studentRequest->user;
+
+        return [
+            'id' => $studentRequest->id,
+            'user_id' => $studentRequest->user_id,
+            'user_name' => $user?->name ?? 'Usuário removido',
+            'user_email' => $user?->email ?? $studentRequest->purchase_email,
+            'purchase_email' => $studentRequest->purchase_email,
+            'institution_name' => $user?->institution ?? null,
+            'course_name' => $studentRequest->course_name ?? 'Build Creators',
+            'document_url' => $this->resolveVerificationDocumentUrl($studentRequest->evidence),
+            'status' => $studentRequest->status,
+            'created_at' => $studentRequest->created_at,
+            'reviewed_at' => $studentRequest->reviewed_at,
+            'review_notes' => $studentRequest->review_notes,
+        ];
+    }
+
+    private function resolveVerificationDocumentUrl(?array $evidence): ?string
+    {
+        if (!$evidence) {
+            return null;
+        }
+
+        foreach ($evidence as $item) {
+            if (is_string($item) && '' !== trim($item)) {
+                return $item;
+            }
+
+            if (!is_array($item)) {
+                continue;
+            }
+
+            foreach (['document_url', 'url', 'path', 'file_url'] as $key) {
+                $value = $item[$key] ?? null;
+                if (is_string($value) && '' !== trim($value)) {
+                    return $value;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function transformStudentData(User $student): array
