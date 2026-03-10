@@ -1185,6 +1185,12 @@ class StripeBillingController extends Controller
         };
 
         try {
+            $accessExpiresAt = $user->getPremiumAccessExpiresAt();
+            $daysRemaining = $accessExpiresAt?->isFuture()
+                ? now()->diffInDays($accessExpiresAt, false)
+                : 0
+            ;
+
             return response()->json([
                 'has_premium' => $user->has_premium,
                 'premium_expires_at' => $formatDate($user->premium_expires_at),
@@ -1194,6 +1200,8 @@ class StripeBillingController extends Controller
                 'student_verified' => $user->student_verified,
                 'student_expires_at' => $formatDate($user->student_expires_at),
                 'is_student' => $user->isStudent(),
+                'access_expires_at' => $formatDate($accessExpiresAt),
+                'days_remaining' => $daysRemaining,
                 'subscription' => $active ? [
                     'id' => $active->id,
                     'status' => $active->status,
@@ -1210,6 +1218,12 @@ class StripeBillingController extends Controller
                 'premium_expires_at_value' => $user->premium_expires_at,
             ]);
 
+            $accessExpiresAt = $user->getPremiumAccessExpiresAt();
+            $daysRemaining = $accessExpiresAt?->isFuture()
+                ? now()->diffInDays($accessExpiresAt, false)
+                : 0
+            ;
+
             return response()->json([
                 'has_premium' => $user->has_premium ?? false,
                 'premium_expires_at' => is_string($user->premium_expires_at) ? $user->premium_expires_at : ($user->premium_expires_at?->format('Y-m-d H:i:s') ?? null),
@@ -1219,6 +1233,8 @@ class StripeBillingController extends Controller
                 'student_verified' => $user->student_verified ?? false,
                 'student_expires_at' => is_string($user->student_expires_at) ? $user->student_expires_at : ($user->student_expires_at?->format('Y-m-d H:i:s') ?? null),
                 'is_student' => $user->isStudent(),
+                'access_expires_at' => is_string($accessExpiresAt) ? $accessExpiresAt : ($accessExpiresAt?->format('Y-m-d H:i:s') ?? null),
+                'days_remaining' => $daysRemaining,
                 'subscription' => $active ? [
                     'id' => $active->id,
                     'status' => $active->status,

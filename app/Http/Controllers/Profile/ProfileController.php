@@ -25,7 +25,6 @@ class ProfileController extends Controller
     {
         try {
             $user = $this->getAuthenticatedUser();
-            $user->load('portfolio');
 
             if (!$user) {
                 return response()->json([
@@ -33,6 +32,9 @@ class ProfileController extends Controller
                     'message' => 'User not authenticated',
                 ], 401);
             }
+
+            $user->load('portfolio');
+            $accessExpiresAt = $user->getPremiumAccessExpiresAt();
 
             return response()->json([
                 'success' => true,
@@ -62,8 +64,12 @@ class ProfileController extends Controller
                     'categories' => ['General'],
                     'has_premium' => $user->has_premium,
                     'student_verified' => $user->student_verified,
+                    'student_expires_at' => $user->student_expires_at,
                     'premium_expires_at' => $user->premium_expires_at,
                     'free_trial_expires_at' => $user->free_trial_expires_at,
+                    'is_premium_active' => $user->hasPremiumAccess(),
+                    'is_on_trial' => $user->isOnTrial(),
+                    'access_expires_at' => $accessExpiresAt,
                     'created_at' => $user->created_at,
                     'updated_at' => $user->updated_at,
                     'portfolio' => $user->portfolio,
@@ -362,6 +368,7 @@ class ProfileController extends Controller
 
             $user->refresh();
             $user->load('portfolio');
+            $accessExpiresAt = $user->getPremiumAccessExpiresAt();
 
             $avatarUrl = FileUploadHelper::resolveUrl($user->avatar_url);
             // Ensure absolute URL
@@ -402,8 +409,12 @@ class ProfileController extends Controller
                     'categories' => ['General'],
                     'has_premium' => $user->has_premium,
                     'student_verified' => $user->student_verified,
+                    'student_expires_at' => $user->student_expires_at,
                     'premium_expires_at' => $user->premium_expires_at,
                     'free_trial_expires_at' => $user->free_trial_expires_at,
+                    'is_premium_active' => $user->hasPremiumAccess(),
+                    'is_on_trial' => $user->isOnTrial(),
+                    'access_expires_at' => $accessExpiresAt,
                     'created_at' => $user->created_at,
                     'updated_at' => $user->updated_at,
                     'portfolio' => $user->portfolio,

@@ -486,6 +486,30 @@ class User extends Authenticatable
         return $premiumExpiresAt === null || $premiumExpiresAt->isFuture();
     }
 
+    public function getStudentAccessExpiresAt(): ?\Carbon\Carbon
+    {
+        $studentExpiresAt = $this->getCarbonDate($this->student_expires_at);
+
+        if ($studentExpiresAt !== null) {
+            return $studentExpiresAt;
+        }
+
+        return $this->getCarbonDate($this->free_trial_expires_at);
+    }
+
+    public function getPremiumAccessExpiresAt(): ?\Carbon\Carbon
+    {
+        if ($this->isPremium()) {
+            return $this->getCarbonDate($this->premium_expires_at);
+        }
+
+        if ($this->isStudent()) {
+            return $this->getStudentAccessExpiresAt();
+        }
+
+        return $this->getCarbonDate($this->free_trial_expires_at);
+    }
+
     public function isOnTrial(): bool
     {
 
@@ -497,7 +521,10 @@ class User extends Authenticatable
             return false;
         }
 
-        $trialExpiresAt = $this->getCarbonDate($this->free_trial_expires_at);
+        $trialExpiresAt = $this->isStudent()
+            ? $this->getStudentAccessExpiresAt()
+            : $this->getCarbonDate($this->free_trial_expires_at)
+        ;
 
         return $trialExpiresAt !== null && $trialExpiresAt->isFuture();
     }
@@ -531,7 +558,7 @@ class User extends Authenticatable
             return false;
         }
 
-        $studentExpiresAt = $this->getCarbonDate($this->student_expires_at);
+        $studentExpiresAt = $this->getStudentAccessExpiresAt();
 
         return $studentExpiresAt === null || $studentExpiresAt->isFuture();
     }

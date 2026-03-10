@@ -363,8 +363,40 @@ class AdminStudentController extends Controller
     private function applyStatusFilter($query, string $status): void
     {
         match ($status) {
-            'active' => $query->where('free_trial_expires_at', '>', now())->where('has_premium', false),
-            'expired' => $query->where('free_trial_expires_at', '<=', now())->where('has_premium', false),
+            'active' => $query->where(function ($studentQuery): void {
+                $studentQuery
+                    ->where(function ($trialQuery): void {
+                        $trialQuery
+                            ->whereNotNull('student_expires_at')
+                            ->where('student_expires_at', '>', now())
+                        ;
+                    })
+                    ->orWhere(function ($trialQuery): void {
+                        $trialQuery
+                            ->whereNull('student_expires_at')
+                            ->whereNotNull('free_trial_expires_at')
+                            ->where('free_trial_expires_at', '>', now())
+                        ;
+                    })
+                ;
+            })->where('has_premium', false),
+            'expired' => $query->where(function ($studentQuery): void {
+                $studentQuery
+                    ->where(function ($trialQuery): void {
+                        $trialQuery
+                            ->whereNotNull('student_expires_at')
+                            ->where('student_expires_at', '<=', now())
+                        ;
+                    })
+                    ->orWhere(function ($trialQuery): void {
+                        $trialQuery
+                            ->whereNull('student_expires_at')
+                            ->whereNotNull('free_trial_expires_at')
+                            ->where('free_trial_expires_at', '<=', now())
+                        ;
+                    })
+                ;
+            })->where('has_premium', false),
             'premium' => $query->where('has_premium', true),
             default => null,
         };
@@ -394,7 +426,7 @@ class AdminStudentController extends Controller
     private function transformStudentData(User $student): array
     {
         $now = now();
-        $trialExpiresAt = $student->free_trial_expires_at;
+        $trialExpiresAt = $student->getStudentAccessExpiresAt();
 
         $status = 'active';
         if ($student->has_premium) {

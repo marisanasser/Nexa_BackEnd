@@ -77,7 +77,13 @@ class AuthenticatedSessionController extends Controller
                 'role' => $user->role,
                 'avatar_url' => FileUploadHelper::resolveUrl($user->avatar_url),
                 'student_verified' => $user->student_verified,
+                'student_expires_at' => $user->student_expires_at,
                 'has_premium' => $user->has_premium,
+                'premium_expires_at' => $user->premium_expires_at,
+                'free_trial_expires_at' => $user->free_trial_expires_at,
+                'is_premium_active' => $user->hasPremiumAccess(),
+                'is_on_trial' => $user->isOnTrial(),
+                'access_expires_at' => $user->getPremiumAccessExpiresAt(),
             ],
         ], 200);
     }
