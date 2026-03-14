@@ -107,9 +107,9 @@
             <p style="margin-top: 25px;">Estamos aqui para apoiar você em cada etapa desta jornada. Se tiver qualquer dúvida, nossa equipe está à disposição!</p>
 
             <div style="text-align: center; margin: 30px 0;">
-                <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/creator/applications" class="button" style="color: white; text-decoration: none;">
-                    Acessar Minhas Propostas
-            </a>
+                <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/dashboard/campaigns/{{ $campaign->id }}" class="button" style="color: white; text-decoration: none;">
+                    Abrir Campanha Aprovada
+                </a>
             </div>
         </div>
 

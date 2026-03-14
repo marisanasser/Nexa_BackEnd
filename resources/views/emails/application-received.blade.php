@@ -176,8 +176,8 @@
             @endif
 
             <p style="text-align: center;">
-                <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/brand/applications" class="button" style="color: white;">
-                    Ver Todas as Candidaturas
+                <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/dashboard/campaigns/{{ $campaign->id }}/manage" class="button" style="color: white;">
+                    Revisar Candidaturas
                 </a>
             </p>
 
@@ -194,4 +194,3 @@
     </div>
 </body>
 </html>
-

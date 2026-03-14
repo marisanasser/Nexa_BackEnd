@@ -117,8 +117,9 @@
 
             <p>Não desanime! Use este feedback para melhorar e enviar um material ainda melhor na próxima vez.</p>
 
-            <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/creator/contracts" class="button">
-                Ver Contratos
+            @php($chatRoomId = optional(optional($contract->offer)->chatRoom)->room_id)
+            <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/dashboard/messages{{ $chatRoomId ? '?roomId=' . $chatRoomId : '' }}" class="button">
+                Abrir Conversa
             </a>
         </div>
 

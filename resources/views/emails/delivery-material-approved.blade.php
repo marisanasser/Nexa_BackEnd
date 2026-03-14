@@ -97,8 +97,9 @@
 
             <p>Continue enviando materiais de qualidade para manter o excelente trabalho!</p>
 
-            <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/creator/contracts" class="button">
-                Ver Contratos
+            @php($chatRoomId = optional(optional($contract->offer)->chatRoom)->room_id)
+            <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/dashboard/messages{{ $chatRoomId ? '?roomId=' . $chatRoomId : '' }}" class="button">
+                Abrir Conversa
             </a>
         </div>
 

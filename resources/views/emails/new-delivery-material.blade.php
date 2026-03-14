@@ -107,7 +107,8 @@
 
             <p>Acesse a plataforma para revisar e aprovar ou solicitar alterações.</p>
 
-            <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/brand/contracts" class="button">
+            @php($chatRoomId = optional(optional($contract->offer)->chatRoom)->room_id)
+            <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/dashboard/messages{{ $chatRoomId ? '?roomId=' . $chatRoomId : '' }}" class="button">
                 Revisar Material
             </a>
         </div>

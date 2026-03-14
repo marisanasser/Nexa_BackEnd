@@ -144,7 +144,7 @@
             </div>
 
             <p style="text-align: center;">
-                <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/brand/campaigns" class="button" style="color: white;">
+                <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/dashboard/campaigns" class="button" style="color: white;">
                     Ver Minhas Campanhas
                 </a>
             </p>
@@ -157,4 +157,3 @@
     </div>
 </body>
 </html>
-

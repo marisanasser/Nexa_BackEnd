@@ -227,7 +227,8 @@
             </div>
 
             <div style="text-align: center;">
-                <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/creator/chat" class="cta-button">
+                @php($chatRoomId = optional(optional($contract->offer)->chatRoom)->room_id)
+                <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/dashboard/messages{{ $chatRoomId ? '?roomId=' . $chatRoomId : '' }}" class="cta-button">
                     🚀 Justificar Atraso Agora
                 </a>
             </div>

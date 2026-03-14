@@ -120,7 +120,7 @@
                 Acesse a campanha, ajuste o texto e salve as alterações para continuar o processo de aprovação.
             </p>
 
-            <a href="{{ config('app.frontend_url', 'http://localhost:3000') }}/dashboard/campaigns/{{ $campaign->id }}" class="button">
+            <a href="{{ config('app.frontend_url', 'http://localhost:3000') }}/dashboard/campaigns/{{ $campaign->id }}?edit=1" class="button">
                 Revisar campanha
             </a>
         </div>

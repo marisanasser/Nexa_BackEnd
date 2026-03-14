@@ -383,7 +383,7 @@ class RegisteredUserController extends Controller
     private function sendWelcomeEmail(User $user, string $token): void
     {
         $frontend = config('app.frontend_url', env('APP_FRONTEND_URL', 'http://localhost:5000'));
-        $link = "{$frontend}/{$user->role}?token={$token}";
+        $link = "{$frontend}/login";
 
         try {
             Mail::to($user->email)->send(new SignupMail($user, $link));
