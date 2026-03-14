@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Campaign;
 
+use App\Domain\Campaign\Services\CampaignAuditService;
 use App\Domain\Shared\Traits\HasAuthenticatedUser;
 use FFI\Exception;
 use Illuminate\Support\Facades\Log;
@@ -13,6 +14,7 @@ use App\Http\Controllers\Base\Controller;
 use App\Http\Requests\Campaign\StoreCampaignRequest;
 use App\Models\Campaign\Campaign;
 use App\Models\Campaign\CampaignFavorite;
+use App\Models\Campaign\CampaignTextSuggestion;
 use App\Models\Common\Notification;
 use App\Models\Contract\Contract;
 use App\Models\Payment\CreatorBalance;
@@ -581,7 +583,13 @@ class CampaignController extends Controller
                 return response()->json(['error' => 'Unauthorized'], 403);
             }
 
-            $campaign->load(['brand', 'approvedBy', 'bids.user']);
+            $relations = ['brand', 'approvedBy', 'bids.user'];
+
+            if ($user->isAdmin() || ($user->isBrand() && $campaign->brand_id === $user->id)) {
+                $relations[] = 'openTextSuggestion.admin';
+            }
+
+            $campaign->load($relations);
 
             if ($user) {
                 $campaign->setAttribute('has_applied', $campaign->applications()->where('creator_id', $user->id)->exists());
@@ -607,14 +615,26 @@ class CampaignController extends Controller
         Log::info('Update campaign request:', ['request' => $request->all()]);
 
         try {
+            $user = $this->getAuthenticatedUser();
+            assert($user instanceof User);
+
             $campaign = Campaign::findOrFail($id);
             Log::info('Campaign found:', ['campaign' => $campaign]);
+
+            if (!$user->isAdmin() && (!$user->isBrand() || $campaign->brand_id !== $user->id)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized to update this campaign',
+                ], 403);
+            }
 
             // Handle multipart/form-data for PUT/PATCH manually if necessary
             $this->performMultipartParsing($request);
 
             // Extract and validate update data
             $data = $this->extractUpdateData($request);
+            $originalTitle = $campaign->title;
+            $originalDescription = $campaign->description;
 
             $uploadedFiles = ['image' => null, 'logo' => null, 'attachments' => []];
             $oldFilesToDelete = ['image' => null, 'logo' => null, 'attachments' => []];
@@ -628,6 +648,28 @@ class CampaignController extends Controller
                 $oldFilesToDelete = $fileResults['old'];
 
                 $campaign->update($data);
+
+                $titleChanged = array_key_exists('title', $data) && $data['title'] !== $originalTitle;
+                $descriptionChanged = array_key_exists('description', $data) && $data['description'] !== $originalDescription;
+
+                if ($titleChanged || $descriptionChanged) {
+                    $resolvedCount = $campaign->textSuggestions()
+                        ->open()
+                        ->update([
+                            'status' => CampaignTextSuggestion::STATUS_RESOLVED,
+                            'resolved_at' => now(),
+                            'resolved_by' => $user->id,
+                        ])
+                    ;
+
+                    if ($resolvedCount > 0) {
+                        app(CampaignAuditService::class)->log($campaign, 'text_revision_resolved', [
+                            'resolved_by' => $user->id,
+                            'resolved_suggestions' => $resolvedCount,
+                        ]);
+                    }
+                }
+
                 DB::commit();
 
                 Log::info('Campaign database update committed', ['id' => $campaign->id]);
@@ -651,7 +693,7 @@ class CampaignController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Campaign updated successfully',
-                'data' => $campaign->fresh()->load(['brand', 'bids']),
+                'data' => $campaign->fresh()->load(['brand', 'bids', 'openTextSuggestion.admin']),
             ]);
         } catch (Exception $e) {
             Log::error('Failed to update campaign', [

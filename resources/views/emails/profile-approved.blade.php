@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Campanha Aprovada - Nexa Platform</title>
+    <title>Perfil aprovado - Nexa</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -40,9 +40,6 @@
             display: inline-block;
             font-weight: bold;
         }
-        .content {
-            margin: 30px 0;
-        }
         .info-box {
             background-color: #f9f9f9;
             padding: 20px;
@@ -74,24 +71,27 @@
     <div class="container">
         <div class="header">
             <div class="logo">NEXA</div>
-            <div class="status">✅ CAMPANHA APROVADA</div>
+            <div class="status">PERFIL APROVADO</div>
         </div>
 
         <div class="content">
-            <h2>Parabéns, {{ $brand->name }}! 🎉</h2>
+            <h2>Ola, {{ $user->name }}!</h2>
 
-            <p> <strong>Parabéns!</strong> Sua campanha foi aprovada na Nexa!</p>
+            <p>Seu perfil foi aprovado pela equipe da Nexa e sua conta ja pode usar os recursos da plataforma.</p>
 
-            <p>Agora é hora de dar início a uma parceria estratégica com criadores de alto nível para a sua marca. Acesse o site e confira sua campanha ativa.</p>
+            <div class="info-box">
+                <p><strong>Tipo de conta:</strong> {{ $approvalData['role'] ?? $user->role }}</p>
+                <p><strong>Data de aprovacao:</strong> {{ isset($approvalData['approved_at']) ? \Illuminate\Support\Carbon::parse($approvalData['approved_at'])->format('d/m/Y H:i') : now()->format('d/m/Y H:i') }}</p>
+            </div>
 
-            <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/dashboard/campaigns" class="button" style="color: white;">
-                Ver Minhas Campanhas
+            <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/dashboard/profile" class="button" style="color: white;">
+                Acessar meu perfil
             </a>
         </div>
 
         <div class="footer">
-            <p>Este é um email automático da plataforma Nexa.</p>
-            <p>Se você tiver alguma dúvida, entre em contato conosco.</p>
+            <p>Este e um email automatico da plataforma Nexa.</p>
+            <p>Se voce tiver alguma duvida, entre em contato conosco.</p>
         </div>
     </div>
 </body>

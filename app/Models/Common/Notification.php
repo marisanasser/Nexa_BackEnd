@@ -240,6 +240,69 @@ class Notification extends Model
         ]);
     }
 
+    public static function createCampaignTextSuggestionRequested(int $userId, array $suggestionData = []): self
+    {
+        $campaignTitle = $suggestionData['campaign_title'] ?? 'Campanha';
+        $adminName = $suggestionData['admin_name'] ?? 'Equipe Nexa';
+
+        return self::create([
+            'user_id' => $userId,
+            'type' => 'campaign_text_suggestion_requested',
+            'title' => 'Ajustes sugeridos na sua campanha',
+            'message' => "{$adminName} sugeriu alterações no texto da campanha '{$campaignTitle}'.",
+            'data' => $suggestionData,
+        ]);
+    }
+
+    public static function createStudentVerificationApproved(int $userId, array $verificationData = []): self
+    {
+        $message = 'Sua verificacao estudantil foi aprovada.';
+        $expiresAt = $verificationData['expires_at'] ?? null;
+
+        if (is_string($expiresAt) && '' !== trim($expiresAt)) {
+            $message .= ' Seu acesso estudantil esta ativo ate '.Carbon::parse($expiresAt)->format('d/m/Y').'.';
+        }
+
+        return self::create([
+            'user_id' => $userId,
+            'type' => 'student_verification_approved',
+            'title' => 'Verificacao estudantil aprovada',
+            'message' => $message,
+            'data' => $verificationData,
+        ]);
+    }
+
+    public static function createStudentVerificationRejected(int $userId, array $verificationData = []): self
+    {
+        $reason = $verificationData['rejection_reason'] ?? null;
+
+        return self::create([
+            'user_id' => $userId,
+            'type' => 'student_verification_rejected',
+            'title' => 'Verificacao estudantil nao aprovada',
+            'message' => 'Nao foi possivel aprovar sua verificacao estudantil.'.($reason ? " Motivo: {$reason}" : ''),
+            'data' => $verificationData,
+        ]);
+    }
+
+    public static function createProfileApproved(int $userId, array $profileData = []): self
+    {
+        $role = $profileData['role'] ?? null;
+        $resourceName = match ($role) {
+            'brand' => 'da marca',
+            'student' => 'de estudante',
+            default => '',
+        };
+
+        return self::create([
+            'user_id' => $userId,
+            'type' => 'profile_approved',
+            'title' => 'Perfil aprovado',
+            'message' => 'Seu perfil '.($resourceName ? "{$resourceName} " : '').'foi aprovado e sua conta esta liberada para uso na plataforma.',
+            'data' => $profileData,
+        ]);
+    }
+
     public static function createProposalApproved($userId, $campaignId, $campaignTitle, $brandName): self
     {
         return self::create([

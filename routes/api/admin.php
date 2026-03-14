@@ -41,6 +41,7 @@ Route::prefix('campaigns')->group(function (): void {
     Route::get('/', [AdminCampaignController::class, 'index']);
     Route::get('/{id}', [AdminCampaignController::class, 'show'])->where('id', '[0-9]+');
     Route::patch('/{id}', [AdminCampaignController::class, 'update'])->where('id', '[0-9]+');
+    Route::post('/{id}/text-suggestions', [AdminCampaignController::class, 'requestTextChanges'])->where('id', '[0-9]+');
     Route::patch('/{id}/approve', [AdminCampaignController::class, 'approve'])->where('id', '[0-9]+');
     Route::patch('/{id}/reject', [AdminCampaignController::class, 'reject'])->where('id', '[0-9]+');
     Route::delete('/{id}', [AdminCampaignController::class, 'destroy'])->where('id', '[0-9]+');

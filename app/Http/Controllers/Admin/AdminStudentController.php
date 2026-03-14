@@ -339,6 +339,7 @@ class AdminStudentController extends Controller
         }
 
         $action = $request->input('action');
+        $wasActive = null !== $student->email_verified_at;
 
         try {
             $message = match ($action) {
@@ -347,6 +348,12 @@ class AdminStudentController extends Controller
                 'remove' => $this->removeStudent($student),
                 default => throw new Exception('Invalid action'),
             };
+
+            if ('activate' === $action && !$wasActive) {
+                UserNotificationService::notifyUserOfProfileApproval($student->fresh() ?? $student, [
+                    'role' => $student->role,
+                ]);
+            }
 
             Log::info('Student status updated', [
                 'student_id' => $student->id,

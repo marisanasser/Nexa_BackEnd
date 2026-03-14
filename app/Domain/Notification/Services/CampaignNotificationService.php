@@ -8,10 +8,12 @@ use App\Mail\ApplicationReceived;
 use App\Mail\CampaignApproved;
 use App\Mail\CampaignCreated;
 use App\Mail\CampaignRejected;
+use App\Mail\CampaignTextSuggestionRequested;
 use App\Mail\ProposalApproved;
 use App\Models\Campaign\Bid;
 use App\Models\Campaign\Campaign;
 use App\Models\Campaign\CampaignApplication;
+use App\Models\Campaign\CampaignTextSuggestion;
 use App\Models\Common\Notification;
 use App\Models\User\User;
 use Exception;
@@ -125,6 +127,47 @@ class CampaignNotificationService
             Log::error('Failed to notify brand of project status', [
                 'campaign_id' => $campaign->id,
                 'status' => $status,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public static function notifyBrandOfTextSuggestion(CampaignTextSuggestion $suggestion): void
+    {
+        try {
+            $suggestion->loadMissing(['campaign.brand', 'admin']);
+
+            $campaign = $suggestion->campaign;
+            $brand = $campaign->brand;
+
+            $notification = Notification::createCampaignTextSuggestionRequested(
+                $campaign->brand_id,
+                [
+                    'campaign_id' => $campaign->id,
+                    'campaign_title' => $campaign->title,
+                    'suggestion_id' => $suggestion->id,
+                    'suggested_title' => $suggestion->suggested_title,
+                    'suggested_description' => $suggestion->suggested_description,
+                    'note' => $suggestion->note,
+                    'admin_name' => $suggestion->admin?->name,
+                ]
+            );
+
+            NotificationService::sendSocketNotification($campaign->brand_id, $notification);
+
+            try {
+                Mail::to($brand->email)->send(new CampaignTextSuggestionRequested($suggestion));
+            } catch (Exception $emailError) {
+                Log::error('Failed to send campaign text suggestion email', [
+                    'campaign_id' => $campaign->id,
+                    'brand_email' => $brand->email,
+                    'suggestion_id' => $suggestion->id,
+                    'error' => $emailError->getMessage(),
+                ]);
+            }
+        } catch (Exception $e) {
+            Log::error('Failed to notify brand of campaign text suggestion', [
+                'suggestion_id' => $suggestion->id,
                 'error' => $e->getMessage(),
             ]);
         }

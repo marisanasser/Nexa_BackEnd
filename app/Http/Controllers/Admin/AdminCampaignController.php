@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Campaign\Services\CampaignAuditService;
 use App\Domain\Notification\Services\AdminNotificationService;
+use App\Domain\Notification\Services\CampaignNotificationService;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
 use App\Domain\Shared\Traits\HasAuthenticatedUser;
 use App\Http\Controllers\Base\Controller;
 use App\Models\Campaign\Campaign;
+use App\Models\Campaign\CampaignTextSuggestion;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,7 +47,7 @@ class AdminCampaignController extends Controller
         $perPage = $request->input('per_page', 10);
         $page = $request->input('page', 1);
 
-        $query = Campaign::with(['brand', 'applications']);
+        $query = Campaign::with(['brand', 'applications', 'openTextSuggestion']);
 
         if ($status) {
             $query->where('status', $status);
@@ -82,7 +85,7 @@ class AdminCampaignController extends Controller
     public function show(int $id): JsonResponse
     {
         try {
-            $campaign = Campaign::with(['brand', 'applications.creator'])
+            $campaign = Campaign::with(['brand', 'applications.creator', 'openTextSuggestion.admin'])
                 ->findOrFail($id)
             ;
 
@@ -111,6 +114,7 @@ class AdminCampaignController extends Controller
                         'email' => $application->creator->email,
                     ],
                 ]),
+                'text_suggestion' => $this->transformTextSuggestionData($campaign->openTextSuggestion),
             ];
 
             return response()->json([
@@ -254,6 +258,114 @@ class AdminCampaignController extends Controller
     }
 
     /**
+     * Request text changes from the brand before approval.
+     */
+    public function requestTextChanges(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'suggested_title' => 'nullable|string|max:255',
+            'suggested_description' => 'nullable|string|max:5000',
+            'note' => 'nullable|string|max:5000',
+        ]);
+
+        try {
+            $user = $this->getAuthenticatedUser();
+            $campaign = Campaign::with(['brand'])->findOrFail($id);
+
+            if (!$campaign->isPending()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only pending campaigns can receive text suggestions',
+                ], 422);
+            }
+
+            $suggestedTitle = isset($validated['suggested_title'])
+                ? trim((string) $validated['suggested_title'])
+                : null;
+            $suggestedDescription = isset($validated['suggested_description'])
+                ? trim((string) $validated['suggested_description'])
+                : null;
+            $note = isset($validated['note']) ? trim((string) $validated['note']) : null;
+
+            $suggestedTitle = '' !== (string) $suggestedTitle ? $suggestedTitle : null;
+            $suggestedDescription = '' !== (string) $suggestedDescription ? $suggestedDescription : null;
+            $note = '' !== (string) $note ? $note : null;
+
+            if ($suggestedTitle === $campaign->title) {
+                $suggestedTitle = null;
+            }
+
+            if ($suggestedDescription === $campaign->description) {
+                $suggestedDescription = null;
+            }
+
+            if (!$suggestedTitle && !$suggestedDescription && !$note) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Provide at least one suggested change or an observation',
+                ], 422);
+            }
+
+            DB::beginTransaction();
+
+            try {
+                $campaign->textSuggestions()
+                    ->open()
+                    ->update([
+                        'status' => CampaignTextSuggestion::STATUS_SUPERSEDED,
+                        'resolved_at' => now(),
+                        'resolved_by' => $user->id,
+                    ])
+                ;
+
+                $suggestion = $campaign->textSuggestions()->create([
+                    'admin_id' => $user->id,
+                    'current_title' => $campaign->title,
+                    'current_description' => $campaign->description,
+                    'suggested_title' => $suggestedTitle,
+                    'suggested_description' => $suggestedDescription,
+                    'note' => $note,
+                    'status' => CampaignTextSuggestion::STATUS_OPEN,
+                ]);
+
+                app(CampaignAuditService::class)->log($campaign, 'text_revision_requested', [
+                    'suggestion_id' => $suggestion->id,
+                    'suggested_title' => $suggestedTitle,
+                    'suggested_description' => $suggestedDescription,
+                    'note' => $note,
+                    'brand_id' => $campaign->brand_id,
+                ]);
+
+                DB::commit();
+            } catch (Exception $e) {
+                DB::rollBack();
+
+                throw $e;
+            }
+
+            $suggestion->load(['admin', 'campaign.brand']);
+
+            CampaignNotificationService::notifyBrandOfTextSuggestion($suggestion);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Text suggestion sent successfully',
+                'data' => $this->transformTextSuggestionData($suggestion),
+            ]);
+        } catch (Exception $e) {
+            Log::error('Failed to request campaign text changes', [
+                'campaign_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send text suggestion',
+            ], 500);
+        }
+    }
+
+    /**
      * Delete a campaign.
      */
     public function destroy(int $id): JsonResponse
@@ -304,6 +416,30 @@ class AdminCampaignController extends Controller
             'created_at' => $campaign->created_at->format('Y-m-d H:i:s'),
             'brand' => $brandData,
             'applications_count' => $campaign->applications->count(),
+            'has_open_text_suggestion' => null !== $campaign->openTextSuggestion,
+        ];
+    }
+
+    private function transformTextSuggestionData(?CampaignTextSuggestion $suggestion): ?array
+    {
+        if (!$suggestion) {
+            return null;
+        }
+
+        return [
+            'id' => $suggestion->id,
+            'status' => $suggestion->status,
+            'current_title' => $suggestion->current_title,
+            'current_description' => $suggestion->current_description,
+            'suggested_title' => $suggestion->suggested_title,
+            'suggested_description' => $suggestion->suggested_description,
+            'note' => $suggestion->note,
+            'created_at' => $suggestion->created_at?->toISOString(),
+            'admin' => $suggestion->admin ? [
+                'id' => $suggestion->admin->id,
+                'name' => $suggestion->admin->name,
+                'email' => $suggestion->admin->email,
+            ] : null,
         ];
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Notification\Services\UserNotificationService;
 use App\Domain\Shared\Traits\HasAuthenticatedUser;
 use App\Http\Controllers\Base\Controller;
 use App\Models\User\User;
@@ -146,6 +147,7 @@ class AdminUserController extends Controller
         ]);
 
         $action = $request->input('action');
+        $wasActive = null !== $user->email_verified_at;
 
         try {
             $message = match ($action) {
@@ -154,6 +156,10 @@ class AdminUserController extends Controller
                 'remove' => $this->removeUser($user),
                 default => throw new Exception('Invalid action'),
             };
+
+            if ('activate' === $action && !$wasActive) {
+                UserNotificationService::notifyUserOfProfileApproval($user->fresh() ?? $user);
+            }
 
             return response()->json([
                 'success' => true,

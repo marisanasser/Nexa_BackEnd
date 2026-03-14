@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -137,6 +138,19 @@ class Campaign extends Model
     public function favorites(): HasMany
     {
         return $this->hasMany(CampaignFavorite::class);
+    }
+
+    public function textSuggestions(): HasMany
+    {
+        return $this->hasMany(CampaignTextSuggestion::class);
+    }
+
+    public function openTextSuggestion(): HasOne
+    {
+        return $this->hasOne(CampaignTextSuggestion::class)
+            ->where('status', CampaignTextSuggestion::STATUS_OPEN)
+            ->latestOfMany()
+        ;
     }
 
     public function isFavoritedBy($creatorId): bool

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Campanha Rejeitada - Nexa Platform</title>
+    <title>Ajustes Sugeridos na Campanha - Nexa</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -18,7 +18,7 @@
             background-color: white;
             padding: 30px;
             border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
         .header {
             text-align: center;
@@ -33,7 +33,7 @@
             margin-bottom: 10px;
         }
         .status {
-            background-color: #f44336;
+            background-color: #f59e0b;
             color: white;
             padding: 10px 20px;
             border-radius: 25px;
@@ -44,11 +44,18 @@
             margin: 30px 0;
         }
         .info-box {
-            background-color: #f9f9f9;
+            background-color: #fff7ed;
             padding: 20px;
             border-radius: 8px;
             margin: 20px 0;
-            border-left: 4px solid #f44336;
+            border-left: 4px solid #f59e0b;
+        }
+        .text-box {
+            background-color: #f9fafb;
+            padding: 12px 14px;
+            border-radius: 6px;
+            margin-top: 8px;
+            white-space: pre-line;
         }
         .button {
             display: inline-block;
@@ -74,38 +81,53 @@
     <div class="container">
         <div class="header">
             <div class="logo">NEXA</div>
-            <div class="status">❌ CAMPANHA REJEITADA</div>
+            <div class="status">AJUSTES SUGERIDOS</div>
         </div>
 
         <div class="content">
             <h2>Olá, {{ $brand->name }}!</h2>
 
-            <p>Infelizmente, sua campanha foi <strong>rejeitada</strong>.</p>
+            <p>
+                A equipe da Nexa revisou sua campanha <strong>{{ $campaign->title }}</strong> e sugeriu ajustes no texto
+                antes da aprovação.
+            </p>
 
             <div class="info-box">
-                <h3>📋 Detalhes da Campanha</h3>
-                <p><strong>Título:</strong> {{ $campaign->title }}</p>
-                <p><strong>Orçamento:</strong> R$ {{ number_format($campaign->budget, 2, ',', '.') }}</p>
-                <p><strong>Categoria:</strong> {{ $campaign->category }}</p>
-                <p><strong>Tipo:</strong> {{ $campaign->campaign_type }}</p>
-                <p><strong>Data de Rejeição:</strong> {{ $campaign->updated_at ? (is_string($campaign->updated_at) ? $campaign->updated_at : $campaign->updated_at->format('d/m/Y H:i')) : 'N/A' }}</p>
+                <h3>Campanha</h3>
+                <p><strong>Título atual:</strong> {{ $suggestion->current_title }}</p>
 
-                @if($campaign->rejection_reason)
-                <p><strong>Motivo da Rejeição:</strong></p>
-                <p style="font-style: italic; color: #666;">"{{ $campaign->rejection_reason }}"</p>
+                @if($suggestion->suggested_title)
+                    <p><strong>Título sugerido:</strong></p>
+                    <div class="text-box">{{ $suggestion->suggested_title }}</div>
+                @endif
+
+                @if($suggestion->suggested_description)
+                    <p><strong>Descrição sugerida:</strong></p>
+                    <div class="text-box">{{ $suggestion->suggested_description }}</div>
+                @endif
+
+                @if($suggestion->note)
+                    <p><strong>Observação da Nexa:</strong></p>
+                    <div class="text-box">{{ $suggestion->note }}</div>
+                @endif
+
+                @if($admin)
+                    <p><strong>Responsável pela revisão:</strong> {{ $admin->name }}</p>
                 @endif
             </div>
 
-            <p>Você pode criar uma nova campanha seguindo nossas diretrizes e políticas da plataforma.</p>
+            <p>
+                Acesse a campanha, ajuste o texto e salve as alterações para continuar o processo de aprovação.
+            </p>
 
-            <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/dashboard/campaigns/create" class="button">
-                Criar Nova Campanha
+            <a href="{{ config('app.frontend_url', 'http://localhost:3000') }}/dashboard/campaigns/{{ $campaign->id }}" class="button">
+                Revisar campanha
             </a>
         </div>
 
         <div class="footer">
             <p>Este é um email automático da plataforma Nexa.</p>
-            <p>Se você tiver alguma dúvida, entre em contato conosco.</p>
+            <p>Se você tiver alguma dúvida, entre em contato com a equipe.</p>
         </div>
     </div>
 </body>

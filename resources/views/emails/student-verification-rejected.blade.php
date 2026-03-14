@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Campanha Aprovada - Nexa Platform</title>
+    <title>Verificacao estudantil - Nexa</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -33,22 +33,19 @@
             margin-bottom: 10px;
         }
         .status {
-            background-color: #4CAF50;
+            background-color: #f44336;
             color: white;
             padding: 10px 20px;
             border-radius: 25px;
             display: inline-block;
             font-weight: bold;
         }
-        .content {
-            margin: 30px 0;
-        }
         .info-box {
             background-color: #f9f9f9;
             padding: 20px;
             border-radius: 8px;
             margin: 20px 0;
-            border-left: 4px solid #E91E63;
+            border-left: 4px solid #f44336;
         }
         .button {
             display: inline-block;
@@ -74,24 +71,31 @@
     <div class="container">
         <div class="header">
             <div class="logo">NEXA</div>
-            <div class="status">✅ CAMPANHA APROVADA</div>
+            <div class="status">VERIFICACAO NAO APROVADA</div>
         </div>
 
         <div class="content">
-            <h2>Parabéns, {{ $brand->name }}! 🎉</h2>
+            <h2>Ola, {{ $user->name }}!</h2>
 
-            <p> <strong>Parabéns!</strong> Sua campanha foi aprovada na Nexa!</p>
+            <p>Neste momento nao foi possivel aprovar sua verificacao estudantil.</p>
 
-            <p>Agora é hora de dar início a uma parceria estratégica com criadores de alto nível para a sua marca. Acesse o site e confira sua campanha ativa.</p>
+            @if(!empty($rejectionData['rejection_reason']))
+                <div class="info-box">
+                    <p><strong>Motivo informado:</strong></p>
+                    <p style="font-style: italic; color: #666;">"{{ $rejectionData['rejection_reason'] }}"</p>
+                </div>
+            @endif
 
-            <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/dashboard/campaigns" class="button" style="color: white;">
-                Ver Minhas Campanhas
+            <p>Voce pode revisar os dados enviados e reenviar a solicitacao quando quiser.</p>
+
+            <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/dashboard/student-verify" class="button" style="color: white;">
+                Revisar solicitacao
             </a>
         </div>
 
         <div class="footer">
-            <p>Este é um email automático da plataforma Nexa.</p>
-            <p>Se você tiver alguma dúvida, entre em contato conosco.</p>
+            <p>Este e um email automatico da plataforma Nexa.</p>
+            <p>Se voce tiver alguma duvida, entre em contato conosco.</p>
         </div>
     </div>
 </body>

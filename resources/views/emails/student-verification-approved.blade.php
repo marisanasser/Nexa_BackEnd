@@ -1,9 +1,15 @@
+@php
+    $expiresAt = $approvalData['expires_at'] ?? null;
+    $formattedExpiresAt = is_string($expiresAt) && '' !== trim($expiresAt)
+        ? \Illuminate\Support\Carbon::parse($expiresAt)->format('d/m/Y')
+        : null;
+@endphp
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Campanha Aprovada - Nexa Platform</title>
+    <title>Verificacao estudantil aprovada - Nexa</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -40,9 +46,6 @@
             display: inline-block;
             font-weight: bold;
         }
-        .content {
-            margin: 30px 0;
-        }
         .info-box {
             background-color: #f9f9f9;
             padding: 20px;
@@ -74,24 +77,29 @@
     <div class="container">
         <div class="header">
             <div class="logo">NEXA</div>
-            <div class="status">✅ CAMPANHA APROVADA</div>
+            <div class="status">VERIFICACAO APROVADA</div>
         </div>
 
         <div class="content">
-            <h2>Parabéns, {{ $brand->name }}! 🎉</h2>
+            <h2>Ola, {{ $user->name }}!</h2>
 
-            <p> <strong>Parabéns!</strong> Sua campanha foi aprovada na Nexa!</p>
+            <p>Sua verificacao estudantil foi aprovada. O acesso estudantil ja esta liberado na sua conta.</p>
 
-            <p>Agora é hora de dar início a uma parceria estratégica com criadores de alto nível para a sua marca. Acesse o site e confira sua campanha ativa.</p>
+            <div class="info-box">
+                <p><strong>Duracao:</strong> {{ $approvalData['duration_months'] ?? 12 }} mes(es)</p>
+                @if($formattedExpiresAt)
+                    <p><strong>Valido ate:</strong> {{ $formattedExpiresAt }}</p>
+                @endif
+            </div>
 
-            <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/dashboard/campaigns" class="button" style="color: white;">
-                Ver Minhas Campanhas
+            <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/dashboard/student-verify" class="button" style="color: white;">
+                Ver meu status
             </a>
         </div>
 
         <div class="footer">
-            <p>Este é um email automático da plataforma Nexa.</p>
-            <p>Se você tiver alguma dúvida, entre em contato conosco.</p>
+            <p>Este e um email automatico da plataforma Nexa.</p>
+            <p>Se voce tiver alguma duvida, entre em contato conosco.</p>
         </div>
     </div>
 </body>
