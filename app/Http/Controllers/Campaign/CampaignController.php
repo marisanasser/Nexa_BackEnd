@@ -49,6 +49,10 @@ class CampaignController extends Controller
 
             $query = Campaign::with(['brand', 'bids'])->withCount('applications');
 
+            if ($user->isBrand() || $user->isAdmin()) {
+                $query->with(['openTextSuggestion.admin']);
+            }
+
             error_log('Request' . json_encode($request));
 
             if ($user->isCreator() || $user->isStudent()) {
