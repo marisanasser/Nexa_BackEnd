@@ -6,7 +6,6 @@ use App\Events\Chat\NewMessage;
 use App\Events\Contract\ContractActivated;
 use App\Events\Contract\ContractCompleted;
 use App\Events\Contract\ContractTerminated;
-use App\Events\Contract\ContractUpdated;
 use App\Http\Controllers\Base\Controller;
 use App\Models\Chat\ChatRoom;
 use App\Models\Chat\Message;
@@ -55,12 +54,9 @@ class ContractController extends Controller
                 'offer_data' => json_encode($data),
             ];
 
-            $systemMessage = Message::create($messageData);
+            Message::create($messageData);
 
             $chatRoom->update(['last_message_at' => now()]);
-
-            // Broadcast in real-time so both participants see timeline/logistics changes immediately.
-            event(new NewMessage($systemMessage, $chatRoom, is_array($systemMessage->offer_data) ? $systemMessage->offer_data : $data));
         } catch (\Throwable $e) {
             Log::error('Failed to create system message', [
                 'chat_room_id' => $chatRoom->id,
@@ -130,42 +126,6 @@ class ContractController extends Controller
 
         // Common SQLSTATEs seen when enum/check constraints reject workflow values
         return in_array($sqlState, ['22p02', '23514', '01000'], true) && $mentionsWorkflow;
-    }
-
-    /**
-     * Resolve a reliable budget payload, including fallbacks for legacy rows.
-     *
-     * @return array{budget: null|float, formatted_budget: null|string}
-     */
-    private function resolveBudgetPayload(Contract $contract): array
-    {
-        $resolvedBudget = $contract->budget;
-
-        if (null === $resolvedBudget && $contract->offer) {
-            $resolvedBudget = $contract->offer->budget;
-        }
-
-        if (
-            null === $resolvedBudget
-            && null !== $contract->creator_amount
-            && null !== $contract->platform_fee
-        ) {
-            $resolvedBudget = (float) $contract->creator_amount + (float) $contract->platform_fee;
-        }
-
-        if (null === $resolvedBudget) {
-            return [
-                'budget' => null,
-                'formatted_budget' => null,
-            ];
-        }
-
-        $budgetValue = (float) $resolvedBudget;
-
-        return [
-            'budget' => $budgetValue,
-            'formatted_budget' => 'R$ ' . number_format($budgetValue, 2, ',', '.'),
-        ];
     }
 
 
@@ -271,14 +231,12 @@ class ContractController extends Controller
                 function (\Illuminate\Pagination\LengthAwarePaginator $paginator) use ($user) {
                     $paginator->getCollection()->transform(function ($contract) use ($user) {
                         $otherUser = $user->isBrand() ? $contract->creator : $contract->brand;
-                        $budgetPayload = $this->resolveBudgetPayload($contract);
 
                         return [
                             'id' => $contract->id,
                             'title' => $contract->title,
                             'description' => $contract->description,
-                            'budget' => $budgetPayload['budget'],
-                            'formatted_budget' => $budgetPayload['formatted_budget'],
+                            'budget' => $contract->formatted_budget,
                             'creator_amount' => $contract->formatted_creator_amount,
                             'platform_fee' => $contract->formatted_platform_fee,
                             'estimated_days' => $contract->estimated_days,
@@ -374,7 +332,6 @@ class ContractController extends Controller
             }
 
             $otherUser = $user->isBrand() ? $contract->creator : $contract->brand;
-            $budgetPayload = $this->resolveBudgetPayload($contract);
 
             $contractData = [
                 'id' => $contract->id,
@@ -384,8 +341,7 @@ class ContractController extends Controller
                     'id' => $contract->offer->campaign->id,
                     'title' => $contract->offer->campaign->title,
                 ] : null,
-                'budget' => $budgetPayload['budget'],
-                'formatted_budget' => $budgetPayload['formatted_budget'],
+                'budget' => $contract->formatted_budget,
                 'creator_amount' => $contract->formatted_creator_amount,
                 'platform_fee' => $contract->formatted_platform_fee,
                 'estimated_days' => $contract->estimated_days,
@@ -553,7 +509,6 @@ class ContractController extends Controller
                         $brand = $contract->brand;
                         $otherUser = $user->isBrand() ? ($creator ?? $brand) : ($brand ?? $creator);
                         $payment = $contract->relationLoaded('payment') ? $contract->getRelation('payment') : null;
-                        $budgetPayload = $this->resolveBudgetPayload($contract);
 
                         if (! $creator || ! $brand) {
                             Log::warning('Contract has missing participant relation when fetching contracts for chat room', [
@@ -595,8 +550,7 @@ class ContractController extends Controller
                             'id' => $contract->id,
                             'title' => $contract->title,
                             'description' => $contract->description,
-                            'budget' => $budgetPayload['budget'],
-                            'formatted_budget' => $budgetPayload['formatted_budget'],
+                            'budget' => $contract->formatted_budget,
                             'creator_amount' => $contract->formatted_creator_amount,
                             'platform_fee' => $contract->formatted_platform_fee,
                             'estimated_days' => $contract->estimated_days,
@@ -786,6 +740,9 @@ class ContractController extends Controller
             }
 
             if ($contract->complete()) {
+
+                $this->sendContractCompletionMessage($contract, $user);
+
                 try {
                     event(new ContractCompleted($contract, $contract->offer->chatRoom, $user->id));
                 } catch (\Throwable $broadcastException) {
@@ -820,12 +777,11 @@ class ContractController extends Controller
                     'message' => 'Falha ao finalizar campanha',
                 ], 500);
             }
-        } catch (\Throwable $e) {
+        } catch (Exception $e) {
             Log::error('Error completing campaign', [
                 'user_id' => $user->id,
                 'contract_id' => $id,
                 'error' => $e->getMessage(),
-                'exception' => get_class($e),
             ]);
 
             return response()->json([
@@ -1235,26 +1191,6 @@ class ContractController extends Controller
                     'workflow_status' => $this->resolveWorkflowStatus($contract),
                     'tracking_code' => $this->resolveTrackingCode($contract),
                     'message_type' => 'logistics_update',
-                ]);
-            }
-
-            try {
-                event(new ContractUpdated(
-                    $contract,
-                    $chatRoom,
-                    $user->id,
-                    [
-                        'update_type' => 'workflow_status_updated',
-                        'workflow_status' => $this->resolveWorkflowStatus($contract),
-                        'tracking_code' => $this->resolveTrackingCode($contract),
-                    ]
-                ));
-            } catch (\Throwable $broadcastException) {
-                Log::error('Failed to broadcast ContractUpdated event from workflow status update', [
-                    'contract_id' => $contract->id,
-                    'user_id' => $user->id,
-                    'error' => $broadcastException->getMessage(),
-                    'exception' => get_class($broadcastException),
                 ]);
             }
 

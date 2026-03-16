@@ -156,7 +156,7 @@ class Offer extends Model
             if (!$existingContract) {
                 $platformFee = round($this->budget * 0.05, 2);
                 $creatorAmount = round($this->budget - $platformFee, 2);
-
+                
                 // Create the contract
                 $contract = Contract::create([
                     'offer_id' => $this->id,
@@ -168,7 +168,7 @@ class Offer extends Model
                     'estimated_days' => $this->estimated_days,
                     'requirements' => $this->requirements,
                     // Status should be pending until the brand funds it
-                    'status' => 'pending',
+                    'status' => 'pending', 
                     'workflow_status' => 'payment_pending',
                     'platform_fee' => $platformFee,
                     'creator_amount' => $creatorAmount,
@@ -177,8 +177,8 @@ class Offer extends Model
                     'created_at' => now(),
                 ]);
 
-                // Create the standard timeline for the campaign.
-                // Approval happens directly on the submission milestones.
+                // Create the standard full timeline for the campaign
+                // This ensures the flow matches the real-world process: Script -> Approval -> Video -> Final Approval
                 $startDate = now();
                 $totalDays = $this->estimated_days ?? 7;
 
@@ -191,11 +191,25 @@ class Offer extends Model
                         'deadline' => $startDate->copy()->addDays((int) ceil($totalDays * 0.25)),
                     ],
                     [
+                        'milestone_type' => 'script_approval',
+                        'title' => 'Aprovação do Roteiro',
+                        'description' => 'Aprovação do roteiro pela marca.',
+                        'status' => 'pending',
+                        'deadline' => $startDate->copy()->addDays((int) ceil($totalDays * 0.35)),
+                    ],
+                    [
                         'milestone_type' => 'video_submission',
                         'title' => 'Envio de Imagem e Vídeo',
                         'description' => 'Enviar o conteúdo final de imagem e vídeo.',
                         'status' => 'pending',
                         'deadline' => $startDate->copy()->addDays((int) ceil($totalDays * 0.85)),
+                    ],
+                    [
+                        'milestone_type' => 'final_approval',
+                        'title' => 'Aprovação Final',
+                        'description' => 'Aprovação final do vídeo pela marca.',
+                        'status' => 'pending',
+                        'deadline' => $startDate->copy()->addDays($totalDays),
                     ],
                 ];
 
@@ -212,6 +226,7 @@ class Offer extends Model
                     'due_date' => $contract->expected_completion_at,
                     'order' => 1,
                 ]);
+
             }
 
             // Avoid stale cached relation returning null right after contract creation.

@@ -17,7 +17,7 @@ class ContractBriefingTest extends TestCase
     {
         // Create a brand user
         $brand = User::factory()->state(['role' => 'brand'])->create();
-
+        
         // Create a contract associated with the brand
         $contract = Contract::factory()->create([
             'brand_id' => $brand->id,
@@ -55,7 +55,7 @@ class ContractBriefingTest extends TestCase
         ]);
 
         $updatedContract = Contract::find($contract->id);
-
+        
         $this->assertEquals($briefingData['briefing'], $updatedContract->briefing);
         $this->assertEquals($briefingData['requirements'], $updatedContract->requirements);
     }
@@ -102,7 +102,7 @@ class ContractBriefingTest extends TestCase
         // Create a brand user and another unrelated user
         $brand = User::factory()->state(['role' => 'brand'])->create();
         $otherUser = User::factory()->create();
-
+        
         // Create a contract associated with the brand
         $contract = Contract::factory()->create([
             'brand_id' => $brand->id,
