@@ -67,7 +67,7 @@ class ContractPaymentController extends Controller
 
             'stripe_payment_method_id' => 'nullable|string',
 
-            'payment_method_id' => "nullable|exists:brand_payment_methods,id,brand_id,{$user->id}",
+            'payment_method_id' => "nullable|exists:brand_payment_methods,id,user_id,{$user->id}",
         ]);
 
         if ($validator->fails()) {
@@ -175,7 +175,7 @@ class ContractPaymentController extends Controller
             ], 403);
         }
 
-        $paymentMethods = BrandPaymentMethod::where('brand_id', $user->id)
+        $paymentMethods = BrandPaymentMethod::where('user_id', $user->id)
             ->where('is_active', true)
             ->get()
         ;
