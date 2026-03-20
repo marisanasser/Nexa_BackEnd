@@ -9,6 +9,7 @@ use App\Wrappers\StripeWrapper;
 use Exception;
 use Illuminate\Support\Facades\Log;
 use Stripe\Customer;
+use Stripe\Exception\InvalidRequestException;
 
 /**
  * StripeCustomerService handles Stripe customer-related operations.
@@ -32,7 +33,30 @@ class StripeCustomerService
     public function ensureStripeCustomer(User $user): string
     {
         if ($user->stripe_customer_id) {
-            return $user->stripe_customer_id;
+            try {
+                $customer = $this->stripeWrapper->retrieveCustomer($user->stripe_customer_id);
+
+                if (!$customer->deleted) {
+                    return $user->stripe_customer_id;
+                }
+
+                Log::warning('Stored Stripe customer is deleted, creating replacement', [
+                    'user_id' => $user->id,
+                    'old_customer_id' => $user->stripe_customer_id,
+                ]);
+            } catch (InvalidRequestException $e) {
+                if (!$this->isMissingCustomerException($e)) {
+                    throw new Exception('Failed to validate Stripe customer: ' . $e->getMessage(), 0, $e);
+                }
+
+                Log::warning('Stored Stripe customer was not found, creating replacement', [
+                    'user_id' => $user->id,
+                    'old_customer_id' => $user->stripe_customer_id,
+                    'error' => $e->getMessage(),
+                ]);
+            } catch (Exception $e) {
+                throw new Exception('Failed to validate Stripe customer: ' . $e->getMessage(), 0, $e);
+            }
         }
 
         return $this->createStripeCustomer($user);
@@ -126,5 +150,18 @@ class StripeCustomerService
         $customer = $this->getCustomer($user->stripe_customer_id);
 
         return null !== $customer && !$customer->deleted;
+    }
+
+    private function isMissingCustomerException(InvalidRequestException $exception): bool
+    {
+        if (404 === $exception->getHttpStatus()) {
+            return true;
+        }
+
+        if ('resource_missing' === $exception->getStripeCode()) {
+            return true;
+        }
+
+        return str_contains(strtolower($exception->getMessage()), 'no such customer');
     }
 }
