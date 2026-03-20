@@ -187,6 +187,7 @@ class ChatController extends Controller
         }
 
         $this->ensureInitialOfferAndMarkRead($room, $user);
+        $this->ensureGuideMessagesForUser($room, $user);
 
         $perPage = (int) $request->query('per_page', 50);
         $page = (int) $request->query('page', 1);
@@ -246,6 +247,81 @@ class ChatController extends Controller
             Message::whereIn('id', $messageIds)->update([
                 'is_read' => true,
                 'read_at' => now(),
+            ]);
+        }
+    }
+
+    private function ensureGuideMessagesForUser(ChatRoom $room, $user): void
+    {
+        if (! $user->isBrand() && ! $user->isCreator() && ! $user->isStudent()) {
+            return;
+        }
+
+        $roleSpecificType = $user->isBrand() ? 'system_brand' : 'system_creator';
+
+        $hasRoleSpecificMessage = Message::where('chat_room_id', $room->id)
+            ->where('sender_id', $user->id)
+            ->where('message_type', $roleSpecificType)
+            ->where('is_system_message', true)
+            ->exists();
+
+        $hasStatusMessage = Message::where('chat_room_id', $room->id)
+            ->where('message_type', 'system')
+            ->where('is_system_message', true)
+            ->exists();
+
+        if (! $hasRoleSpecificMessage) {
+            $guideMessage = $user->isBrand()
+                ? "PARABENS PELA PARCERIA INICIADA!\n\n".
+                    "Voce acabou de conectar com uma creator da NEXA. Para garantir o melhor resultado possivel, siga o fluxo oficial da campanha.\n\n".
+                    "PROXIMOS PASSOS OBRIGATORIOS:\n\n".
+                    "- Saldo: adicione o valor da campanha na aba Saldo antes de avancar.\n".
+                    "- Briefing: envie briefing claro e completo para iniciar roteiro e gravacao.\n".
+                    "- Roteiro: aprove em ate 7 dias uteis.\n".
+                    "- Conteudo final: faca a validacao final em ate 7 dias uteis.\n".
+                    "- Ajustes: sao permitidas ate 3 correcoes por conteudo.\n".
+                    "- Pagamento: libere o pagamento somente apos a aprovacao final.\n\n".
+                    "REGRAS DE SEGURANCA:\n\n".
+                    "- Comunicacao oficial: exclusivamente no chat da NEXA.\n".
+                    "- Pagamento por fora: proibido e em desacordo com os Termos de Uso.\n".
+                    "- Garantia: apenas pagamentos feitos pela NEXA possuem garantia e suporte.\n".
+                    "- Dados pessoais: compartilhamento de telefone, e-mail ou contato externo e bloqueado pelo sistema.\n\n".
+                    "A NEXA garante rastreabilidade e seguranca para as duas partes."
+                : "PARABENS! VOCE FOI APROVADA!\n\n".
+                    "Agora siga os prazos e regras da campanha para garantir aprovacao e pagamento sem atrasos.\n\n".
+                    "CHECKLIST DA CAMPANHA:\n\n".
+                    "- Endereco: confirme seus dados de envio antes da marca despachar produto.\n".
+                    "- Roteiro: envie em ate 3 dias uteis apos receber briefing.\n".
+                    "- Ajuste de roteiro: quando solicitado, corrija em ate 48 horas uteis.\n".
+                    "- Conteudo final: entregue em ate 7 dias uteis apos aprovacao do roteiro.\n".
+                    "- Correcoes: a marca pode solicitar ate 3 correcoes.\n".
+                    "- Comunicacao: responda mensagens da marca/NEXA em ate 8 horas.\n\n".
+                    "REGRAS IMPORTANTES:\n\n".
+                    "- Chat oficial: toda comunicacao deve acontecer pela NEXA.\n".
+                    "- Pagamento externo: nunca aceite pagamento por fora.\n".
+                    "- Protecao: a NEXA so garante campanhas e pagamentos feitos dentro da plataforma.\n".
+                    "- Contato pessoal: telefone, e-mail e links externos sao bloqueados e monitorados, com excecao de links do Google Drive para entrega de materiais.\n\n".
+                    "Boa campanha! Conte com a NEXA para um processo seguro e profissional.";
+
+            Message::create([
+                'chat_room_id' => $room->id,
+                'sender_id' => $user->id,
+                'message' => $guideMessage,
+                'message_type' => $roleSpecificType,
+                'is_system_message' => true,
+            ]);
+        }
+
+        if (! $hasStatusMessage) {
+            Message::create([
+                'chat_room_id' => $room->id,
+                'sender_id' => $user->id,
+                'message' => "DETALHES DA CAMPANHA\n\n".
+                    "Status: conectado.\n\n".
+                    "Voce esta agora conectado e pode comecar a conversar.\n".
+                    'Use o chat para todas as comunicacoes e siga as diretrizes da plataforma.',
+                'message_type' => 'system',
+                'is_system_message' => true,
             ]);
         }
     }
@@ -347,9 +423,44 @@ class ChatController extends Controller
         // 1. Mask Emails
         $content = preg_replace('/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/', '[EMAIL REMOVIDO - USE O CHAT]', $content);
 
+        $preservedLinks = [];
+
+        $content = preg_replace_callback(
+            '/\b((https?|ftp):\/\/|www\.)[-A-Z0-9+&@#\/%?=~_|$!:,.;]*[A-Z0-9+&@#\/%=~_|$]/i',
+            function (array $matches) use (&$preservedLinks): string {
+                $url = $matches[0];
+
+                if (! $this->isAllowedExternalLink($url)) {
+                    return $url;
+                }
+
+                $token = '[ALLOWED_EXTERNAL_LINK_'.count($preservedLinks).']';
+                $preservedLinks[$token] = $url;
+
+                return $token;
+            },
+            $content
+        );
+
         // 2. Mask URLs (Basic detection)
         // Note: We allow internal links if needed, but for now blocking all external is safer for anti-leakage.
         $content = preg_replace('/\b((https?|ftp):\/\/|www\.)[-A-Z0-9+&@#\/%?=~_|$!:,.;]*[A-Z0-9+&@#\/%=~_|$]/i', '[LINK REMOVIDO - MANTENHA A NEGOCIAÇÃO AQUI]', $content);
+
+        $content = str_replace(
+            '[LINK REMOVIDO - MANTENHA A NEGOCIAÃ‡ÃƒO AQUI]',
+            '[LINK REMOVIDO - MANTENHA A NEGOCIACAO AQUI]',
+            $content
+        );
+
+        $content = preg_replace(
+            '/\[LINK REMOVIDO - MANTENHA A NEGOCI.*? AQUI\]/',
+            '[LINK REMOVIDO - MANTENHA A NEGOCIACAO AQUI]',
+            $content
+        );
+
+        foreach ($preservedLinks as $token => $url) {
+            $content = str_replace($token, $url, $content);
+        }
 
         // 3. Mask Phones/Keywords
         // It's hard to regex phones perfectly without false positives (like budgets/dates).
@@ -365,6 +476,24 @@ class ChatController extends Controller
         $content = preg_replace('/(?:\(?\d{2}\)?\s*)?(?:9\d{4}[-\s]?\d{4}|\d{4}[-\s]?\d{4})\b/', '[TELEFONE REMOVIDO]', $content);
 
         return $content;
+    }
+
+    private function isAllowedExternalLink(string $url): bool
+    {
+        $normalizedUrl = preg_match('/^[a-z][a-z0-9+\-.]*:\/\//i', $url) ? $url : "https://{$url}";
+        $host = strtolower((string) parse_url($normalizedUrl, PHP_URL_HOST));
+
+        if ($host === '') {
+            return false;
+        }
+
+        foreach (['drive.google.com', 'docs.google.com'] as $allowedHost) {
+            if ($host === $allowedHost || str_ends_with($host, ".{$allowedHost}")) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function markMessagesAsRead(Request $request): JsonResponse
@@ -518,6 +647,31 @@ class ChatController extends Controller
         }
 
         try {
+            $beforeCount = Message::where('chat_room_id', $room->id)
+                ->where('sender_id', $user->id)
+                ->where('is_system_message', true)
+                ->count();
+
+            $this->ensureGuideMessagesForUser($room, $user);
+
+            $afterCount = Message::where('chat_room_id', $room->id)
+                ->where('sender_id', $user->id)
+                ->where('is_system_message', true)
+                ->count();
+
+            Log::info('Guide messages sent successfully', [
+                'chat_room_id' => $room->id,
+                'user_id' => $user->id,
+                'user_role' => $user->role,
+                'messages_created' => max(0, $afterCount - $beforeCount),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => $afterCount > $beforeCount
+                    ? 'Guide messages sent successfully'
+                    : 'Guide messages already sent',
+            ]);
 
             $existingGuideMessages = Message::where('chat_room_id', $room->id)
                 ->where('sender_id', $user->id)
