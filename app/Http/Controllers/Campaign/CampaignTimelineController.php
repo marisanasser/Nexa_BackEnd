@@ -201,7 +201,8 @@ class CampaignTimelineController extends Controller
     {
         $request->validate([
             'milestone_id' => 'required|exists:campaign_timelines,id',
-            'file' => 'required|file|max:256000',
+            'file' => 'nullable|file|max:256000|required_without:external_link',
+            'external_link' => 'nullable|string|url|starts_with:http://,https://|max:4000|required_without:file',
         ]);
 
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
@@ -222,36 +223,56 @@ class CampaignTimelineController extends Controller
             return response()->json(['error' => $milestone->getUploadBlockerReason() ?? 'Não é possível enviar arquivo para este milestone'], 400);
         }
 
-        $file = $request->file('file');
-        $fileName = $file->getClientOriginalName();
-        $fileSize = $file->getSize();
-        $fileType = $file->getMimeType();
+        $filePath = null;
+        $fileName = null;
+        $fileSize = 0;
+        $fileType = null;
 
-        try {
-            $filePath = FileUploadHelper::upload($file, 'timeline-files');
-        } catch (Exception $e) {
-            Log::error('Timeline file upload exception', [
-                'milestone_id' => $milestone->id,
-                'user_id' => Auth::id(),
-                'error' => $e->getMessage(),
-            ]);
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $fileName = $file->getClientOriginalName();
+            $fileSize = $file->getSize();
+            $fileType = $file->getMimeType();
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Falha ao salvar arquivo no armazenamento',
-            ], 500);
-        }
+            try {
+                $filePath = FileUploadHelper::upload($file, 'timeline-files');
+            } catch (Exception $e) {
+                Log::error('Timeline file upload exception', [
+                    'milestone_id' => $milestone->id,
+                    'user_id' => Auth::id(),
+                    'error' => $e->getMessage(),
+                ]);
 
-        if (!is_string($filePath) || '' === trim($filePath)) {
-            Log::error('Timeline file upload failed to return a valid path', [
-                'milestone_id' => $milestone->id,
-                'user_id' => Auth::id(),
-            ]);
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Falha ao salvar arquivo no armazenamento',
+                ], 500);
+            }
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Falha ao salvar arquivo no armazenamento',
-            ], 500);
+            if (!is_string($filePath) || '' === trim($filePath)) {
+                Log::error('Timeline file upload failed to return a valid path', [
+                    'milestone_id' => $milestone->id,
+                    'user_id' => Auth::id(),
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Falha ao salvar arquivo no armazenamento',
+                ], 500);
+            }
+        } else {
+            $externalLink = trim((string) $request->input('external_link', ''));
+            if ('' === $externalLink) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Informe um link válido para envio.',
+                ], 422);
+            }
+
+            $filePath = $externalLink;
+            $fileName = $this->resolveExternalLinkLabel($externalLink);
+            $fileType = 'external_link';
+            $fileSize = 0;
         }
 
         $milestone->uploadFile($filePath, $fileName, $fileSize, $fileType);
@@ -262,7 +283,7 @@ class CampaignTimelineController extends Controller
         return response()->json([
             'success' => true,
             'data' => $milestone->fresh(),
-            'message' => 'Arquivo enviado com sucesso',
+            'message' => 'Material enviado com sucesso',
         ]);
     }
 
@@ -418,6 +439,18 @@ class CampaignTimelineController extends Controller
             return response()->json(['error' => 'Nenhum arquivo disponível para download'], 404);
         }
 
+        if ($this->isExternalSubmissionLink($milestone->file_path, $milestone->file_type)) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'download_url' => $milestone->file_path,
+                    'file_name' => $milestone->file_name,
+                    'file_size' => $milestone->file_size,
+                    'file_type' => 'external_link',
+                ],
+            ]);
+        }
+
         [$disk, $resolvedPath] = $this->resolveFileDiskAndPath($milestone->file_path);
         if (!$disk || !$resolvedPath) {
             Log::warning('Timeline file not found for signed download', [
@@ -478,6 +511,38 @@ class CampaignTimelineController extends Controller
         }, $downloadName, [
             'Content-Type' => $milestone->file_type ?: 'application/octet-stream',
         ]);
+    }
+
+    private function isExternalSubmissionLink(?string $filePath, ?string $fileType = null): bool
+    {
+        if (!is_string($filePath) || '' === trim($filePath)) {
+            return false;
+        }
+
+        if ('external_link' === $fileType) {
+            return true;
+        }
+
+        return str_starts_with($filePath, 'http://') || str_starts_with($filePath, 'https://');
+    }
+
+    private function resolveExternalLinkLabel(string $externalLink): string
+    {
+        $host = parse_url($externalLink, PHP_URL_HOST);
+        $path = parse_url($externalLink, PHP_URL_PATH);
+
+        if (is_string($path) && '' !== trim($path)) {
+            $basename = basename($path);
+            if ('' !== trim($basename) && '/' !== $basename) {
+                return rawurldecode($basename);
+            }
+        }
+
+        if (is_string($host) && '' !== trim($host)) {
+            return "Link externo ({$host})";
+        }
+
+        return 'Link externo';
     }
 
     private function getStorageDiskName(): string
@@ -768,3 +833,4 @@ class CampaignTimelineController extends Controller
         }
     }
 }
+
