@@ -146,4 +146,50 @@ class ContractBriefingTest extends TestCase
         // Usually $request->validate returns only validated fields that are present.
         // But let's check the update method implementation again.)
     }
+
+    public function test_creator_cannot_update_briefing_even_when_participant()
+    {
+        $brand = User::factory()->state(['role' => 'brand'])->create();
+        $creator = User::factory()->state(['role' => 'creator'])->create();
+
+        $contract = Contract::factory()->create([
+            'brand_id' => $brand->id,
+            'creator_id' => $creator->id,
+        ]);
+
+        $this->actingAs($creator);
+
+        $response = $this->putJson("/api/contracts/{$contract->id}", [
+            'briefing' => ['objectives' => 'Tentativa indevida'],
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_brand_update_ignores_private_requirement_keys()
+    {
+        $brand = User::factory()->state(['role' => 'brand'])->create();
+
+        $contract = Contract::factory()->create([
+            'brand_id' => $brand->id,
+            'requirements' => ['initial' => 'ok'],
+        ]);
+
+        $this->actingAs($brand);
+
+        $response = $this->putJson("/api/contracts/{$contract->id}", [
+            'requirements' => [
+                '_tracking_code' => 'SHOULD_NOT_SAVE',
+                '_logistics_workflow_status' => 'material_sent',
+                'format' => 'Reels',
+            ],
+        ]);
+
+        $response->assertStatus(200);
+
+        $contract->refresh();
+        $this->assertArrayNotHasKey('_tracking_code', $contract->requirements);
+        $this->assertArrayNotHasKey('_logistics_workflow_status', $contract->requirements);
+        $this->assertSame('Reels', $contract->requirements['format'] ?? null);
+    }
 }

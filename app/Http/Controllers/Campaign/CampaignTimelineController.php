@@ -25,6 +25,36 @@ use Illuminate\Support\Facades\URL;
 
 class CampaignTimelineController extends Controller
 {
+    private function isCurrentUserBrandParticipant(Contract $contract): bool
+    {
+        $user = Auth::user();
+        if (! $user) {
+            return false;
+        }
+
+        return 'brand' === $user->role && (int) $contract->brand_id === (int) $user->id;
+    }
+
+    private function isCurrentUserCreatorParticipant(Contract $contract): bool
+    {
+        $user = Auth::user();
+        if (! $user) {
+            return false;
+        }
+
+        return in_array($user->role, ['creator', 'student'], true) && (int) $contract->creator_id === (int) $user->id;
+    }
+
+    private function isCurrentUserContractParticipant(Contract $contract): bool
+    {
+        $userId = Auth::id();
+        if (! $userId) {
+            return false;
+        }
+
+        return (int) $contract->brand_id === (int) $userId || (int) $contract->creator_id === (int) $userId;
+    }
+
     public function index(Request $request): JsonResponse
     {
         $request->validate([
@@ -33,11 +63,7 @@ class CampaignTimelineController extends Controller
 
         $contract = Contract::findOrFail($request->contract_id);
 
-        if ('brand' === Auth::user()->role && $contract->brand_id !== Auth::id()) {
-            return response()->json(['error' => 'Não autorizado'], 403);
-        }
-
-        if ('creator' === Auth::user()->role && $contract->creator_id !== Auth::id()) {
+        if (! $this->isCurrentUserContractParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
@@ -57,7 +83,7 @@ class CampaignTimelineController extends Controller
 
         $contract = Contract::findOrFail($request->contract_id);
 
-        if ('brand' !== Auth::user()->role || $contract->brand_id !== Auth::id()) {
+        if (! $this->isCurrentUserBrandParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
@@ -118,7 +144,7 @@ class CampaignTimelineController extends Controller
 
         $contract = Contract::with('offer')->findOrFail($request->contract_id);
 
-        if ('brand' !== Auth::user()->role || $contract->brand_id !== Auth::id()) {
+        if (! $this->isCurrentUserBrandParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
@@ -181,15 +207,14 @@ class CampaignTimelineController extends Controller
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
 
-        if ('brand' === Auth::user()->role && $contract->brand_id !== Auth::id()) {
+        if (! $this->isCurrentUserContractParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
-        if ('creator' === Auth::user()->role && $contract->creator_id !== Auth::id()) {
-            return response()->json(['error' => 'Não autorizado'], 403);
-        }
-
-        if ('creator' !== Auth::user()->role && in_array($milestone->milestone_type, ['script_submission', 'video_submission'])) {
+        if (
+            in_array($milestone->milestone_type, ['script_submission', 'video_submission'], true)
+            && ! $this->isCurrentUserCreatorParticipant($contract)
+        ) {
             return response()->json(['error' => 'Apenas o criador pode enviar arquivos para milestones de submissão'], 403);
         }
 
@@ -251,7 +276,7 @@ class CampaignTimelineController extends Controller
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
 
-        if ('brand' !== Auth::user()->role || $contract->brand_id !== Auth::id()) {
+        if (! $this->isCurrentUserBrandParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
@@ -303,11 +328,7 @@ class CampaignTimelineController extends Controller
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
 
-        if ('brand' === Auth::user()->role && $contract->brand_id !== Auth::id()) {
-            return response()->json(['error' => 'Não autorizado'], 403);
-        }
-
-        if ('creator' === Auth::user()->role && $contract->creator_id !== Auth::id()) {
+        if (! $this->isCurrentUserContractParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
@@ -336,7 +357,7 @@ class CampaignTimelineController extends Controller
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
 
-        if ('brand' !== Auth::user()->role || $contract->brand_id !== Auth::id()) {
+        if (! $this->isCurrentUserBrandParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
@@ -365,11 +386,7 @@ class CampaignTimelineController extends Controller
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
 
-        if ('brand' === Auth::user()->role && $contract->brand_id !== Auth::id()) {
-            return response()->json(['error' => 'Não autorizado'], 403);
-        }
-
-        if ('creator' === Auth::user()->role && $contract->creator_id !== Auth::id()) {
+        if (! $this->isCurrentUserContractParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
@@ -393,11 +410,7 @@ class CampaignTimelineController extends Controller
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
 
-        if ('brand' === Auth::user()->role && $contract->brand_id !== Auth::id()) {
-            return response()->json(['error' => 'Não autorizado'], 403);
-        }
-
-        if ('creator' === Auth::user()->role && $contract->creator_id !== Auth::id()) {
+        if (! $this->isCurrentUserContractParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
@@ -546,7 +559,7 @@ class CampaignTimelineController extends Controller
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
 
-        if ('brand' !== Auth::user()->role || $contract->brand_id !== Auth::id()) {
+        if (! $this->isCurrentUserBrandParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
@@ -572,11 +585,7 @@ class CampaignTimelineController extends Controller
 
         $contract = Contract::findOrFail($request->contract_id);
 
-        if ('brand' === Auth::user()->role && $contract->brand_id !== Auth::id()) {
-            return response()->json(['error' => 'Não autorizado'], 403);
-        }
-
-        if ('creator' === Auth::user()->role && $contract->creator_id !== Auth::id()) {
+        if (! $this->isCurrentUserContractParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
@@ -609,7 +618,7 @@ class CampaignTimelineController extends Controller
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
 
-        if ('brand' !== Auth::user()->role || $contract->brand_id !== Auth::id()) {
+        if (! $this->isCurrentUserBrandParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
@@ -655,7 +664,7 @@ class CampaignTimelineController extends Controller
     private function handleCreatorMilestoneSubmission(Contract $contract, CampaignTimeline $milestone): void
     {
         if (
-            'creator' !== Auth::user()->role
+            ! $this->isCurrentUserCreatorParticipant($contract)
             || !in_array($milestone->milestone_type, ['script_submission', 'video_submission'], true)
         ) {
             return;

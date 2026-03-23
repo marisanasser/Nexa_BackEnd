@@ -71,6 +71,35 @@ class ContractController extends Controller
         return is_array($contract->requirements) ? $contract->requirements : [];
     }
 
+    private function isCreatorLike(User $user): bool
+    {
+        return $user->isCreator() || 'student' === $user->role;
+    }
+
+    /**
+     * Remove internal/private requirement keys from generic contract updates.
+     *
+     * @param array<mixed>|null $requirements
+     * @return array<mixed>|null
+     */
+    private function sanitizePublicRequirements(?array $requirements): ?array
+    {
+        if (! is_array($requirements)) {
+            return null;
+        }
+
+        $sanitized = [];
+        foreach ($requirements as $key => $value) {
+            if (is_string($key) && str_starts_with($key, '_')) {
+                continue;
+            }
+
+            $sanitized[$key] = $value;
+        }
+
+        return $sanitized;
+    }
+
     private function resolveTrackingCode(Contract $contract): ?string
     {
         $nativeTrackingCode = $contract->tracking_code;
@@ -432,10 +461,28 @@ class ContractController extends Controller
                 ], 404);
             }
 
+            if (! $user->isBrand() && ! $user->isAdmin()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Apenas a marca vinculada pode editar briefing do contrato',
+                ], 403);
+            }
+
+            if (! $user->isAdmin() && (int) $contract->brand_id !== (int) $user->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Apenas a marca vinculada pode editar briefing do contrato',
+                ], 403);
+            }
+
             $validated = $request->validate([
                 'briefing' => 'nullable|array',
                 'requirements' => 'nullable|array',
             ]);
+
+            if (array_key_exists('requirements', $validated)) {
+                $validated['requirements'] = $this->sanitizePublicRequirements($validated['requirements']);
+            }
 
             $contract->update($validated);
 
@@ -1074,6 +1121,7 @@ class ContractController extends Controller
             }
 
             $newStatus = (string) $request->input('workflow_status');
+            $isShippingStatus = in_array($newStatus, self::SHIPPING_WORKFLOW_STATUSES, true);
             $trackingCode = null;
             if ($request->has('tracking_code')) {
                 $trackingCode = trim((string) $request->input('tracking_code'));
@@ -1082,20 +1130,30 @@ class ContractController extends Controller
                 }
             }
 
-            $currentTrackingCode = $this->resolveTrackingCode($contract);
-            $trackingCodeToPersist = $trackingCode ?: $currentTrackingCode;
-            $hasTrackingCodeColumn = Schema::hasColumn('contracts', 'tracking_code');
-
             // Authorization logic for specific statuses
-            if (in_array($newStatus, self::SHIPPING_WORKFLOW_STATUSES, true) && ! $user->isBrand()) {
+            if ($isShippingStatus && ! $user->isBrand()) {
                 return response()->json(['success' => false, 'message' => 'Apenas a marca pode marcar material/produto como enviado'], 403);
             }
 
-            if ('product_received' === $newStatus && ! $user->isCreator()) {
+            if ('product_received' === $newStatus && ! $this->isCreatorLike($user)) {
                 return response()->json(['success' => false, 'message' => 'Apenas o criador pode confirmar recebimento do produto'], 403);
             }
 
-            if (in_array($newStatus, self::SHIPPING_WORKFLOW_STATUSES, true) && ! $trackingCodeToPersist) {
+            if ($request->has('tracking_code') && ! $isShippingStatus) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Código de rastreio só pode ser alterado ao marcar envio pela marca.',
+                ], 422);
+            }
+
+            $currentTrackingCode = $this->resolveTrackingCode($contract);
+            $trackingCodeToPersist = $currentTrackingCode;
+            if ($isShippingStatus && $request->has('tracking_code')) {
+                $trackingCodeToPersist = $trackingCode;
+            }
+            $hasTrackingCodeColumn = Schema::hasColumn('contracts', 'tracking_code');
+
+            if ($isShippingStatus && ! $trackingCodeToPersist) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Informe o codigo de rastreio para marcar o envio do produto.',
@@ -1104,7 +1162,7 @@ class ContractController extends Controller
 
             $requirements = $this->getContractRequirements($contract);
             $requirements['_logistics_workflow_status'] = $newStatus;
-            if ($trackingCodeToPersist) {
+            if ($isShippingStatus && $trackingCodeToPersist) {
                 $requirements['_tracking_code'] = $trackingCodeToPersist;
             }
 
@@ -1112,7 +1170,7 @@ class ContractController extends Controller
                 'requirements' => $requirements,
             ];
 
-            if ($hasTrackingCodeColumn && ($trackingCodeToPersist || (null !== $trackingCode && $user->isBrand()))) {
+            if ($hasTrackingCodeColumn && $isShippingStatus) {
                 $updateData['tracking_code'] = $trackingCodeToPersist;
             }
 
