@@ -378,7 +378,7 @@ class CampaignTimelineController extends Controller
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
 
-        if (! $this->isCurrentUserBrandParticipant($contract)) {
+        if (! $this->isCurrentUserCreatorParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);
         }
 
@@ -407,8 +407,12 @@ class CampaignTimelineController extends Controller
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
         $contract = $milestone->contract;
 
-        if (! $this->isCurrentUserContractParticipant($contract)) {
+        if (! $this->isCurrentUserBrandParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);
+        }
+
+        if ('pending' !== $milestone->status || ! $milestone->isOverdue() || $milestone->isDelayed()) {
+            return response()->json(['error' => 'Não é possível marcar atraso para este milestone'], 400);
         }
 
         $milestone->markAsDelayed($request->justification);
@@ -465,7 +469,8 @@ class CampaignTimelineController extends Controller
         $downloadUrl = URL::temporarySignedRoute(
             'api.campaign-timeline.download-signed',
             now()->addMinutes(60),
-            ['milestone' => $milestone->id]
+            ['milestone' => $milestone->id],
+            false
         );
 
         return response()->json([
@@ -833,4 +838,6 @@ class CampaignTimelineController extends Controller
         }
     }
 }
+
+
 

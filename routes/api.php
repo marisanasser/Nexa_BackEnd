@@ -70,7 +70,7 @@ Route::get('/download/{path}', function ($path) {
 
 Route::get('/campaign-timeline/download-signed/{milestone}', [CampaignTimelineController::class, 'streamFileSigned'])
     ->name('api.campaign-timeline.download-signed')
-    ->middleware('signed');
+    ->middleware('signed:relative');
 
 Route::get('/guides', [GuideController::class, 'index']);
 Route::get('/guides/{guide}', [GuideController::class, 'show']);
@@ -421,9 +421,6 @@ Route::get('/debug-visibility', function () {
         }),
     ]);
 });
-
-Route::middleware('signed')->get('/campaign-timeline/download-signed/{milestone}', [CampaignTimelineController::class, 'streamFileSigned'])
-    ->name('api.campaign-timeline.download-signed');
 
 Route::get('/debug/password-reset-table', function () {
     try {

@@ -108,5 +108,188 @@ class ContractWorkflowPermissionsTest extends TestCase
         $this->assertSame('TRACK123', $contract->tracking_code);
         $this->assertSame('TRACK123', $contract->requirements['_tracking_code'] ?? null);
     }
-}
 
+    public function test_student_cannot_mark_milestone_as_delayed(): void
+    {
+        $brand = User::factory()->state(['role' => 'brand'])->create();
+        $student = User::factory()->state(['role' => 'student'])->create();
+
+        $contract = Contract::factory()->create([
+            'brand_id' => $brand->id,
+            'creator_id' => $student->id,
+            'status' => 'active',
+        ]);
+
+        $milestone = CampaignTimeline::query()->create([
+            'contract_id' => $contract->id,
+            'milestone_type' => 'script_submission',
+            'title' => 'Envio de roteiro',
+            'status' => 'pending',
+            'deadline' => now()->subDay(),
+            'is_delayed' => false,
+        ]);
+
+        Sanctum::actingAs($student);
+
+        $response = $this->postJson('/api/campaign-timeline/mark-delayed', [
+            'milestone_id' => $milestone->id,
+        ]);
+
+        $response->assertStatus(403);
+
+        $milestone->refresh();
+        $this->assertSame('pending', $milestone->status);
+        $this->assertFalse((bool) $milestone->is_delayed);
+    }
+
+    public function test_brand_can_mark_overdue_pending_milestone_as_delayed(): void
+    {
+        $brand = User::factory()->state(['role' => 'brand'])->create();
+        $student = User::factory()->state(['role' => 'student'])->create();
+
+        $contract = Contract::factory()->create([
+            'brand_id' => $brand->id,
+            'creator_id' => $student->id,
+            'status' => 'active',
+        ]);
+
+        $milestone = CampaignTimeline::query()->create([
+            'contract_id' => $contract->id,
+            'milestone_type' => 'script_submission',
+            'title' => 'Envio de roteiro',
+            'status' => 'pending',
+            'deadline' => now()->subDay(),
+            'is_delayed' => false,
+        ]);
+
+        Sanctum::actingAs($brand);
+
+        $response = $this->postJson('/api/campaign-timeline/mark-delayed', [
+            'milestone_id' => $milestone->id,
+            'justification' => 'Cliente não enviou material no prazo',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.status', 'delayed');
+
+        $milestone->refresh();
+        $this->assertSame('delayed', $milestone->status);
+        $this->assertTrue((bool) $milestone->is_delayed);
+    }
+
+    public function test_student_can_justify_delayed_milestone(): void
+    {
+        $brand = User::factory()->state(['role' => 'brand'])->create();
+        $student = User::factory()->state(['role' => 'student'])->create();
+
+        $contract = Contract::factory()->create([
+            'brand_id' => $brand->id,
+            'creator_id' => $student->id,
+            'status' => 'active',
+        ]);
+
+        $milestone = CampaignTimeline::query()->create([
+            'contract_id' => $contract->id,
+            'milestone_type' => 'script_submission',
+            'title' => 'Envio de roteiro',
+            'status' => 'delayed',
+            'deadline' => now()->subDay(),
+            'is_delayed' => true,
+            'justification' => null,
+        ]);
+
+        Sanctum::actingAs($student);
+
+        $response = $this->postJson('/api/campaign-timeline/justify-delay', [
+            'milestone_id' => $milestone->id,
+            'justification' => 'Atraso por problema de conexão',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $milestone->refresh();
+        $this->assertSame('Atraso por problema de conexão', $milestone->justification);
+    }
+
+    public function test_brand_cannot_justify_delayed_milestone(): void
+    {
+        $brand = User::factory()->state(['role' => 'brand'])->create();
+        $student = User::factory()->state(['role' => 'student'])->create();
+
+        $contract = Contract::factory()->create([
+            'brand_id' => $brand->id,
+            'creator_id' => $student->id,
+            'status' => 'active',
+        ]);
+
+        $milestone = CampaignTimeline::query()->create([
+            'contract_id' => $contract->id,
+            'milestone_type' => 'script_submission',
+            'title' => 'Envio de roteiro',
+            'status' => 'delayed',
+            'deadline' => now()->subDay(),
+            'is_delayed' => true,
+            'justification' => null,
+        ]);
+
+        Sanctum::actingAs($brand);
+
+        $response = $this->postJson('/api/campaign-timeline/justify-delay', [
+            'milestone_id' => $milestone->id,
+            'justification' => 'Tentativa indevida da marca',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_contract_participants_can_request_download_link_and_signed_url_streams_file(): void
+    {
+        config(['filesystems.default' => 'gcs']);
+        Storage::fake('gcs');
+
+        $brand = User::factory()->state(['role' => 'brand'])->create();
+        $student = User::factory()->state(['role' => 'student'])->create();
+
+        $contract = Contract::factory()->create([
+            'brand_id' => $brand->id,
+            'creator_id' => $student->id,
+            'status' => 'active',
+        ]);
+
+        $storedPath = 'timeline-files/test-script.txt';
+        Storage::disk('gcs')->put($storedPath, 'roteiro');
+
+        $milestone = CampaignTimeline::query()->create([
+            'contract_id' => $contract->id,
+            'milestone_type' => 'script_submission',
+            'title' => 'Envio de roteiro',
+            'status' => 'pending',
+            'deadline' => now()->addDay(),
+            'file_path' => $storedPath,
+            'file_name' => 'roteiro.txt',
+            'file_size' => '7',
+            'file_type' => 'text/plain',
+        ]);
+
+        Sanctum::actingAs($student);
+        $studentResponse = $this->getJson("/api/campaign-timeline/download-file?milestone_id={$milestone->id}");
+        $studentResponse->assertStatus(200)->assertJsonPath('success', true);
+        $studentDownloadUrl = (string) $studentResponse->json('data.download_url');
+        $this->assertStringStartsWith('/api/campaign-timeline/download-signed/', $studentDownloadUrl);
+
+        Sanctum::actingAs($brand);
+        $brandResponse = $this->getJson("/api/campaign-timeline/download-file?milestone_id={$milestone->id}");
+        $brandResponse->assertStatus(200)->assertJsonPath('success', true);
+        $brandDownloadUrl = (string) $brandResponse->json('data.download_url');
+        $this->assertStringStartsWith('/api/campaign-timeline/download-signed/', $brandDownloadUrl);
+
+        $downloadResponse = $this->get($brandDownloadUrl);
+        $downloadResponse->assertStatus(200);
+        $this->assertStringContainsString(
+            'attachment;',
+            (string) $downloadResponse->headers->get('content-disposition')
+        );
+    }
+}
