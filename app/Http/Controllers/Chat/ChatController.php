@@ -864,7 +864,7 @@ class ChatController extends Controller
             'created_at' => $message->created_at->toISOString(),
         ];
 
-        if (($message->message_type === 'offer' || $message->message_type === 'contract_completion') && $message->offer_data) {
+        if ($message->offer_data) {
             $messageData['offer_data'] = $this->enrichOfferData($message->offer_data);
         } else {
             $messageData['offer_data'] = null;
