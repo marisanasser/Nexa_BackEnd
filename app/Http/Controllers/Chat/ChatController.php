@@ -331,7 +331,7 @@ class ChatController extends Controller
         $request->validate([
             'room_id' => 'required|string',
             'message' => 'required_without:file|string|max:1000',
-            'file' => 'nullable|file|max:10240',
+            'file' => 'nullable|file|max:256000',
         ]);
 
         $user = $this->getAuthenticatedUser();

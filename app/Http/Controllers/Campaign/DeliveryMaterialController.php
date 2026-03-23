@@ -55,7 +55,7 @@ class DeliveryMaterialController extends Controller
         $validator = Validator::make($request->all(), [
             'contract_id' => 'required|exists:contracts,id',
             'milestone_id' => 'nullable|exists:campaign_timelines,id',
-            'file' => 'required|file|max:102400',
+            'file' => 'required|file|max:256000',
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:1000',
         ]);

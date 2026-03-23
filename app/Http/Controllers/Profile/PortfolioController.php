@@ -150,11 +150,11 @@ class PortfolioController extends Controller
                         'required',
                         'file',
                         'mimes:jpeg,png,jpg,webp,avif,gif,bmp,svg,mp4,mov,avi,webm,ogg,mkv,flv,3gp,wmv',
-                        'max:102400' // 100MB
+                        'max:256000' // 250MB
                     ]
                 ], [
                     'file.mimes' => 'Tipo de arquivo não suportado. Use imagens ou vídeos (mp4, mov, avi, etc).',
-                    'file.max' => 'O arquivo excede o limite de 100MB.'
+                    'file.max' => 'O arquivo excede o limite de 250MB.'
                 ]);
 
                 if ($validator->fails()) {

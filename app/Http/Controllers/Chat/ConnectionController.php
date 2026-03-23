@@ -298,7 +298,7 @@ class ConnectionController extends Controller
         $validator = Validator::make($request->all(), [
             'room_id' => 'required|string',
             'message' => 'required_without:file|string|max:1000',
-            'file' => 'nullable|file|max:10240',
+            'file' => 'nullable|file|max:256000',
         ]);
 
         if ($validator->fails()) {

@@ -201,7 +201,7 @@ class CampaignTimelineController extends Controller
     {
         $request->validate([
             'milestone_id' => 'required|exists:campaign_timelines,id',
-            'file' => 'required|file|max:102400',
+            'file' => 'required|file|max:256000',
         ]);
 
         $milestone = CampaignTimeline::findOrFail($request->milestone_id);
