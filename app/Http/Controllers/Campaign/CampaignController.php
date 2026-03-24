@@ -24,6 +24,7 @@ use App\Models\User\User;
 use App\Domain\Notification\Services\AdminNotificationService;
 use App\Domain\Notification\Services\CampaignNotificationService;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -37,6 +38,9 @@ use Stripe\Stripe;
 class CampaignController extends Controller
 {
     use HasAuthenticatedUser;
+
+    private const int RESTRICTED_CAMPAIGN_ID = 138;
+    private const string RESTRICTED_CAMPAIGN_ALLOWED_EMAIL = 'arturcamposba99@gmail.com';
 
     public function index(Request $request): JsonResponse
     {
@@ -53,8 +57,6 @@ class CampaignController extends Controller
                 $query->with(['openTextSuggestion.admin']);
             }
 
-            error_log('Request' . json_encode($request));
-
             if ($user->isCreator() || $user->isStudent()) {
                 Log::info('Creator/Student listing campaigns', ['user_id' => $user->id, 'role' => $user->role]);
                 $query->approved()->active();
@@ -66,6 +68,8 @@ class CampaignController extends Controller
             } else {
                 return response()->json(['error' => 'Unauthorized'], 403);
             }
+
+            $this->applyRestrictedCampaignVisibility($query, $user);
 
             if ($request->has('status')) {
                 $query->where('status', $request->status);
@@ -221,6 +225,8 @@ class CampaignController extends Controller
                 return response()->json(['error' => 'Unauthorized'], 403);
             }
 
+            $this->applyRestrictedCampaignVisibility($query, $user);
+
             if ($request->has('status')) {
                 $query->where('status', $request->status);
             }
@@ -267,6 +273,7 @@ class CampaignController extends Controller
             }
 
             $query = Campaign::with(['brand', 'bids'])->pending();
+            $this->applyRestrictedCampaignVisibility($query, $user);
 
             if ($request->has('category')) {
                 $query->byCategory($request->category);
@@ -321,6 +328,8 @@ class CampaignController extends Controller
 
             $query = Campaign::with(['brand', 'approvedBy', 'bids'])
                 ->where('brand_id', $user->id);
+
+            $this->applyRestrictedCampaignVisibility($query, $authUser);
 
             if ($request->has('status')) {
                 $query->where('status', $request->status);
@@ -394,6 +403,8 @@ class CampaignController extends Controller
                     'message' => 'User role not authorized.',
                 ], 403);
             }
+
+            $this->applyRestrictedCampaignVisibility($query, $user);
 
             if ($request->filled('category')) {
                 $query->byCategory($request->category);
@@ -574,6 +585,10 @@ class CampaignController extends Controller
         try {
             $user = $this->getAuthenticatedUser();
             assert($user instanceof User);
+
+            if ($this->isRestrictedCampaign($campaign->id) && !$this->canAccessRestrictedCampaign($user)) {
+                return response()->json(['error' => 'Campaign not found or not available'], 404);
+            }
 
             if ($user->isCreator() || $user->isStudent()) {
                 if (!$campaign->isApproved() || !$campaign->is_active) {
@@ -1813,5 +1828,41 @@ class CampaignController extends Controller
         if (!empty($oldFilesToDelete['attachments'])) {
             Log::info('Deleted old campaign attachments after successful update', ['campaign_id' => $campaignId]);
         }
+    }
+
+    private function isRestrictedCampaign(int $campaignId): bool
+    {
+        return $this->getRestrictedCampaignId() === $campaignId;
+    }
+
+    private function canAccessRestrictedCampaign(User $user): bool
+    {
+        return strtolower(trim((string) $user->email)) === $this->getRestrictedCampaignAllowedEmail();
+    }
+
+    private function applyRestrictedCampaignVisibility(Builder $query, User $user): void
+    {
+        if ($this->canAccessRestrictedCampaign($user)) {
+            return;
+        }
+
+        $query->where('id', '!=', $this->getRestrictedCampaignId());
+    }
+
+    private function getRestrictedCampaignId(): int
+    {
+        $configuredId = config('campaign_visibility.restricted_campaign_id');
+        if (is_numeric($configuredId)) {
+            return (int) $configuredId;
+        }
+
+        return self::RESTRICTED_CAMPAIGN_ID;
+    }
+
+    private function getRestrictedCampaignAllowedEmail(): string
+    {
+        $configuredEmail = config('campaign_visibility.restricted_campaign_allowed_email', self::RESTRICTED_CAMPAIGN_ALLOWED_EMAIL);
+
+        return strtolower(trim((string) $configuredEmail));
     }
 }
