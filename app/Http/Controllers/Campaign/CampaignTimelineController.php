@@ -58,11 +58,23 @@ class CampaignTimelineController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $request->validate([
-            'contract_id' => 'required|exists:contracts,id',
+        $validated = $request->validate([
+            'contract_id' => 'required|integer|min:1',
         ]);
 
-        $contract = Contract::findOrFail($request->contract_id);
+        $contractId = (int) $validated['contract_id'];
+        $contract = Contract::find($contractId);
+
+        if (! $contract) {
+            return response()->json([
+                'success' => true,
+                'data' => [],
+                'meta' => [
+                    'contract_not_found' => true,
+                    'contract_id' => $contractId,
+                ],
+            ]);
+        }
 
         if (! $this->isCurrentUserContractParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);
@@ -651,11 +663,31 @@ class CampaignTimelineController extends Controller
 
     public function getStatistics(Request $request): JsonResponse
     {
-        $request->validate([
-            'contract_id' => 'required|exists:contracts,id',
+        $validated = $request->validate([
+            'contract_id' => 'required|integer|min:1',
         ]);
 
-        $contract = Contract::findOrFail($request->contract_id);
+        $contractId = (int) $validated['contract_id'];
+        $contract = Contract::find($contractId);
+
+        if (! $contract) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'total_milestones' => 0,
+                    'completed_milestones' => 0,
+                    'pending_milestones' => 0,
+                    'approved_milestones' => 0,
+                    'delayed_milestones' => 0,
+                    'overdue_milestones' => 0,
+                    'progress_percentage' => 0,
+                ],
+                'meta' => [
+                    'contract_not_found' => true,
+                    'contract_id' => $contractId,
+                ],
+            ]);
+        }
 
         if (! $this->isCurrentUserContractParticipant($contract)) {
             return response()->json(['error' => 'Não autorizado'], 403);

@@ -339,8 +339,38 @@ class CreatorBalanceService
     {
         $balance = $this->getOrCreateBalance($creator);
 
-        // Simple consistency check: if zero but payments exist, trigger full recalc logic (not implemented fully here but placeholder)
-        if (0 == $balance->total_earned && JobPayment::where('creator_id', $creator->id)->exists()) {
+        $hasAnyPayments = JobPayment::where('creator_id', $creator->id)->exists();
+        $completedCreatorAmount = (float) JobPayment::where('creator_id', $creator->id)
+            ->where('status', 'completed')
+            ->sum('creator_amount');
+
+        $totalWithdrawnFromSettled = (float) Withdrawal::where('creator_id', $creator->id)
+            ->whereIn('status', ['completed', 'processing'])
+            ->sum('amount');
+
+        $expectedAvailableBalance = max(
+            0.0,
+            round($completedCreatorAmount - $totalWithdrawnFromSettled, 2)
+        );
+
+        $currentEarned = (float) $balance->total_earned;
+        $currentAvailable = (float) $balance->available_balance;
+        $tolerance = 0.01;
+
+        $shouldRecalculate =
+            ($hasAnyPayments && abs($currentEarned) < $tolerance)
+            || abs($currentEarned - $completedCreatorAmount) > $tolerance
+            || abs($currentAvailable - $expectedAvailableBalance) > $tolerance;
+
+        if ($shouldRecalculate) {
+            Log::info('Detected creator balance drift, recalculating from payments', [
+                'creator_id' => $creator->id,
+                'current_total_earned' => $currentEarned,
+                'expected_total_earned' => $completedCreatorAmount,
+                'current_available_balance' => $currentAvailable,
+                'expected_available_balance' => $expectedAvailableBalance,
+            ]);
+
             $balance->recalculateFromPayments();
             $balance->refresh();
         }

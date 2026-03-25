@@ -866,6 +866,8 @@ class Contract extends Model
             return;
         }
 
+        $creatorIdsToRecalculate = [];
+
         foreach ($completedContracts as $contract) {
             $payment = JobPayment::where('contract_id', $contract->id)->first();
 
@@ -877,6 +879,8 @@ class Contract extends Model
 
                 continue;
             }
+
+            $creatorIdsToRecalculate[] = (int) $contract->creator_id;
 
             if ($payment->isPending()) {
                 try {
@@ -899,31 +903,35 @@ class Contract extends Model
                     ]);
                 }
             } elseif ($payment->isCompleted()) {
-                $balance = CreatorBalance::where('creator_id', $contract->creator_id)->first();
-                if ($balance) {
-                    $balance->refresh();
-                    $moveSuccess = $balance->movePendingToAvailable($payment->creator_amount);
+                Log::info('Skipping direct creator balance mutation for already completed payment on campaign completion', [
+                    'contract_id' => $contract->id,
+                    'campaign_id' => $campaign->id,
+                    'creator_id' => $contract->creator_id,
+                    'payment_id' => $payment->id,
+                ]);
+            }
+        }
 
-                    if ($moveSuccess) {
-                        Log::info('Moved payment to available balance for contract on campaign completion', [
-                            'contract_id' => $contract->id,
-                            'campaign_id' => $campaign->id,
-                            'creator_id' => $contract->creator_id,
-                            'creator_amount' => $payment->creator_amount,
-                        ]);
-                    } else {
-                        $balance->increment('available_balance', $payment->creator_amount);
-                        $balance->refresh();
+        $uniqueCreatorIds = array_values(array_unique(array_filter(
+            $creatorIdsToRecalculate,
+            static fn(int $creatorId): bool => $creatorId > 0
+        )));
 
-                        Log::info('Added payment directly to available balance for contract on campaign completion (fallback)', [
-                            'contract_id' => $contract->id,
-                            'campaign_id' => $campaign->id,
-                            'creator_id' => $contract->creator_id,
-                            'creator_amount' => $payment->creator_amount,
-                            'available_balance_after' => $balance->available_balance,
-                        ]);
-                    }
-                }
+        foreach ($uniqueCreatorIds as $creatorId) {
+            $balance = CreatorBalance::where('creator_id', $creatorId)->first();
+
+            if (! $balance) {
+                continue;
+            }
+
+            try {
+                $balance->recalculateFromPayments();
+            } catch (Exception $e) {
+                Log::error('Failed to recalculate creator balance after campaign completion payment processing', [
+                    'campaign_id' => $campaign->id,
+                    'creator_id' => $creatorId,
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
     }

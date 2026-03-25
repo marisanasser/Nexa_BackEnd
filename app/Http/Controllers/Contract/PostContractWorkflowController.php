@@ -72,10 +72,10 @@ class PostContractWorkflowController extends Controller
     {
         $user = $this->getAuthenticatedUser();
 
-        if (!$user->isCreator()) {
+        if (!$user->isCreator() && !$user->isStudent()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only creators can access this endpoint',
+                'message' => 'Only creators and students can access this endpoint',
             ], 403);
         }
 
