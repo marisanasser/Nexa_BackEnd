@@ -2,18 +2,29 @@ FROM php:8.4-fpm-bookworm
 
 WORKDIR /var/www/html
 
-RUN apt-get update && apt-get install -y \
+# Install PostgreSQL 17 client (pg_dump) to match production DB major version.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    gnupg \
     git \
     unzip \
-    postgresql-client \
     libpq-dev \
     libonig-dev \
     libzip-dev \
     libsqlite3-dev \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+       | gpg --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+       > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends postgresql-client-17 \
     && pecl install redis \
     && docker-php-ext-enable redis \
     && docker-php-ext-install pdo pdo_pgsql pgsql pcntl pdo_sqlite \
     && rm -rf /var/lib/apt/lists/*
+
+ENV DB_BACKUP_PG_DUMP_BINARY=/usr/lib/postgresql/17/bin/pg_dump
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 

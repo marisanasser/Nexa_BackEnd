@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Payment;
 
+use App\Models\Payment\Transaction;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
@@ -42,20 +43,35 @@ class CreatorBalanceController extends Controller
 
             // Get recent transactions manually for now as service doesn't have it yet encapsulated perfectly with exact format
             // But we can retrieve them from relations via balance object returned
-            $recentTransactions = $balance->payments()
+            $recentPayments = $balance->payments()
                 ->with([
                     'contract:id,title,offer_id',
                     'contract.offer:id,title,campaign_id',
                     'contract.offer.campaign:id,title',
                 ])
                 ->where('status', 'completed')
-                ->whereHas('transaction', function ($query): void {
-                    $query->whereIn('status', ['paid', 'succeeded'])
-                        ->where('stripe_payment_intent_id', 'like', 'pi_%');
-                })
                 ->orderBy('processed_at', 'desc')
-                ->limit(5)
-                ->get()
+                ->limit(30)
+                ->get();
+
+            $candidateTransactionIds = $recentPayments
+                ->pluck('transaction_id')
+                ->filter(static fn($id): bool => is_numeric((string) $id))
+                ->map(static fn($id): int => (int) $id)
+                ->unique()
+                ->values();
+
+            $settledTransactionIds = Transaction::query()
+                ->whereIn('id', $candidateTransactionIds)
+                ->whereIn('status', ['paid', 'succeeded'])
+                ->where('stripe_payment_intent_id', 'like', 'pi_%')
+                ->pluck('id')
+                ->map(static fn($id): string => (string) $id)
+                ->all();
+
+            $recentTransactions = $recentPayments
+                ->filter(static fn($payment): bool => in_array((string) $payment->transaction_id, $settledTransactionIds, true))
+                ->take(5)
                 ->map(fn($payment) => [
                     'id' => $payment->id,
                     'campaign_title' => $payment->contract?->offer?->campaign?->title

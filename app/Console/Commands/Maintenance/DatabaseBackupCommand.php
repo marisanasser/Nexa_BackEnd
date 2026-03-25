@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands\Maintenance;
 
+use Google\Cloud\Storage\StorageClient;
 use Illuminate\Console\Command;
 use Illuminate\Mail\Message;
 use Illuminate\Support\Carbon;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 use Throwable;
 
@@ -49,6 +51,8 @@ class DatabaseBackupCommand extends Command
             return self::FAILURE;
         }
 
+        $connection = $this->resolvePgsqlConnectionConfig($connection);
+
         $localDirectory = trim((string) config('backup.directory', 'backups/database'), '/\\');
         $localDiskPath = storage_path('app'.DIRECTORY_SEPARATOR.$localDirectory);
         $filenamePrefix = trim((string) config('backup.filename_prefix', 'nexa'));
@@ -79,6 +83,10 @@ class DatabaseBackupCommand extends Command
                 [
                     ['connection', $connectionName],
                     ['driver', (string) ($connection['driver'] ?? '')],
+                    ['db_host', (string) ($connection['host'] ?? '')],
+                    ['db_port', (string) ($connection['port'] ?? '')],
+                    ['db_database', (string) ($connection['database'] ?? '')],
+                    ['db_sslmode', (string) ($connection['sslmode'] ?? '')],
                     ['local_directory', $localDiskPath],
                     ['backup_filename', $filename],
                     ['retention_days', (string) $keepDays],
@@ -229,8 +237,10 @@ class DatabaseBackupCommand extends Command
             throw new RuntimeException('Invalid DB config for backup: host/database/username are required.');
         }
 
+        $pgDumpBinary = $this->resolvePgDumpBinary();
+
         $command = [
-            (string) config('backup.pg_dump_binary', 'pg_dump'),
+            $pgDumpBinary,
             '--format=plain',
             '--encoding=UTF8',
             '--clean',
@@ -304,15 +314,29 @@ class DatabaseBackupCommand extends Command
      */
     private function uploadToCloud(string $diskName, string $cloudPath, string $localPath): array
     {
+        if ('gcs' === $diskName && class_exists(StorageClient::class)) {
+            return $this->uploadToGcsDirect($cloudPath, $localPath);
+        }
+
         $stream = fopen($localPath, 'rb');
         if (false === $stream) {
             throw new RuntimeException("Could not open local file for upload: {$localPath}");
         }
 
+        $disk = Storage::disk($diskName);
+
         try {
-            Storage::disk($diskName)->put($cloudPath, $stream, ['visibility' => 'private']);
+            // Use writeStream to surface adapter-level errors instead of silent false responses.
+            $disk->getDriver()->writeStream($cloudPath, $stream);
         } finally {
-            fclose($stream);
+            // Some filesystem adapters (including GCS) can close the stream internally.
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+
+        if (!$disk->exists($cloudPath)) {
+            throw new RuntimeException("Failed to upload backup to disk [{$diskName}] path [{$cloudPath}].");
         }
 
         $url = null;
@@ -326,6 +350,50 @@ class DatabaseBackupCommand extends Command
             'disk' => $diskName,
             'path' => $cloudPath,
             'url' => $url,
+        ];
+    }
+
+    /**
+     * Upload backup directly to GCS, avoiding per-object ACL writes (UBLA compatible).
+     *
+     * @return array{disk:string,path:string,url:string|null}
+     */
+    private function uploadToGcsDirect(string $cloudPath, string $localPath): array
+    {
+        $bucketName = (string) config('filesystems.disks.gcs.bucket', env('GOOGLE_CLOUD_STORAGE_BUCKET', ''));
+        if ('' === trim($bucketName)) {
+            throw new RuntimeException('GCS bucket is not configured.');
+        }
+
+        $stream = fopen($localPath, 'rb');
+        if (false === $stream) {
+            throw new RuntimeException("Could not open local file for upload: {$localPath}");
+        }
+
+        $projectId = (string) config('filesystems.disks.gcs.project_id', env('GOOGLE_CLOUD_PROJECT_ID', ''));
+        $clientConfig = [];
+        if ('' !== trim($projectId)) {
+            $clientConfig['projectId'] = $projectId;
+        }
+
+        try {
+            $storageClient = new StorageClient($clientConfig);
+            $bucket = $storageClient->bucket($bucketName);
+            $bucket->upload($stream, [
+                'name' => ltrim($cloudPath, '/'),
+            ]);
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+
+        $normalizedPath = ltrim($cloudPath, '/');
+
+        return [
+            'disk' => 'gcs',
+            'path' => $normalizedPath,
+            'url' => "https://storage.googleapis.com/{$bucketName}/{$normalizedPath}",
         ];
     }
 
@@ -499,5 +567,110 @@ class DatabaseBackupCommand extends Command
         }
 
         return number_format($mb / 1024, 2).' GB';
+    }
+
+    private function resolvePgDumpBinary(): string
+    {
+        $configuredBinary = trim((string) config('backup.pg_dump_binary', 'pg_dump'));
+        $candidates = array_filter(array_values(array_unique(array_merge(
+            [$configuredBinary, 'pg_dump'],
+            'Windows' === PHP_OS_FAMILY
+                ? [
+                    'pg_dump.exe',
+                    'C:\\Program Files\\PostgreSQL\\17\\bin\\pg_dump.exe',
+                    'C:\\Program Files\\PostgreSQL\\16\\bin\\pg_dump.exe',
+                    'C:\\Program Files\\PostgreSQL\\15\\bin\\pg_dump.exe',
+                  ]
+                : [
+                    '/usr/bin/pg_dump',
+                    '/usr/lib/postgresql/17/bin/pg_dump',
+                    '/usr/lib/postgresql/16/bin/pg_dump',
+                    '/usr/lib/postgresql/15/bin/pg_dump',
+                  ]
+        ))));
+
+        $finder = new ExecutableFinder();
+
+        foreach ($candidates as $candidate) {
+            $resolved = $this->resolveBinaryCandidate($finder, $candidate);
+            if (null !== $resolved) {
+                return $resolved;
+            }
+        }
+
+        throw new RuntimeException('pg_dump was not found. Install PostgreSQL client tools or set DB_BACKUP_PG_DUMP_BINARY with the full binary path.');
+    }
+
+    private function resolveBinaryCandidate(ExecutableFinder $finder, string $candidate): ?string
+    {
+        if ($this->looksLikePath($candidate)) {
+            if ('Windows' === PHP_OS_FAMILY) {
+                return File::exists($candidate) ? $candidate : null;
+            }
+
+            return (File::exists($candidate) && is_executable($candidate)) ? $candidate : null;
+        }
+
+        return $finder->find($candidate);
+    }
+
+    private function looksLikePath(string $value): bool
+    {
+        return str_contains($value, '/') || str_contains($value, '\\');
+    }
+
+    /**
+     * @param array<string,mixed> $connection
+     * @return array<string,mixed>
+     */
+    private function resolvePgsqlConnectionConfig(array $connection): array
+    {
+        $databaseUrl = trim((string) ($connection['url'] ?? ''));
+        if ('' === $databaseUrl) {
+            return $connection;
+        }
+
+        $parsed = parse_url($databaseUrl);
+        if (false === $parsed) {
+            return $connection;
+        }
+
+        $scheme = strtolower((string) ($parsed['scheme'] ?? ''));
+        if ('' !== $scheme && !str_starts_with($scheme, 'postgres')) {
+            return $connection;
+        }
+
+        if (isset($parsed['host'])) {
+            $connection['host'] = (string) $parsed['host'];
+        }
+
+        if (isset($parsed['port'])) {
+            $connection['port'] = (string) $parsed['port'];
+        }
+
+        if (isset($parsed['user'])) {
+            $connection['username'] = rawurldecode((string) $parsed['user']);
+        }
+
+        if (array_key_exists('pass', $parsed)) {
+            $connection['password'] = rawurldecode((string) $parsed['pass']);
+        }
+
+        if (isset($parsed['path'])) {
+            $database = ltrim((string) $parsed['path'], '/');
+            if ('' !== $database) {
+                $connection['database'] = rawurldecode($database);
+            }
+        }
+
+        if (isset($parsed['query'])) {
+            parse_str((string) $parsed['query'], $query);
+
+            if (is_array($query) && isset($query['sslmode']) && '' !== trim((string) $query['sslmode'])) {
+                $connection['sslmode'] = (string) $query['sslmode'];
+            }
+        }
+
+        return $connection;
     }
 }
