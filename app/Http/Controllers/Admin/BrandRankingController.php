@@ -75,11 +75,15 @@ class BrandRankingController extends Controller
                     'total_campaigns' => $brand->total_campaigns,
                     'total_contracts' => $brand->total_contracts,
                     'total_paid' => (float) ($brand->total_paid ?? 0),
-                    'total_paid_formatted' => 'R$ '.number_format($brand->total_paid ?? 0, 2, ',', '.'),
+                    'total_paid_formatted' => 'R$ '.number_format((float) ($brand->total_paid ?? 0), 2, ',', '.'),
                     'avatar_url' => $brand->avatar_url,
                     'has_premium' => $brand->has_premium,
                     'created_at' => $brand->created_at,
-                    'score' => $this->calculateRankingScore($brand->total_campaigns, $brand->total_contracts, $brand->total_paid ?? 0),
+                    'score' => $this->calculateRankingScore(
+                        (int) $brand->total_campaigns,
+                        (int) $brand->total_contracts,
+                        (float) ($brand->total_paid ?? 0)
+                    ),
                 ])
                 ->sortByDesc('score')
                 ->values()
@@ -203,7 +207,7 @@ class BrandRankingController extends Controller
                     'company_name' => $brand->company_name,
                     'display_name' => $brand->company_name ?: $brand->name,
                     'total_paid' => (float) $brand->total_paid,
-                    'total_paid_formatted' => 'R$ '.number_format($brand->total_paid, 2, ',', '.'),
+                    'total_paid_formatted' => 'R$ '.number_format((float) $brand->total_paid, 2, ',', '.'),
                     'avatar_url' => $brand->avatar_url,
                     'has_premium' => $brand->has_premium,
                     'created_at' => $brand->created_at,

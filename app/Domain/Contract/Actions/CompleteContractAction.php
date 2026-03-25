@@ -13,6 +13,7 @@ use App\Models\Contract\Contract;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * CompleteContractAction handles the process of completing a contract.
@@ -64,7 +65,7 @@ class CompleteContractAction
                 try {
                     $this->paymentService->releasePaymentToCreator($contract);
                     $fundsReleased = true;
-                } catch (Exception $e) {
+                } catch (Throwable $e) {
                     Log::error('Payment release failed during contract completion', ['error' => $e->getMessage()]);
 
                     throw $e;
@@ -85,7 +86,7 @@ class CompleteContractAction
 
                 return ContractCompletionResult::success($contract, $fundsReleased ? 1.0 : 0.0);
             });
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Log::error('Contract completion failed', [
                 'contract_id' => $contract->id,
                 'error' => $e->getMessage(),
@@ -160,7 +161,7 @@ class CompleteContractAction
         try {
             ContractNotificationService::notifyCreatorOfContractCompleted($contract);
             PaymentNotificationService::notifyCreatorOfPaymentAvailable($contract);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Log::warning('Failed to send contract completion notifications', [
                 'contract_id' => $contract->id,
                 'error' => $e->getMessage(),

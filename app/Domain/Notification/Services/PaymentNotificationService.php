@@ -6,7 +6,7 @@ namespace App\Domain\Notification\Services;
 
 use App\Models\Common\Notification;
 use App\Models\Payment\WithdrawalMethod;
-use Exception;
+use Throwable;
 use Illuminate\Support\Facades\Log;
 
 class PaymentNotificationService
@@ -46,7 +46,7 @@ class PaymentNotificationService
             ]);
 
             NotificationService::sendSocketNotification($contract->creator_id, $notification);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Log::error('Failed to notify creator of payment available', [
                 'contract_id' => $contract->id,
                 'creator_id' => $contract->creator_id,
@@ -73,7 +73,7 @@ class PaymentNotificationService
             ]);
 
             NotificationService::sendSocketNotification($contract->brand_id, $notification);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Log::error('Failed to notify brand of payment successful', [
                 'contract_id' => $contract->id,
                 'brand_id' => $contract->brand_id,
@@ -100,7 +100,7 @@ class PaymentNotificationService
             ]);
 
             NotificationService::sendSocketNotification($contract->creator_id, $notification);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Log::error('Failed to notify creator of payment received', [
                 'contract_id' => $contract->id,
                 'creator_id' => $contract->creator_id,
@@ -127,7 +127,7 @@ class PaymentNotificationService
             ]);
 
             NotificationService::sendSocketNotification($contract->brand_id, $notification);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Log::error('Failed to notify brand of payment failed', [
                 'contract_id' => $contract->id,
                 'brand_id' => $contract->brand_id,
@@ -154,7 +154,7 @@ class PaymentNotificationService
             ]);
 
             NotificationService::sendSocketNotification($contract->creator_id, $notification);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Log::error('Failed to notify creator of payment pending', [
                 'contract_id' => $contract->id,
                 'creator_id' => $contract->creator_id,
@@ -183,7 +183,7 @@ class PaymentNotificationService
             ]);
 
             NotificationService::sendSocketNotification($jobPayment->creator_id, $notification);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Log::error('Failed to notify user of payment completed', [
                 'job_payment_id' => $jobPayment->id,
                 'error' => $e->getMessage(),
@@ -210,7 +210,7 @@ class PaymentNotificationService
             ]);
 
             NotificationService::sendSocketNotification($jobPayment->creator_id, $notification);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Log::error('Failed to notify user of payment failed', [
                 'job_payment_id' => $jobPayment->id,
                 'error' => $e->getMessage(),
@@ -238,7 +238,7 @@ class PaymentNotificationService
             ]);
 
             NotificationService::sendSocketNotification($jobPayment->creator_id, $notification);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Log::error('Failed to notify user of payment refunded', [
                 'job_payment_id' => $jobPayment->id,
                 'error' => $e->getMessage(),
@@ -262,7 +262,7 @@ class PaymentNotificationService
                 'user_id' => $userId,
                 'amount' => $amount,
             ]);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Log::error('Failed to create platform funding success notification', [
                 'user_id' => $userId,
                 'amount' => $amount,
@@ -317,7 +317,7 @@ class PaymentNotificationService
             }
 
             NotificationService::sendSocketNotification($withdrawal->creator_id, $notification);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Log::error('Failed to create withdrawal notification', [
                 'withdrawal_id' => $withdrawal->id,
                 'status' => $status,
