@@ -5,6 +5,7 @@ WORKDIR /var/www/html
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
+    postgresql-client \
     libpq-dev \
     libonig-dev \
     libzip-dev \
