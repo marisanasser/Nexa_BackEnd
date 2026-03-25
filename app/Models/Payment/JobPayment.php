@@ -6,6 +6,7 @@ namespace App\Models\Payment;
 
 use App\Domain\Notification\Services\PaymentNotificationService;
 use App\Models\Contract\Contract;
+use App\Models\Payment\Transaction;
 use App\Models\User\User;
 use Exception;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -41,6 +42,7 @@ use Illuminate\Support\Carbon;
  * @property null|Contract $contract
  * @property null|User     $brand
  * @property null|User     $creator
+ * @property null|Transaction $transaction
  */
 class JobPayment extends Model
 {
@@ -55,6 +57,8 @@ class JobPayment extends Model
         'creator_amount',
         'payment_method',
         'transaction_id',
+        'stripe_transfer_id',
+        'stripe_balance_tx_id',
         'status',
         'paid_at',
         'processed_at',
@@ -83,6 +87,11 @@ class JobPayment extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'creator_id');
+    }
+
+    public function transaction(): BelongsTo
+    {
+        return $this->belongsTo(Transaction::class, 'transaction_id');
     }
 
     public function scopePending($query)
@@ -258,11 +267,23 @@ class JobPayment extends Model
 
     private function processPayment(): void
     {
-        sleep(1);
+        if (is_numeric($this->transaction_id)) {
+            // Escrow-backed payments already reference the real transaction.
+            // Never overwrite that link with synthetic IDs.
+            return;
+        }
 
-        $this->update([
-            'transaction_id' => 'TXN_'.time().'_'.$this->id,
-        ]);
+        if ((bool) config('services.stripe.simulation_mode', false)) {
+            sleep(1);
+
+            $this->update([
+                'transaction_id' => 'SIM_TXN_' . time() . '_' . $this->id,
+            ]);
+
+            return;
+        }
+
+        throw new Exception('Cannot process payment without confirmed escrow transaction');
     }
 
     private function updateCreatorBalance(): void

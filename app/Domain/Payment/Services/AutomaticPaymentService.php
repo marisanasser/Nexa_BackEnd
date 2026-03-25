@@ -85,39 +85,15 @@ class AutomaticPaymentService
                 ];
             }
 
-            $payment = JobPayment::create([
+            Log::warning('Automatic payment processing blocked outside simulation mode', [
                 'contract_id' => $contract->id,
                 'brand_id' => $contract->brand_id,
                 'creator_id' => $contract->creator_id,
-                'total_amount' => $contract->budget,
-                'creator_amount' => $contract->creator_amount,
-                'platform_fee' => $contract->platform_fee,
-                'payment_method' => 'credit_card',
-                'status' => 'completed',
-                'processed_at' => now(),
-            ]);
-
-            if (!$payment) {
-                throw new Exception('Failed to create payment record');
-            }
-
-            $contract->update([
-                'status' => 'active',
-                'workflow_status' => 'active',
-            ]);
-
-            Log::info('Payment processed successfully', [
-                'contract_id' => $contract->id,
-                'payment_id' => $payment->id,
-                'amount' => $contract->budget,
-                'new_status' => 'active',
-                'new_workflow_status' => 'active',
             ]);
 
             return [
-                'success' => true,
-                'message' => 'Payment processed successfully',
-                'payment_id' => $payment->id,
+                'success' => false,
+                'message' => 'Automatic payment is disabled in production. Use Stripe checkout funding flow.',
             ];
         } catch (Exception $e) {
             Log::error('Payment processing failed', [

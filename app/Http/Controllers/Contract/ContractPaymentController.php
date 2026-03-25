@@ -250,8 +250,10 @@ class ContractPaymentController extends Controller
 
         return response()->json([
             'success' => false,
-            'message' => 'Payment retry failed. Please check your payment method.',
-        ], 400);
+            'message' => 'Automatic retry is disabled. Start a new Stripe checkout to fund this contract.',
+            'action_required' => 'checkout_session',
+            'contract_id' => $contract->id,
+        ], 409);
     }
 
     public function getBrandTransactionHistory(Request $request): JsonResponse

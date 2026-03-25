@@ -37,7 +37,7 @@ class CreatorBalanceController extends Controller
         }
 
         try {
-            $balance = $this->balanceService->getOrCreateBalance($user);
+            $balance = $this->balanceService->ensureBalanceExists($user);
             $summary = $this->balanceService->getBalanceSummary($user);
 
             // Get recent transactions manually for now as service doesn't have it yet encapsulated perfectly with exact format
@@ -49,6 +49,10 @@ class CreatorBalanceController extends Controller
                     'contract.offer.campaign:id,title',
                 ])
                 ->where('status', 'completed')
+                ->whereHas('transaction', function ($query): void {
+                    $query->whereIn('status', ['paid', 'succeeded'])
+                        ->where('stripe_payment_intent_id', 'like', 'pi_%');
+                })
                 ->orderBy('processed_at', 'desc')
                 ->limit(5)
                 ->get()

@@ -204,21 +204,29 @@ class CreatorBalance extends Model
 
     public function getEarningsThisMonth(): float
     {
-        return (float) $this->payments()
+        $payments = $this->payments()
+            ->with('transaction')
             ->where('status', 'completed')
             ->whereMonth('processed_at', now()->month)
             ->whereYear('processed_at', now()->year)
-            ->sum('creator_amount')
-        ;
+            ->get();
+
+        return (float) $payments
+            ->filter(fn(JobPayment $payment) => $this->hasSettledFundingReference($payment))
+            ->sum('creator_amount');
     }
 
     public function getEarningsThisYear(): float
     {
-        return (float) $this->payments()
+        $payments = $this->payments()
+            ->with('transaction')
             ->where('status', 'completed')
             ->whereYear('processed_at', now()->year)
-            ->sum('creator_amount')
-        ;
+            ->get();
+
+        return (float) $payments
+            ->filter(fn(JobPayment $payment) => $this->hasSettledFundingReference($payment))
+            ->sum('creator_amount');
     }
 
     public function getFormattedEarningsThisMonthAttribute(): string
@@ -265,11 +273,16 @@ class CreatorBalance extends Model
     public function recalculateFromPayments(): void
     {
         $allPayments = $this->payments()
-            ->with('contract')
+            ->with(['contract', 'transaction'])
             ->get();
 
-        $completedPayments = $allPayments->where('status', 'completed');
-        $pendingPayments = $allPayments->where('status', 'pending');
+        $completedPayments = $allPayments
+            ->filter(fn(JobPayment $payment) => 'completed' === $payment->status)
+            ->filter(fn(JobPayment $payment) => $this->hasSettledFundingReference($payment));
+
+        $pendingPayments = $allPayments
+            ->filter(fn(JobPayment $payment) => 'pending' === $payment->status)
+            ->filter(fn(JobPayment $payment) => $this->hasSettledFundingReference($payment));
 
         $totalEarned = $completedPayments->sum('creator_amount');
 
@@ -292,20 +305,36 @@ class CreatorBalance extends Model
             ->get();
 
         foreach ($contractsWithAvailablePayment as $contract) {
-            $hasPaymentRecord = $allPayments->contains(fn($payment) => $payment->contract_id === $contract->id);
+            $hasPaymentRecord = $allPayments->contains(
+                fn(JobPayment $payment) =>
+                $payment->contract_id === $contract->id
+                && $this->hasSettledFundingReference($payment)
+            );
 
             if (!$hasPaymentRecord && $contract->creator_amount > 0) {
-                $creatorAmount = (float) $contract->creator_amount;
-                $availableFromCompleted += $creatorAmount;
-                // Only modify totalEarned if it's not already counted via payments?
-                // The original logic just added it. Assuming integrity check logic.
-                $totalEarned += $creatorAmount;
+                $hasSettledTransaction = Transaction::query()
+                    ->where('contract_id', $contract->id)
+                    ->whereIn('status', ['paid', 'succeeded'])
+                    ->where('stripe_payment_intent_id', 'like', 'pi_%')
+                    ->exists();
 
-                Log::info('Found contract with payment_available but no payment record', [
-                    'contract_id' => $contract->id,
-                    'creator_id' => $this->creator_id,
-                    'creator_amount' => $creatorAmount,
-                ]);
+                if ($hasSettledTransaction) {
+                    $creatorAmount = (float) $contract->creator_amount;
+                    $availableFromCompleted += $creatorAmount;
+                    $totalEarned += $creatorAmount;
+
+                    Log::info('Found contract with payment_available and settled transaction but no payment record', [
+                        'contract_id' => $contract->id,
+                        'creator_id' => $this->creator_id,
+                        'creator_amount' => $creatorAmount,
+                    ]);
+                } else {
+                    Log::warning('Ignoring contract with payment_available and no settled Stripe funding proof', [
+                        'contract_id' => $contract->id,
+                        'creator_id' => $this->creator_id,
+                        'creator_amount' => (float) $contract->creator_amount,
+                    ]);
+                }
             }
         }
 
@@ -330,6 +359,32 @@ class CreatorBalance extends Model
             'completed_payments_count' => $completedPayments->count(),
             'pending_payments_count' => $pendingPayments->count(),
         ]);
+    }
+
+    private function hasSettledFundingReference(JobPayment $payment): bool
+    {
+        if (!is_numeric($payment->transaction_id)) {
+            return false;
+        }
+
+        $transaction = $payment->relationLoaded('transaction')
+            ? $payment->transaction
+            : $payment->transaction()->first();
+
+        if (!$transaction) {
+            return false;
+        }
+
+        if (!in_array((string) $transaction->status, ['paid', 'succeeded'], true)) {
+            return false;
+        }
+
+        $paymentIntentId = (string) ($transaction->stripe_payment_intent_id ?? '');
+        if ('' === $paymentIntentId || !str_starts_with($paymentIntentId, 'pi_')) {
+            return false;
+        }
+
+        return true;
     }
 
     public function getWithdrawalHistory(int $limit = 10)

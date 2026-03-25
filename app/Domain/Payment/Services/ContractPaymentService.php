@@ -183,16 +183,30 @@ class ContractPaymentService
             ->first()
         ;
 
-        if (!$jobPayment || !$jobPayment->stripe_payment_intent_id) {
+        if (!$jobPayment) {
             throw new Exception('No refundable payment found for this contract');
         }
 
         try {
+            if (!is_numeric($jobPayment->transaction_id)) {
+                throw new Exception('No refundable Stripe transaction found for this contract');
+            }
+
+            $transaction = Transaction::find((int) $jobPayment->transaction_id);
+            if (!$transaction) {
+                throw new Exception('No refundable Stripe transaction found for this contract');
+            }
+
+            $paymentIntentId = (string) ($transaction->stripe_payment_intent_id ?? '');
+            if ('' === $paymentIntentId || !str_starts_with($paymentIntentId, 'pi_')) {
+                throw new Exception('No refundable Stripe payment intent found for this contract');
+            }
+
             $wasCompleted = 'completed' === $jobPayment->status;
 
             // Refund in Stripe
             $this->stripeWrapper->createRefund([
-                'payment_intent' => $jobPayment->stripe_payment_intent_id,
+                'payment_intent' => $paymentIntentId,
                 'reason' => 'requested_by_customer',
             ]);
 
@@ -201,6 +215,17 @@ class ContractPaymentService
                 'status' => 'refunded',
                 'refunded_at' => now(),
                 'refund_reason' => $reason,
+            ]);
+
+            $transaction->update([
+                'status' => 'refunded',
+                'metadata' => array_merge(
+                    is_array($transaction->metadata) ? $transaction->metadata : [],
+                    [
+                        'refund_reason' => $reason,
+                        'refunded_at' => now()->toDateTimeString(),
+                    ]
+                ),
             ]);
 
             // If payment was already released, deduct from creator balance
