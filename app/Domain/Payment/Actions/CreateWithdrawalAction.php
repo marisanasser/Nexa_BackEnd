@@ -47,6 +47,11 @@ class CreateWithdrawalAction
             return DB::transaction(function () use ($user, $amount, $withdrawalMethodCode, $withdrawalMethod, $dynamicMethod, $withdrawalDetails) {
                 // Get or create balance
                 $balance = $this->getOrCreateBalance($user);
+                $balance = CreatorBalance::query()
+                    ->whereKey($balance->id)
+                    ->lockForUpdate()
+                    ->firstOrFail()
+                ;
 
                 // Validate balance
                 if (!$balance->canWithdraw($amount)) {
@@ -87,11 +92,9 @@ class CreateWithdrawalAction
                     throw new Exception('Failed to create withdrawal record in database');
                 }
 
-                // Deduct from balance
-                $withdrawResult = $balance->withdraw($amount);
-                if (!$withdrawResult) {
-                    throw new Exception('Failed to deduct amount from available balance');
-                }
+                // Reserve funds immediately on request creation.
+                // `total_withdrawn` must be updated only when the withdrawal is completed.
+                $balance->decrement('available_balance', $amount);
 
                 $balance->refresh();
 

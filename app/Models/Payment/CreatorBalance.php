@@ -204,7 +204,7 @@ class CreatorBalance extends Model
 
     public function getEarningsThisMonth(): float
     {
-        return $this->payments()
+        return (float) $this->payments()
             ->where('status', 'completed')
             ->whereMonth('processed_at', now()->month)
             ->whereYear('processed_at', now()->year)
@@ -214,7 +214,7 @@ class CreatorBalance extends Model
 
     public function getEarningsThisYear(): float
     {
-        return $this->payments()
+        return (float) $this->payments()
             ->where('status', 'completed')
             ->whereYear('processed_at', now()->year)
             ->sum('creator_amount')
@@ -241,7 +241,7 @@ class CreatorBalance extends Model
 
     public function getPendingWithdrawalsAmountAttribute(): float
     {
-        return $this->withdrawals()
+        return (float) $this->withdrawals()
             ->whereIn('status', ['pending', 'processing'])
             ->sum('amount')
         ;

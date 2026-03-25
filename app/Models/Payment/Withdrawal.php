@@ -683,7 +683,8 @@ class Withdrawal extends Model
     {
         $balance = CreatorBalance::where('creator_id', $this->creator_id)->first();
         if ($balance) {
-            $balance->withdraw((float) $this->amount);
+            // Funds are reserved at request time; completion should only account as withdrawn.
+            $balance->increment('total_withdrawn', (float) $this->amount);
         }
     }
 
