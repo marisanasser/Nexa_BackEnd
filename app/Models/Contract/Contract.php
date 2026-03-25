@@ -278,7 +278,7 @@ class Contract extends Model
 
     public function canBeCompleted(): bool
     {
-        return $this->isActive();
+        return $this->isActive() && $this->canTransitionToActiveWorkflow();
     }
 
     public function canBeCancelled(): bool
@@ -511,15 +511,15 @@ class Contract extends Model
 
     public function isFunded(): bool
     {
+        if (!$this->requiresEscrowFunding()) {
+            return true;
+        }
+
         if ($this->hasPaymentProcessed()) {
             return true;
         }
 
-        if ($this->isActive() || $this->isCompleted()) {
-            return true;
-        }
-
-        if ($this->payment && in_array($this->payment->status, ['completed', 'processing'])) {
+        if ($this->hasEscrowFundingRecord()) {
             return true;
         }
 
@@ -549,7 +549,49 @@ class Contract extends Model
 
     public function canBeStarted(): bool
     {
-        return 'pending' === $this->status && $this->hasPaymentProcessed();
+        return 'pending' === $this->status && $this->canTransitionToActiveWorkflow();
+    }
+
+    public function canTransitionToActiveWorkflow(): bool
+    {
+        return !$this->requiresEscrowFunding() || $this->hasEscrowFundingRecord();
+    }
+
+    public function requiresEscrowFunding(): bool
+    {
+        return (float) $this->budget > 0;
+    }
+
+    public function hasEscrowFundingRecord(): bool
+    {
+        if (!$this->requiresEscrowFunding()) {
+            return true;
+        }
+
+        /** @var null|JobPayment $jobPayment */
+        $jobPayment = $this->relationLoaded('payment')
+            ? $this->getRelation('payment')
+            : $this->payment()->latest('id')->first();
+
+        if (!$jobPayment) {
+            return false;
+        }
+
+        if (!in_array((string) $jobPayment->status, ['pending', 'processing', 'completed'], true)) {
+            return false;
+        }
+
+        if (!is_numeric($jobPayment->transaction_id)) {
+            return false;
+        }
+
+        $transaction = Transaction::find((int) $jobPayment->transaction_id);
+
+        if (!$transaction) {
+            return false;
+        }
+
+        return in_array((string) $transaction->status, ['paid', 'succeeded'], true);
     }
 
     public function retryPayment(): bool
@@ -599,83 +641,65 @@ class Contract extends Model
         $creatorAmount = round((float) $this->budget * 0.95, 2);
         $platformFee = round((float) $this->budget * 0.05, 2);
 
-        DB::transaction(function () use ($creatorAmount, $platformFee): void {
-            $jobPayment = JobPayment::where('contract_id', $this->id)
-                ->orderByDesc('id')
-                ->first();
+        try {
+            DB::transaction(function () use ($creatorAmount, $platformFee): void {
+                $jobPayment = JobPayment::where('contract_id', $this->id)
+                    ->orderByDesc('id')
+                    ->first();
 
-            if (!$jobPayment) {
-                Log::warning('No escrow payment found while completing contract, creating fallback payment record', [
-                    'contract_id' => $this->id,
-                    'brand_id' => $this->brand_id,
-                    'creator_id' => $this->creator_id,
-                ]);
-
-                $transaction = Transaction::firstOrCreate(
-                    [
+                if (!$jobPayment) {
+                    Log::error('Cannot complete contract without escrow payment record', [
                         'contract_id' => $this->id,
-                        'payment_method' => 'platform_escrow',
-                    ],
-                    [
-                        'user_id' => $this->brand_id,
-                        'stripe_payment_intent_id' => 'contract_escrow_' . $this->id,
-                        'status' => 'paid',
-                        'amount' => $this->budget,
-                        'payment_data' => [
-                            'type' => 'contract_escrow_fallback',
-                            'contract_id' => $this->id,
-                        ],
-                        'paid_at' => now(),
-                    ]
-                );
+                        'brand_id' => $this->brand_id,
+                        'creator_id' => $this->creator_id,
+                    ]);
 
-                $jobPayment = JobPayment::create([
-                    'contract_id' => $this->id,
-                    'brand_id' => $this->brand_id,
-                    'creator_id' => $this->creator_id,
+                    throw new Exception('Contract has no escrow payment record');
+                }
+
+                $this->assertEscrowFundingIsConfirmed($jobPayment);
+
+                $alreadyReleased = 'completed' === $jobPayment->status;
+
+                $jobPayment->update([
                     'total_amount' => $this->budget,
                     'platform_fee' => $platformFee,
                     'creator_amount' => $creatorAmount,
-                    'payment_method' => 'platform_escrow',
-                    'status' => 'pending',
-                    'transaction_id' => $transaction->id,
-                    'paid_at' => now(),
+                    'status' => 'completed',
+                    'processed_at' => now(),
                 ]);
-            }
 
-            $alreadyReleased = 'completed' === $jobPayment->status;
+                if (!$alreadyReleased) {
+                    $balance = CreatorBalance::firstOrCreate(
+                        ['creator_id' => $this->creator_id],
+                        [
+                            'available_balance' => 0,
+                            'pending_balance' => 0,
+                            'total_earned' => 0,
+                            'total_withdrawn' => 0,
+                        ]
+                    );
 
-            $jobPayment->update([
-                'total_amount' => $this->budget,
-                'platform_fee' => $platformFee,
-                'creator_amount' => $creatorAmount,
-                'status' => 'completed',
-                'processed_at' => now(),
+                    $balance->increment('available_balance', $creatorAmount);
+                    $balance->increment('total_earned', $creatorAmount);
+                }
+
+                $this->update([
+                    'status' => 'completed',
+                    'completed_at' => now(),
+                    'workflow_status' => 'payment_available',
+                    'platform_fee' => $platformFee,
+                    'creator_amount' => $creatorAmount,
+                ]);
+            });
+        } catch (Exception $e) {
+            Log::error('Contract completion blocked: payment funding not confirmed', [
+                'contract_id' => $this->id,
+                'error' => $e->getMessage(),
             ]);
 
-            if (!$alreadyReleased) {
-                $balance = CreatorBalance::firstOrCreate(
-                    ['creator_id' => $this->creator_id],
-                    [
-                        'available_balance' => 0,
-                        'pending_balance' => 0,
-                        'total_earned' => 0,
-                        'total_withdrawn' => 0,
-                    ]
-                );
-
-                $balance->increment('available_balance', $creatorAmount);
-                $balance->increment('total_earned', $creatorAmount);
-            }
-
-            $this->update([
-                'status' => 'completed',
-                'completed_at' => now(),
-                'workflow_status' => 'payment_available',
-                'platform_fee' => $platformFee,
-                'creator_amount' => $creatorAmount,
-            ]);
-        });
+            return false;
+        }
 
         ContractNotificationService::notifyCreatorOfContractCompleted($this);
         PaymentNotificationService::notifyCreatorOfPaymentAvailable($this);
@@ -962,5 +986,29 @@ class Contract extends Model
 
         $balance->increment('available_balance', $amount);
         $balance->increment('total_earned', $amount);
+    }
+
+    private function assertEscrowFundingIsConfirmed(JobPayment $jobPayment): void
+    {
+        if (!is_numeric($jobPayment->transaction_id)) {
+            throw new Exception('Escrow payment transaction reference is invalid');
+        }
+
+        $transaction = Transaction::find((int) $jobPayment->transaction_id);
+        if (!$transaction) {
+            throw new Exception('Escrow funding transaction not found');
+        }
+
+        if (!in_array((string) $transaction->status, ['paid', 'succeeded'], true)) {
+            throw new Exception('Escrow funding transaction is not confirmed');
+        }
+
+        if ('stripe_escrow' === $jobPayment->payment_method) {
+            $paymentIntentId = (string) ($transaction->stripe_payment_intent_id ?? '');
+
+            if ('' === $paymentIntentId || !str_starts_with($paymentIntentId, 'pi_')) {
+                throw new Exception('Escrow funding payment intent is invalid');
+            }
+        }
     }
 }

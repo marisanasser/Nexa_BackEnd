@@ -14,6 +14,23 @@ class PaymentNotificationService
     public static function notifyCreatorOfPaymentAvailable($contract): void
     {
         try {
+            $existingNotification = Notification::query()
+                ->where('user_id', $contract->creator_id)
+                ->where('type', 'payment_available')
+                ->whereRaw("COALESCE(data->>'contract_id', '') = ?", [(string) $contract->id])
+                ->first()
+            ;
+
+            if ($existingNotification) {
+                Log::info('Payment available notification already exists for contract', [
+                    'contract_id' => $contract->id,
+                    'creator_id' => $contract->creator_id,
+                    'notification_id' => $existingNotification->id,
+                ]);
+
+                return;
+            }
+
             $notification = Notification::create([
                 'user_id' => $contract->creator_id,
                 'type' => 'payment_available',

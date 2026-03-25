@@ -43,13 +43,21 @@ class CreatorBalanceController extends Controller
             // Get recent transactions manually for now as service doesn't have it yet encapsulated perfectly with exact format
             // But we can retrieve them from relations via balance object returned
             $recentTransactions = $balance->payments()
-                ->with('contract:id,title')
+                ->with([
+                    'contract:id,title,offer_id',
+                    'contract.offer:id,title,campaign_id',
+                    'contract.offer.campaign:id,title',
+                ])
                 ->where('status', 'completed')
                 ->orderBy('processed_at', 'desc')
                 ->limit(5)
                 ->get()
                 ->map(fn($payment) => [
                     'id' => $payment->id,
+                    'campaign_title' => $payment->contract?->offer?->campaign?->title
+                        ?? $payment->contract?->offer?->title
+                        ?? $payment->contract?->title
+                        ?? 'Campanha Removida',
                     'contract_title' => $payment->contract?->title ?? 'Contrato Removido',
                     'amount' => $payment->formatted_creator_amount,
                     'status' => $payment->status,

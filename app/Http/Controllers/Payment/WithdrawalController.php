@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Payment;
 
 use App\Domain\Payment\Actions\CreateWithdrawalAction;
+use App\Domain\Payment\Services\StripeSettlementService;
 use App\Domain\Shared\Traits\HasAuthenticatedUser;
 use App\Http\Controllers\Base\Controller;
 use App\Http\Resources\Payment\WithdrawalCollection;
@@ -24,7 +25,8 @@ class WithdrawalController extends Controller
     use HasAuthenticatedUser;
 
     public function __construct(
-        private readonly StripeWrapper $stripe
+        private readonly StripeWrapper $stripe,
+        private readonly StripeSettlementService $settlementService
     ) {
         $this->stripe->setApiKey((string) config('services.stripe.secret'));
     }
@@ -84,6 +86,7 @@ class WithdrawalController extends Controller
 
         $withdrawalMethodCode = $request->string('withdrawal_method')->toString();
         $amount = $request->float('amount');
+        $amountCents = (int) round($amount * 100);
 
         // Validate and get withdrawal method
         $methodValidation = $this->validateWithdrawalMethod($user, $withdrawalMethodCode);
@@ -97,6 +100,32 @@ class WithdrawalController extends Controller
 
         $withdrawalMethod = $methodValidation['withdrawalMethod'];
         $dynamicMethod = $methodValidation['dynamicMethod'];
+
+        // Ensure withdrawal has real settled Stripe backing.
+        $coverage = $this->settlementService->canCoverWithdrawalAmount($user->id, $amountCents);
+        if (!$coverage['can_cover']) {
+            $summary = $coverage['summary'];
+            $availableCents = (int) ($summary['available_for_new_withdrawal_cents'] ?? 0);
+            $availableAmount = number_format($availableCents / 100, 2, '.', '');
+
+            Log::warning('Withdrawal blocked: insufficient settled Stripe funds backing', [
+                'user_id' => $user->id,
+                'requested_amount_cents' => $amountCents,
+                'reason' => $coverage['reason'],
+                'available_for_new_withdrawal_cents' => $availableCents,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => "Saque bloqueado: nao ha fundos liquidados reais suficientes na Stripe. Disponivel agora: R$ {$availableAmount}.",
+                'action_required' => 'insufficient_settled_funds',
+                'blocked' => true,
+                'settled_backing' => [
+                    'available_for_new_withdrawal_cents' => $availableCents,
+                    'max_single_source_cents' => (int) ($summary['max_single_source_cents'] ?? 0),
+                ],
+            ], 403);
+        }
 
         // Execute the withdrawal creation via Action
         $result = $createAction->execute(

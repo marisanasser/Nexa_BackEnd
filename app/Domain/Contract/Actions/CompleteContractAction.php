@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Contract\Actions;
 
 use App\Domain\Contract\DTOs\ContractCompletionResult;
+use App\Domain\Notification\Services\ContractNotificationService;
+use App\Domain\Notification\Services\PaymentNotificationService;
 use App\Domain\Payment\Services\ContractPaymentService;
 use App\Models\Campaign\Campaign;
 use App\Models\Contract\Contract;
@@ -156,9 +158,8 @@ class CompleteContractAction
     private function sendNotifications(Contract $contract): void
     {
         try {
-            // Ideally trigger events or call NotificationService
-            // ContractNotificationService::notifyCreatorOfContractCompleted($contract);
-            // ContractNotificationService::notifyBrandOfReviewRequired($contract);
+            ContractNotificationService::notifyCreatorOfContractCompleted($contract);
+            PaymentNotificationService::notifyCreatorOfPaymentAvailable($contract);
         } catch (Exception $e) {
             Log::warning('Failed to send contract completion notifications', [
                 'contract_id' => $contract->id,

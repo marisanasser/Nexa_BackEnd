@@ -373,8 +373,28 @@ class AdminCampaignController extends Controller
         try {
             $campaign = Campaign::findOrFail($id);
 
+            $deletionBlockers = $this->getCampaignDeletionBlockers($campaign);
+            if (!empty($deletionBlockers)) {
+                Log::warning('Blocked admin campaign deletion due linked workflow data', [
+                    'campaign_id' => $campaign->id,
+                    'admin_user_id' => optional($this->getAuthenticatedUser())->id,
+                    'blockers' => $deletionBlockers,
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Esta campanha possui vínculos operacionais (chat/oferta/contrato/pagamento) e não pode ser excluída.',
+                    'blockers' => $deletionBlockers,
+                ], 422);
+            }
+
             $this->deleteCampaignFiles($campaign);
             $campaign->delete();
+
+            Log::warning('Admin deleted campaign', [
+                'campaign_id' => $campaign->id,
+                'admin_user_id' => optional($this->getAuthenticatedUser())->id,
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -418,6 +438,50 @@ class AdminCampaignController extends Controller
             'applications_count' => $campaign->applications->count(),
             'has_open_text_suggestion' => null !== $campaign->openTextSuggestion,
         ];
+    }
+
+    /**
+     * Protect campaign deletion from removing operational history via FK cascade.
+     *
+     * @return array<string, int>
+     */
+    private function getCampaignDeletionBlockers(Campaign $campaign): array
+    {
+        $campaignId = (int) $campaign->id;
+
+        $applicationsCount = DB::table('campaign_applications')
+            ->where('campaign_id', $campaignId)
+            ->count();
+
+        $chatRoomsCount = DB::table('chat_rooms')
+            ->where('campaign_id', $campaignId)
+            ->count();
+
+        $offersQuery = DB::table('offers')->where('campaign_id', $campaignId);
+        $offersCount = (clone $offersQuery)->count();
+        $offerIds = (clone $offersQuery)->pluck('id');
+
+        $contractsCount = $offerIds->isEmpty()
+            ? 0
+            : DB::table('contracts')->whereIn('offer_id', $offerIds)->count();
+
+        $contractIds = $offerIds->isEmpty()
+            ? collect()
+            : DB::table('contracts')->whereIn('offer_id', $offerIds)->pluck('id');
+
+        $jobPaymentsCount = $contractIds->isEmpty()
+            ? 0
+            : DB::table('job_payments')->whereIn('contract_id', $contractIds)->count();
+
+        $blockers = [
+            'applications' => $applicationsCount,
+            'chat_rooms' => $chatRoomsCount,
+            'offers' => $offersCount,
+            'contracts' => $contractsCount,
+            'job_payments' => $jobPaymentsCount,
+        ];
+
+        return array_filter($blockers, static fn (int $count): bool => $count > 0);
     }
 
     private function transformTextSuggestionData(?CampaignTextSuggestion $suggestion): ?array

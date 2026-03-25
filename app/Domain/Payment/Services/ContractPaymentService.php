@@ -122,6 +122,8 @@ class ContractPaymentService
             throw new Exception("Cannot release payment in '{$jobPayment->status}' status");
         }
 
+        $this->assertEscrowFundingIsConfirmed($jobPayment);
+
         DB::transaction(function () use ($contract, $jobPayment): void {
             // Update job payment status
             $jobPayment->update([
@@ -512,6 +514,30 @@ class ContractPaymentService
 
         if ($balance) {
             $balance->decrement('available_balance', min($amount, $balance->available_balance));
+        }
+    }
+
+    private function assertEscrowFundingIsConfirmed(JobPayment $jobPayment): void
+    {
+        if (!is_numeric($jobPayment->transaction_id)) {
+            throw new Exception('Escrow payment transaction reference is invalid');
+        }
+
+        $transaction = Transaction::find((int) $jobPayment->transaction_id);
+        if (!$transaction) {
+            throw new Exception('Escrow funding transaction not found');
+        }
+
+        if (!in_array((string) $transaction->status, ['paid', 'succeeded'], true)) {
+            throw new Exception('Escrow funding transaction is not confirmed');
+        }
+
+        if ('stripe_escrow' === $jobPayment->payment_method) {
+            $paymentIntentId = (string) ($transaction->stripe_payment_intent_id ?? '');
+
+            if ('' === $paymentIntentId || !str_starts_with($paymentIntentId, 'pi_')) {
+                throw new Exception('Escrow funding payment intent is invalid');
+            }
         }
     }
 }

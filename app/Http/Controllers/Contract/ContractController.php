@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Contract;
 
+use App\Domain\Notification\Services\PaymentNotificationService;
 use App\Events\Chat\NewMessage;
 use App\Events\Contract\ContractActivated;
 use App\Events\Contract\ContractCompleted;
@@ -787,6 +788,7 @@ class ContractController extends Controller
             }
 
             if ($contract->complete()) {
+                PaymentNotificationService::notifyCreatorOfPaymentAvailable($contract);
 
                 $this->sendContractCompletionMessage($contract, $user);
 
@@ -1119,6 +1121,36 @@ class ContractController extends Controller
                     'message' => 'Contrato não encontrado ou acesso negado',
                 ], 404);
             }
+            if (! $contract->canTransitionToActiveWorkflow()) {
+                Log::warning('Blocked logistics workflow update due missing escrow confirmation', [
+                    'contract_id' => $contract->id,
+                    'status' => $contract->status,
+                    'workflow_status' => $contract->workflow_status,
+                    'budget' => $contract->budget,
+                    'user_id' => $user->id,
+                ]);
+
+                // Self-heal inconsistent records: active contract without confirmed funding.
+                if ('active' === $contract->status && $contract->requiresEscrowFunding()) {
+                    $contract->update([
+                        'status' => 'pending',
+                        'workflow_status' => 'payment_pending',
+                        'started_at' => null,
+                    ]);
+                    $contract->refresh();
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pagamento do contrato ainda não foi confirmado. O contrato voltou para aguardando pagamento.',
+                    'data' => [
+                        'contract_id' => $contract->id,
+                        'status' => $contract->status,
+                        'workflow_status' => $this->resolveWorkflowStatus($contract),
+                    ],
+                ], 409);
+            }
+
 
             $newStatus = (string) $request->input('workflow_status');
             $isShippingStatus = in_array($newStatus, self::SHIPPING_WORKFLOW_STATUSES, true);

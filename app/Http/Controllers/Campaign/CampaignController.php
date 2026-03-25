@@ -742,6 +742,23 @@ class CampaignController extends Controller
                 return response()->json(['error' => 'Cannot delete approved campaigns with bids'], 422);
             }
 
+            $deletionBlockers = $this->getCampaignDeletionBlockers($campaign);
+            if (!empty($deletionBlockers)) {
+                Log::warning('Blocked campaign deletion due linked workflow data', [
+                    'campaign_id' => $campaign->id,
+                    'user_id' => $user->id,
+                    'user_role' => $user->role,
+                    'blockers' => $deletionBlockers,
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Cannot delete campaign with linked workflow history',
+                    'message' => 'Esta campanha possui vínculos operacionais (chat/oferta/contrato/pagamento) e não pode ser excluída.',
+                    'blockers' => $deletionBlockers,
+                ], 422);
+            }
+
             if ($campaign->image_url) {
                 $this->deleteFile($campaign->image_url);
             }
@@ -760,6 +777,12 @@ class CampaignController extends Controller
 
             $campaign->delete();
 
+            Log::warning('Campaign deleted', [
+                'campaign_id' => $campaign->id,
+                'user_id' => $user->id,
+                'user_role' => $user->role,
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Campaign deleted successfully',
@@ -773,6 +796,50 @@ class CampaignController extends Controller
                 'message' => 'An error occurred while deleting the campaign',
             ], 500);
         }
+    }
+
+    /**
+     * Protect campaign deletion from removing operational history via FK cascade.
+     *
+     * @return array<string, int>
+     */
+    private function getCampaignDeletionBlockers(Campaign $campaign): array
+    {
+        $campaignId = (int) $campaign->id;
+
+        $applicationsCount = DB::table('campaign_applications')
+            ->where('campaign_id', $campaignId)
+            ->count();
+
+        $chatRoomsCount = DB::table('chat_rooms')
+            ->where('campaign_id', $campaignId)
+            ->count();
+
+        $offersQuery = DB::table('offers')->where('campaign_id', $campaignId);
+        $offersCount = (clone $offersQuery)->count();
+        $offerIds = (clone $offersQuery)->pluck('id');
+
+        $contractsCount = $offerIds->isEmpty()
+            ? 0
+            : DB::table('contracts')->whereIn('offer_id', $offerIds)->count();
+
+        $contractIds = $offerIds->isEmpty()
+            ? collect()
+            : DB::table('contracts')->whereIn('offer_id', $offerIds)->pluck('id');
+
+        $jobPaymentsCount = $contractIds->isEmpty()
+            ? 0
+            : DB::table('job_payments')->whereIn('contract_id', $contractIds)->count();
+
+        $blockers = [
+            'applications' => $applicationsCount,
+            'chat_rooms' => $chatRoomsCount,
+            'offers' => $offersCount,
+            'contracts' => $contractsCount,
+            'job_payments' => $jobPaymentsCount,
+        ];
+
+        return array_filter($blockers, static fn (int $count): bool => $count > 0);
     }
 
     public function statistics(Request $request): JsonResponse

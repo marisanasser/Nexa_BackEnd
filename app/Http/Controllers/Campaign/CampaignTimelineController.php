@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Campaign;
 
 use App\Domain\Notification\Services\ContractNotificationService;
+use App\Domain\Notification\Services\PaymentNotificationService;
 use App\Events\Chat\NewMessage;
 use App\Events\Contract\ContractCompleted;
 use App\Events\Contract\ContractUpdated;
@@ -104,6 +105,7 @@ class CampaignTimelineController extends Controller
             }
 
             $contract = $contract->fresh();
+            PaymentNotificationService::notifyCreatorOfPaymentAvailable($contract);
 
             try {
                 event(new ContractCompleted($contract, $contract->offer?->chatRoom, (int) Auth::id()));

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models\Payment;
 
+use App\Domain\Payment\Services\StripeSettlementService;
 use App\Domain\Notification\Services\PaymentNotificationService;
 use App\Models\User\User;
 use App\Models\Payment\WithdrawalMethod;
@@ -13,8 +14,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
-use Stripe\Charge;
 use Stripe\Stripe;
 use Stripe\Transfer;
 
@@ -469,134 +468,39 @@ class Withdrawal extends Model
         }
     }
 
-    private function findSourceChargeForCreator(int $creatorId): ?string
+    private function findSourceChargeForCreator(int $creatorId, int $requiredAmountInCents): ?string
     {
-        $jobPayment = JobPayment::where('creator_id', $creatorId)
-            ->whereNotNull('transaction_id')
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->first(fn($jobPayment) => is_numeric($jobPayment->transaction_id));
+        try {
+            /** @var StripeSettlementService $settlement */
+            $settlement = app(StripeSettlementService::class);
+            $source = $settlement->findSourceChargeForWithdrawal($creatorId, $requiredAmountInCents);
 
-        if ($jobPayment && is_numeric($jobPayment->transaction_id)) {
-            $jobPayment->load('transaction');
-
-            if ($jobPayment->transaction) {
-                $transaction = $jobPayment->transaction;
-
-                if ($transaction->stripe_charge_id) {
-                    Log::info('Found source charge from JobPayment transaction', [
-                        'withdrawal_id' => $this->id,
-                        'creator_id' => $creatorId,
-                        'job_payment_id' => $jobPayment->id,
-                        'transaction_id' => $transaction->id,
-                        'stripe_charge_id' => $transaction->stripe_charge_id,
-                    ]);
-
-                    return $transaction->stripe_charge_id;
-                }
-            }
-        }
-
-        if (Schema::hasColumn('transactions', 'contract_id')) {
-            $contractTransaction = Transaction::whereHas('contract', function ($query) use ($creatorId): void {
-                $query->where('creator_id', $creatorId);
-            })
-                ->whereNotNull('stripe_charge_id')
-                ->orderBy('created_at', 'desc')
-                ->first();
-
-            if ($contractTransaction && $contractTransaction->stripe_charge_id) {
-                Log::info('Found source charge from contract transaction', [
+            if ($source) {
+                Log::info('Found settled source charge for withdrawal', [
                     'withdrawal_id' => $this->id,
                     'creator_id' => $creatorId,
-                    'transaction_id' => $contractTransaction->id,
-                    'stripe_charge_id' => $contractTransaction->stripe_charge_id,
+                    'required_amount_cents' => $requiredAmountInCents,
+                    'source_charge_id' => $source['charge_id'],
+                    'payment_intent_id' => $source['payment_intent_id'],
+                    'transaction_id' => $source['transaction_id'],
+                    'available_entitled_cents' => $source['available_entitled_cents'],
                 ]);
 
-                return $contractTransaction->stripe_charge_id;
+                return (string) $source['charge_id'];
             }
-        }
-
-        $anyTransaction = Transaction::where('user_id', $creatorId)
-            ->whereNotNull('stripe_charge_id')
-            ->orderBy('created_at', 'desc')
-            ->first();
-
-        if ($anyTransaction && $anyTransaction->stripe_charge_id) {
-            Log::info('Found source charge from any creator transaction', [
+        } catch (Exception $e) {
+            Log::warning('Failed to resolve settled source charge for creator withdrawal', [
                 'withdrawal_id' => $this->id,
                 'creator_id' => $creatorId,
-                'transaction_id' => $anyTransaction->id,
-                'stripe_charge_id' => $anyTransaction->stripe_charge_id,
+                'required_amount_cents' => $requiredAmountInCents,
+                'error' => $e->getMessage(),
             ]);
-
-            return $anyTransaction->stripe_charge_id;
         }
 
-        if (app()->environment(['local', 'testing'])) {
-            try {
-                $stripeSecret = config('services.stripe.secret');
-                if ($stripeSecret) {
-                    Stripe::setApiKey($stripeSecret);
-
-                    $requiredAmount = (int) round(((float) $this->amount) * 100);
-
-                    $charges = Charge::all([
-                        'limit' => 10,
-                        'expand' => ['data.balance_transaction'],
-                    ]);
-
-                    foreach ($charges->data as $charge) {
-                        if ($charge->amount < $requiredAmount) {
-                            continue;
-                        }
-
-                        $transfers = Transfer::all([
-                            'limit' => 100,
-                        ]);
-
-                        $usedAmount = 0;
-                        foreach ($transfers->data as $transfer) {
-                            if ($transfer->source_transaction === $charge->id) {
-                                $usedAmount += $transfer->amount;
-                            }
-                        }
-
-                        $availableAmount = $charge->amount - $usedAmount;
-
-                        if ($availableAmount >= $requiredAmount) {
-                            Log::info('Found source charge from Stripe API with available balance', [
-                                'withdrawal_id' => $this->id,
-                                'creator_id' => $creatorId,
-                                'stripe_charge_id' => $charge->id,
-                                'charge_amount' => $charge->amount / 100,
-                                'used_amount' => $usedAmount / 100,
-                                'available_amount' => $availableAmount / 100,
-                                'required_amount' => $requiredAmount / 100,
-                            ]);
-
-                            return $charge->id;
-                        }
-                    }
-
-                    Log::warning('No charge with sufficient available balance found', [
-                        'withdrawal_id' => $this->id,
-                        'creator_id' => $creatorId,
-                        'required_amount' => $requiredAmount / 100,
-                    ]);
-                }
-            } catch (Exception $e) {
-                Log::warning('Failed to get charge from Stripe API (development fallback)', [
-                    'withdrawal_id' => $this->id,
-                    'creator_id' => $creatorId,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
-
-        Log::warning('No source charge found for creator', [
+        Log::warning('No settled source charge found for creator withdrawal', [
             'withdrawal_id' => $this->id,
             'creator_id' => $creatorId,
+            'required_amount_cents' => $requiredAmountInCents,
         ]);
 
         return null;
@@ -621,12 +525,16 @@ class Withdrawal extends Model
             throw new Exception('Valor líquido inválido para transferência.');
         }
 
-        $sourceChargeId = $this->findSourceChargeForCreator($this->creator_id);
+        $sourceChargeId = $this->findSourceChargeForCreator($this->creator_id, $amountInCents);
+        if (!$sourceChargeId) {
+            throw new Exception('Nao ha fundos liquidados reais na Stripe para este saque.');
+        }
 
         $transferParams = [
             'amount' => $amountInCents,
             'currency' => 'brl',
             'destination' => $creator->stripe_account_id,
+            'source_transaction' => $sourceChargeId,
             'metadata' => [
                 'withdrawal_id' => (string) $this->id,
                 'creator_id' => (string) $this->creator_id,
@@ -634,16 +542,6 @@ class Withdrawal extends Model
                 'fees_disabled' => 'true',
             ],
         ];
-
-        if ($sourceChargeId) {
-            $transferParams['source_transaction'] = $sourceChargeId;
-        } else {
-            Log::warning('No source charge found for withdrawal, attempting transfer from platform balance', [
-                'withdrawal_id' => $this->id,
-                'creator_id' => $this->creator_id,
-                'amount' => $this->amount,
-            ]);
-        }
 
         $transfer = Transfer::create($transferParams);
 

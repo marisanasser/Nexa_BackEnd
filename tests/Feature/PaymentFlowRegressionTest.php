@@ -10,6 +10,7 @@ use App\Domain\Payment\Services\StripeCustomerService;
 use App\Models\Contract\Contract;
 use App\Models\Payment\CreatorBalance;
 use App\Models\Payment\JobPayment;
+use App\Models\Payment\Transaction;
 use App\Models\Payment\Withdrawal;
 use App\Models\User\User;
 use App\Wrappers\StripeWrapper;
@@ -169,6 +170,17 @@ class PaymentFlowRegressionTest extends TestCase
             'creator_amount' => 4.75,
         ]);
 
+        $transaction = Transaction::create([
+            'user_id' => $brand->id,
+            'contract_id' => $contract->id,
+            'status' => 'paid',
+            'amount' => 5.00,
+            'payment_method' => 'stripe',
+            'stripe_payment_intent_id' => 'pi_test_contract_release',
+            'payment_data' => ['type' => 'contract_funding'],
+            'paid_at' => now(),
+        ]);
+
         JobPayment::create([
             'contract_id' => $contract->id,
             'brand_id' => $brand->id,
@@ -178,6 +190,7 @@ class PaymentFlowRegressionTest extends TestCase
             'creator_amount' => 4.75,
             'payment_method' => 'stripe_escrow',
             'status' => 'pending',
+            'transaction_id' => $transaction->id,
         ]);
 
         $balance = CreatorBalance::create([
@@ -233,6 +246,17 @@ class PaymentFlowRegressionTest extends TestCase
             'creator_amount' => 94.99,
         ]);
 
+        $transaction = Transaction::create([
+            'user_id' => $brand->id,
+            'contract_id' => $contract->id,
+            'status' => 'paid',
+            'amount' => 99.99,
+            'payment_method' => 'stripe',
+            'stripe_payment_intent_id' => 'pi_test_student_release',
+            'payment_data' => ['type' => 'contract_funding'],
+            'paid_at' => now(),
+        ]);
+
         JobPayment::create([
             'contract_id' => $contract->id,
             'brand_id' => $brand->id,
@@ -242,6 +266,7 @@ class PaymentFlowRegressionTest extends TestCase
             'creator_amount' => 94.99,
             'payment_method' => 'stripe_escrow',
             'status' => 'pending',
+            'transaction_id' => $transaction->id,
         ]);
 
         CreatorBalance::create([
@@ -294,6 +319,66 @@ class PaymentFlowRegressionTest extends TestCase
             'platform_fee' => 5.00,
             'creator_amount' => 94.99,
         ]);
+    }
+
+    public function testContractCompletionIsBlockedWithoutConfirmedEscrowFunding(): void
+    {
+        $student = User::factory()->create([
+            'role' => 'student',
+            'student_verified' => true,
+        ]);
+        $brand = User::factory()->create(['role' => 'brand']);
+
+        $contract = Contract::factory()->create([
+            'brand_id' => $brand->id,
+            'creator_id' => $student->id,
+            'status' => 'active',
+            'workflow_status' => 'active',
+            'budget' => 10.00,
+            'platform_fee' => 0.50,
+            'creator_amount' => 9.50,
+        ]);
+
+        JobPayment::create([
+            'contract_id' => $contract->id,
+            'brand_id' => $brand->id,
+            'creator_id' => $student->id,
+            'total_amount' => 10.00,
+            'platform_fee' => 0.50,
+            'creator_amount' => 9.50,
+            'payment_method' => 'stripe_escrow',
+            'status' => 'pending',
+            'transaction_id' => null,
+        ]);
+
+        CreatorBalance::create([
+            'creator_id' => $student->id,
+            'available_balance' => 0,
+            'pending_balance' => 0,
+            'total_earned' => 0,
+            'total_withdrawn' => 0,
+        ]);
+
+        $response = $this->actingAs($brand)->postJson('/api/campaign-timeline/complete-contract', [
+            'contract_id' => $contract->id,
+        ]);
+
+        $response
+            ->assertStatus(400)
+            ->assertJson([
+                'success' => false,
+            ])
+        ;
+
+        $contract->refresh();
+        $balance = CreatorBalance::where('creator_id', $student->id)->firstOrFail();
+        $jobPayment = JobPayment::where('contract_id', $contract->id)->firstOrFail();
+
+        $this->assertSame('active', $contract->status);
+        $this->assertSame('active', $contract->workflow_status);
+        $this->assertSame('pending', $jobPayment->status);
+        $this->assertSame(0.00, (float) $balance->available_balance);
+        $this->assertSame(0.00, (float) $balance->total_earned);
     }
 
     public function testStudentCanRequestWithdrawalAndFundsAreReserved(): void
