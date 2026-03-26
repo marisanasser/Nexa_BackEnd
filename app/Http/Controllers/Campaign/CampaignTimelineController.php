@@ -117,6 +117,7 @@ class CampaignTimelineController extends Controller
             }
 
             $contract = $contract->fresh();
+            $this->sendContractCompletionMessage($contract);
             PaymentNotificationService::notifyCreatorOfPaymentAvailable($contract);
 
             try {
@@ -147,6 +148,53 @@ class CampaignTimelineController extends Controller
                 'success' => false,
                 'message' => 'Falha ao finalizar contrato: ' . $e->getMessage(),
             ], 500);
+        }
+    }
+
+    private function sendContractCompletionMessage(Contract $contract): void
+    {
+        try {
+            $contract->loadMissing(['offer.chatRoom', 'brand:id,name', 'creator:id,name']);
+
+            $chatRoom = $contract->offer?->chatRoom;
+            if (! $chatRoom) {
+                Log::warning('No chat room found for timeline contract completion message', [
+                    'contract_id' => $contract->id,
+                    'offer_id' => $contract->offer_id,
+                ]);
+
+                return;
+            }
+
+            $message = Message::create([
+                'chat_room_id' => $chatRoom->id,
+                'sender_id' => null,
+                'message' => 'O contrato foi finalizado com sucesso! Agora faltam as avaliacoes da experiencia.',
+                'message_type' => 'contract_completion',
+                'offer_data' => json_encode([
+                    'contract_id' => $contract->id,
+                    'requires_review' => true,
+                    'review_type' => 'experience',
+                    'brand_name' => $contract->brand?->name,
+                    'creator_name' => $contract->creator?->name,
+                    'contract_title' => $contract->title,
+                    'creator_amount' => $contract->formatted_creator_amount,
+                    'completed_at' => $contract->completed_at?->toISOString(),
+                    'show_review_button_for_creator_only' => false,
+                ]),
+                'is_system_message' => true,
+            ]);
+
+            $chatRoom->update(['last_message_at' => now()]);
+
+            // Broadcast system message so both participants can open the review flow immediately.
+            event(new NewMessage($message, $chatRoom, $message->offer_data));
+        } catch (\Throwable $e) {
+            Log::error('Failed to send timeline contract completion message', [
+                'contract_id' => $contract->id,
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
         }
     }
 
