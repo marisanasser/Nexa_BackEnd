@@ -640,7 +640,7 @@ class CampaignController extends Controller
             $campaign = Campaign::findOrFail($id);
             Log::info('Campaign found:', ['campaign' => $campaign]);
 
-            if (!$this->canManageCampaign($user, $campaign)) {
+            if (!$this->canEditCampaign($user, $campaign)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized to update this campaign',
@@ -1913,6 +1913,15 @@ class CampaignController extends Controller
             return true;
         }
 
+        if (!$user->isBrand()) {
+            return false;
+        }
+
+        return (int) $campaign->brand_id === (int) $user->id;
+    }
+
+    private function canEditCampaign(User $user, Campaign $campaign): bool
+    {
         if (!$user->isBrand()) {
             return false;
         }

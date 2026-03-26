@@ -140,6 +140,14 @@ class AdminCampaignController extends Controller
             $campaign = Campaign::findOrFail($id);
 
             $this->handleMultipartRequest($request);
+
+            if ($request->exists('title') || $request->exists('description')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Admins cannot edit campaign text directly. Use text suggestions flow.',
+                ], 403);
+            }
+
             $this->validateUpdateRequest($request);
 
             $data = $this->prepareUpdateData($request);
