@@ -6,7 +6,7 @@ namespace App\Http\Controllers\Campaign;
 
 use App\Domain\Campaign\Services\CampaignAuditService;
 use App\Domain\Shared\Traits\HasAuthenticatedUser;
-use FFI\Exception;
+use Exception;
 use Illuminate\Support\Facades\Log;
 
 use App\Helpers\FileUploadHelper;
@@ -322,7 +322,7 @@ class CampaignController extends Controller
             $authUser = auth()->user();
             assert($authUser instanceof User);
 
-            if (!$authUser->isAdmin() && $authUser->id !== $user->id) {
+            if (!$authUser->isAdmin() && (int) $authUser->id !== (int) $user->id) {
                 return response()->json(['error' => 'Unauthorized to view other user campaigns'], 403);
             }
 
@@ -595,7 +595,7 @@ class CampaignController extends Controller
                     return response()->json(['error' => 'Campaign not found or not available'], 404);
                 }
             } elseif ($user->isBrand()) {
-                if ($campaign->brand_id !== $user->id) {
+                if (!$this->canManageCampaign($user, $campaign)) {
                     return response()->json(['error' => 'Unauthorized to view this campaign'], 403);
                 }
             } elseif (!$user->isAdmin()) {
@@ -604,7 +604,7 @@ class CampaignController extends Controller
 
             $relations = ['brand', 'approvedBy', 'bids.user'];
 
-            if ($user->isAdmin() || ($user->isBrand() && $campaign->brand_id === $user->id)) {
+            if ($this->canManageCampaign($user, $campaign)) {
                 $relations[] = 'openTextSuggestion.admin';
             }
 
@@ -640,7 +640,7 @@ class CampaignController extends Controller
             $campaign = Campaign::findOrFail($id);
             Log::info('Campaign found:', ['campaign' => $campaign]);
 
-            if (!$user->isAdmin() && (!$user->isBrand() || $campaign->brand_id !== $user->id)) {
+            if (!$this->canManageCampaign($user, $campaign)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized to update this campaign',
@@ -734,7 +734,7 @@ class CampaignController extends Controller
             $user = $this->getAuthenticatedUser();
             assert($user instanceof User);
 
-            if (!$user->isAdmin() && (!$user->isBrand() || $campaign->brand_id !== $user->id)) {
+            if (!$this->canManageCampaign($user, $campaign)) {
                 return response()->json(['error' => 'Unauthorized to delete this campaign'], 403);
             }
 
@@ -1001,7 +1001,7 @@ class CampaignController extends Controller
             $user = $this->getAuthenticatedUser();
             assert($user instanceof User);
 
-            if (!$user->isAdmin() && ($user->isBrand() && $campaign->brand_id !== $user->id)) {
+            if (!$this->canManageCampaign($user, $campaign)) {
                 return response()->json(['error' => 'Unauthorized to archive this campaign'], 403);
             }
 
@@ -1086,7 +1086,7 @@ class CampaignController extends Controller
             $user = $this->getAuthenticatedUser();
             assert($user instanceof User);
 
-            if (!$user->isBrand() || $campaign->brand_id !== $user->id) {
+            if (!$user->isBrand() || (int) $campaign->brand_id !== (int) $user->id) {
                 return response()->json(['error' => 'Unauthorized to modify this campaign'], 403);
             }
 
@@ -1905,6 +1905,19 @@ class CampaignController extends Controller
     private function canAccessRestrictedCampaign(User $user): bool
     {
         return strtolower(trim((string) $user->email)) === $this->getRestrictedCampaignAllowedEmail();
+    }
+
+    private function canManageCampaign(User $user, Campaign $campaign): bool
+    {
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        if (!$user->isBrand()) {
+            return false;
+        }
+
+        return (int) $campaign->brand_id === (int) $user->id;
     }
 
     private function applyRestrictedCampaignVisibility(Builder $query, User $user): void

@@ -375,6 +375,11 @@ class AdminCampaignController extends Controller
 
             $deletionBlockers = $this->getCampaignDeletionBlockers($campaign);
             if (!empty($deletionBlockers)) {
+                $campaign->update([
+                    'status' => 'cancelled',
+                    'is_active' => false,
+                ]);
+
                 Log::warning('Blocked admin campaign deletion due linked workflow data', [
                     'campaign_id' => $campaign->id,
                     'admin_user_id' => optional($this->getAuthenticatedUser())->id,
@@ -382,10 +387,13 @@ class AdminCampaignController extends Controller
                 ]);
 
                 return response()->json([
-                    'success' => false,
-                    'message' => 'Esta campanha possui vínculos operacionais (chat/oferta/contrato/pagamento) e não pode ser excluída.',
+                    'success' => true,
+                    'message' => 'Campanha com vinculos operacionais foi arquivada em vez de excluida.',
+                    'archived' => true,
+                    'deleted' => false,
                     'blockers' => $deletionBlockers,
-                ], 422);
+                    'data' => $campaign->fresh(),
+                ]);
             }
 
             $this->deleteCampaignFiles($campaign);
@@ -399,6 +407,8 @@ class AdminCampaignController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Campaign deleted successfully',
+                'archived' => false,
+                'deleted' => true,
             ]);
         } catch (Exception $e) {
             Log::error('Failed to delete campaign: '.$e->getMessage());
