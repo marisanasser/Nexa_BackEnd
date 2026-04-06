@@ -183,6 +183,9 @@ class PaymentMethodService
         return $this->stripeWrapper->createCheckoutSession([
             'customer' => $customerId,
             'mode' => 'setup',
+            'currency' => 'brl',
+            'payment_method_types' => ['card'],
+            'locale' => 'pt-BR',
             'success_url' => $successUrl,
             'cancel_url' => $cancelUrl,
             'metadata' => [

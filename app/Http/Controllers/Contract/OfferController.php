@@ -797,6 +797,7 @@ class OfferController extends Controller
                 $checkoutSession = Session::create([
                     'customer' => $customerId,
                     'mode' => 'setup',
+                    'currency' => 'brl',
                     'payment_method_types' => ['card'],
                     'locale' => 'pt-BR',
                     'success_url' => $frontendUrl.'/dashboard/payment-methods?success=true&session_id={CHECKOUT_SESSION_ID}&action=send_offer&creator_id='.$request->creator_id.'&chat_room_id='.$request->chat_room_id,

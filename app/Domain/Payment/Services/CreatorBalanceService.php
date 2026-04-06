@@ -260,6 +260,7 @@ class CreatorBalanceService
         $sessionParams = [
             'customer' => $customerId,
             'mode' => 'setup',
+            'currency' => 'brl',
             'payment_method_types' => ['card'],
             'locale' => 'pt-BR',
             'success_url' => $successUrl,
