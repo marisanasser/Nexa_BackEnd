@@ -275,7 +275,7 @@ class ChatController extends Controller
                 ? "PARABENS PELA PARCERIA INICIADA!\n\n".
                     "Voce acabou de conectar com uma creator da NEXA. Para garantir o melhor resultado possivel, siga o fluxo oficial da campanha.\n\n".
                     "PROXIMOS PASSOS OBRIGATORIOS:\n\n".
-                    "- Saldo: adicione o valor da campanha na aba Saldo antes de avancar.\n".
+                    "- Financiamento: o saldo da campanha e liberado dentro do chat, no botao 'Financiar contrato'.\n".
                     "- Briefing: envie briefing claro e completo para iniciar roteiro e gravacao.\n".
                     "- Roteiro: aprove em ate 7 dias uteis.\n".
                     "- Conteudo final: faca a validacao final em ate 7 dias uteis.\n".
@@ -693,7 +693,7 @@ class ChatController extends Controller
                 $brandMessage = "🎉 **Parabéns pela parceria iniciada!**\n\n".
                     "Você acabou de conectar com uma creator da NEXA. Para garantir o melhor resultado possível, siga o fluxo oficial da campanha.\n\n".
                     "**📋 Próximos passos obrigatórios:**\n\n".
-                    "• **Saldo:** Adicione o valor da campanha na aba \"Saldo\" antes de avançar\n".
+                    "• **Financiamento:** O saldo da campanha e liberado no botao \"Financiar contrato\" dentro do chat\n".
                     "• **Briefing:** Envie briefing claro e completo para iniciar roteiro e gravação\n".
                     "• **Roteiro:** Aprove em até **7 dias úteis** (o roteiro é enviado em até 3 dias úteis após o briefing)\n".
                     "• **Conteúdo final:** Faça a validação final em até **7 dias úteis**\n".
