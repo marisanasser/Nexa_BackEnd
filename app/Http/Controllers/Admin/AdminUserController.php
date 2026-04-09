@@ -28,7 +28,7 @@ class AdminUserController extends Controller
     public function index(Request $request): JsonResponse
     {
         $request->validate([
-            'role' => 'nullable|in:creator,brand,admin',
+            'role' => 'nullable|in:creator,brand,admin,student',
             'status' => 'nullable|in:active,blocked,removed,pending,unverified',
             'search' => 'nullable|string|max:255',
             'per_page' => 'nullable|integer|min:1|max:100',
@@ -226,55 +226,48 @@ class AdminUserController extends Controller
      */
     private function transformUserData(User $user): array
     {
-        $isCreator = 'creator' === $user->role;
+        $isCreatorLike = in_array($user->role, ['creator', 'student'], true);
+        $isBrand = 'brand' === $user->role;
+        $isAdmin = 'admin' === $user->role;
+        $isStudent = (bool) $user->student_verified || 'student' === $user->role;
         $accountStatus = $this->getAccountStatus($user);
         $isActive = null !== $user->email_verified_at && 'Removido' !== $accountStatus;
         $timeOnPlatform = $this->getUserTimeStatus($user);
-        $displayName = $user->company_name ?: $user->name;
+        $displayName = $isBrand ? ($user->company_name ?: $user->name) : $user->name;
         $profileImage = $user->avatar ?: $user->avatar_url;
+        $premiumExpiresAt = $user->premium_expires_at instanceof Carbon
+            ? $user->premium_expires_at
+            : ($user->premium_expires_at ? Carbon::parse($user->premium_expires_at) : null);
+        $freeTrialExpiresAt = $user->free_trial_expires_at instanceof Carbon
+            ? $user->free_trial_expires_at
+            : ($user->free_trial_expires_at ? Carbon::parse($user->free_trial_expires_at) : null);
+        $studentExpiresAt = $user->getStudentAccessExpiresAt();
 
-        if ($isCreator) {
-            $status = 'Criador';
-            $statusColor = 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200';
+        $isPremiumActive = (bool) $user->has_premium
+            && (null === $premiumExpiresAt || $premiumExpiresAt->isFuture());
+        $isStudentAccessActive = $isStudent
+            && (null === $studentExpiresAt || $studentExpiresAt->isFuture());
+        $isFreeTrialActive = !$isPremiumActive
+            && !$isStudent
+            && null !== $freeTrialExpiresAt
+            && $freeTrialExpiresAt->isFuture();
 
-            if ($user->has_premium) {
-                $status = 'Pagante';
-                $statusColor = 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-200';
-            }
+        $status = 'Criador';
+        $statusColor = 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200';
 
-            return [
-                'id' => $user->id,
-                'name' => $user->name,
-                'role' => $user->role,
-                'email' => $user->email,
-                'profile_image' => $profileImage,
-                'is_active' => $isActive,
-                'last_login_at' => null,
-                'status' => $status,
-                'statusColor' => $statusColor,
-                'time' => $timeOnPlatform,
-                'time_on_platform' => $timeOnPlatform,
-                'campaigns' => ($user->applied_campaigns ?? 0).' aplicadas / '.($user->approved_campaigns ?? 0).' aprovadas',
-                'accountStatus' => $accountStatus,
-                'account_status' => $accountStatus,
-                'created_at' => $user->created_at,
-                'email_verified_at' => $user->email_verified_at,
-                'total_campaigns' => (int) ($user->created_campaigns ?? 0),
-                'total_applications' => (int) ($user->applied_campaigns ?? 0),
-                'company_name' => null,
-                'has_premium' => $user->has_premium,
-                'student_verified' => $user->student_verified,
-                'premium_expires_at' => $user->premium_expires_at,
-                'free_trial_expires_at' => $user->free_trial_expires_at,
-            ];
+        if ($isBrand) {
+            $status = 'Marca';
+            $statusColor = 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-200';
+        } elseif ($isAdmin) {
+            $status = 'Admin';
+            $statusColor = 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-200';
+        } elseif ($isStudent) {
+            $status = 'Estudante';
+            $statusColor = 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-200';
         }
 
-        // Brand user
-        $status = 'Marca';
-        $statusColor = 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-200';
-
-        if ($user->has_premium) {
-            $status = 'Pagante';
+        if ($isPremiumActive) {
+            $status = 'Premium';
             $statusColor = 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-200';
         }
 
@@ -286,6 +279,7 @@ class AdminUserController extends Controller
             'brandName' => $user->company_name ?: $user->name,
             'company_name' => $user->company_name ?: $user->name,
             'email' => $user->email,
+            'whatsapp' => $user->whatsapp ?? $user->whatsapp_number,
             'profile_image' => $profileImage,
             'is_active' => $isActive,
             'last_login_at' => null,
@@ -293,16 +287,23 @@ class AdminUserController extends Controller
             'statusColor' => $statusColor,
             'time' => $timeOnPlatform,
             'time_on_platform' => $timeOnPlatform,
-            'campaigns' => $user->created_campaigns,
+            'campaigns' => $isCreatorLike
+                ? ($user->applied_campaigns ?? 0).' aplicadas / '.($user->approved_campaigns ?? 0).' aprovadas'
+                : ($user->created_campaigns ?? 0),
             'accountStatus' => $accountStatus,
             'account_status' => $accountStatus,
             'created_at' => $user->created_at,
             'email_verified_at' => $user->email_verified_at,
             'total_campaigns' => (int) ($user->created_campaigns ?? 0),
             'total_applications' => (int) ($user->applied_campaigns ?? 0),
-            'has_premium' => $user->has_premium,
-            'premium_expires_at' => $user->premium_expires_at,
-            'free_trial_expires_at' => $user->free_trial_expires_at,
+            'has_premium' => (bool) $user->has_premium,
+            'student_verified' => (bool) $user->student_verified,
+            'is_premium_active' => $isPremiumActive,
+            'is_student_active' => $isStudentAccessActive,
+            'is_trial_active' => $isFreeTrialActive,
+            'premium_expires_at' => $premiumExpiresAt,
+            'free_trial_expires_at' => $freeTrialExpiresAt,
+            'student_expires_at' => $studentExpiresAt,
         ];
     }
 
@@ -319,23 +320,56 @@ class AdminUserController extends Controller
             $premiumExpiresAt = $user->premium_expires_at instanceof Carbon
                 ? $user->premium_expires_at
                 : Carbon::parse($user->premium_expires_at);
-            $months = $premiumExpiresAt->diffInMonths(now());
 
-            return $months.' meses';
+            return $this->formatTimeDistance($premiumExpiresAt, true);
+        }
+
+        $studentExpiresAt = $user->getStudentAccessExpiresAt();
+        if ($studentExpiresAt) {
+            return $this->formatTimeDistance($studentExpiresAt, true);
         }
 
         if ($user->free_trial_expires_at) {
             $trialExpiresAt = $user->free_trial_expires_at instanceof Carbon
                 ? $user->free_trial_expires_at
                 : Carbon::parse($user->free_trial_expires_at);
-            $months = $trialExpiresAt->diffInMonths(now());
 
-            return $months.' meses';
+            return $this->formatTimeDistance($trialExpiresAt, true);
         }
 
-        $months = $user->created_at->diffInMonths(now());
+        return $this->formatTimeDistance($user->created_at, false);
+    }
 
-        return $months.' meses';
+    /**
+     * Format time distance in a user-friendly way.
+     */
+    private function formatTimeDistance(Carbon $referenceDate, bool $isExpiryDate): string
+    {
+        $now = now();
+        $isFuture = $referenceDate->isFuture();
+        $days = $now->diffInDays($referenceDate);
+
+        if (0 === $days) {
+            return $isExpiryDate ? 'Hoje' : '0 dias';
+        }
+
+        if ($days < 30) {
+            $suffix = 1 === $days ? 'dia' : 'dias';
+            if ($isExpiryDate) {
+                return $isFuture ? "{$days} {$suffix} restantes" : "Expirou ha {$days} {$suffix}";
+            }
+
+            return "{$days} {$suffix}";
+        }
+
+        $months = max(1, $now->diffInMonths($referenceDate));
+        $suffix = 1 === $months ? 'mes' : 'meses';
+
+        if ($isExpiryDate) {
+            return $isFuture ? "{$months} {$suffix} restantes" : "Expirou ha {$months} {$suffix}";
+        }
+
+        return "{$months} {$suffix}";
     }
 
     /**

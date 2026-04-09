@@ -102,6 +102,7 @@ class AdminCampaignController extends Controller
                     'name' => $campaign->brand->name,
                     'company_name' => $campaign->brand->company_name,
                     'email' => $campaign->brand->email,
+                    'whatsapp' => $campaign->brand->whatsapp ?? $campaign->brand->whatsapp_number,
                 ],
                 'applications' => $campaign->applications->map(fn ($application) => [
                     'id' => $application->id,
@@ -441,6 +442,7 @@ class AdminCampaignController extends Controller
                 'name' => $campaign->brand->name,
                 'company_name' => $campaign->brand->company_name,
                 'email' => $campaign->brand->email,
+                'whatsapp' => $campaign->brand->whatsapp ?? $campaign->brand->whatsapp_number,
             ];
         }
 

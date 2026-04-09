@@ -43,7 +43,13 @@ class AdminStudentController extends Controller
         $perPage = $request->input('per_page', 10);
         $page = $request->input('page', 1);
 
-        $query = User::where('student_verified', true);
+        $query = User::where('student_verified', true)
+            ->withCount([
+                'subscriptions as active_subscriptions_count' => function ($subscriptionQuery): void {
+                    $this->applyActiveSubscriptionFilter($subscriptionQuery);
+                },
+            ])
+        ;
 
         if ($status) {
             $this->applyStatusFilter($query, $status);
@@ -388,6 +394,8 @@ class AdminStudentController extends Controller
 
     private function applyStatusFilter($query, string $status): void
     {
+        $now = now();
+
         match ($status) {
             'active' => $query->where(function ($studentQuery): void {
                 $studentQuery
@@ -405,28 +413,94 @@ class AdminStudentController extends Controller
                         ;
                     })
                 ;
-            })->where('has_premium', false),
-            'expired' => $query->where(function ($studentQuery): void {
-                $studentQuery
-                    ->where(function ($trialQuery): void {
-                        $trialQuery
-                            ->whereNotNull('student_expires_at')
-                            ->where('student_expires_at', '<=', now())
+            })->where(function ($premiumQuery) use ($now): void {
+                $premiumQuery
+                    ->where(function ($flagQuery) use ($now): void {
+                        $flagQuery
+                            ->where('has_premium', false)
+                            ->orWhere(function ($expiredPremiumQuery) use ($now): void {
+                                $expiredPremiumQuery
+                                    ->where('has_premium', true)
+                                    ->whereNotNull('premium_expires_at')
+                                    ->where('premium_expires_at', '<=', $now)
+                                ;
+                            })
                         ;
                     })
-                    ->orWhere(function ($trialQuery): void {
-                        $trialQuery
-                            ->whereNull('student_expires_at')
-                            ->whereNotNull('free_trial_expires_at')
-                            ->where('free_trial_expires_at', '<=', now())
+                    ->whereDoesntHave('subscriptions', function ($subscriptionQuery): void {
+                        $this->applyActiveSubscriptionFilter($subscriptionQuery);
+                    })
+                ;
+            }),
+            'expired' => $query->where(function ($statusQuery) use ($now): void {
+                $statusQuery
+                    ->where(function ($studentQuery): void {
+                        $studentQuery
+                            ->where(function ($trialQuery): void {
+                                $trialQuery
+                                    ->whereNotNull('student_expires_at')
+                                    ->where('student_expires_at', '<=', now())
+                                ;
+                            })
+                            ->orWhere(function ($trialQuery): void {
+                                $trialQuery
+                                    ->whereNull('student_expires_at')
+                                    ->whereNotNull('free_trial_expires_at')
+                                    ->where('free_trial_expires_at', '<=', now())
+                                ;
+                            })
+                        ;
+                    })
+                    ->orWhere(function ($premiumExpiredQuery) use ($now): void {
+                        $premiumExpiredQuery
+                            ->where('has_premium', true)
+                            ->whereNotNull('premium_expires_at')
+                            ->where('premium_expires_at', '<=', $now)
                         ;
                     })
                 ;
-            })->where('has_premium', false),
-            'premium' => $query->where('has_premium', true),
+            })->whereDoesntHave('subscriptions', function ($subscriptionQuery): void {
+                $this->applyActiveSubscriptionFilter($subscriptionQuery);
+            }),
+            'premium' => $query->where(function ($premiumQuery) use ($now): void {
+                $premiumQuery
+                    ->where(function ($flagQuery) use ($now): void {
+                        $flagQuery
+                            ->where('has_premium', true)
+                            ->where(function ($expiryQuery) use ($now): void {
+                                $expiryQuery
+                                    ->whereNull('premium_expires_at')
+                                    ->orWhere('premium_expires_at', '>', $now)
+                                ;
+                            })
+                        ;
+                    })
+                    ->orWhereHas('subscriptions', function ($subscriptionQuery): void {
+                        $this->applyActiveSubscriptionFilter($subscriptionQuery);
+                    })
+                ;
+            }),
             'blocked' => $query->whereNull('email_verified_at'),
             default => null,
         };
+    }
+
+    /**
+     * Filter active subscriptions for premium access checks.
+     *
+     * @param mixed $subscriptionQuery
+     */
+    private function applyActiveSubscriptionFilter($subscriptionQuery): void
+    {
+        $subscriptionQuery
+            ->where('status', 'active')
+            ->where(function ($expiryQuery): void {
+                $expiryQuery
+                    ->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now())
+                ;
+            })
+        ;
     }
 
     private function activateStudent(User $student): string
@@ -500,16 +574,21 @@ class AdminStudentController extends Controller
     {
         $now = now();
         $trialExpiresAt = $student->getStudentAccessExpiresAt();
+        $premiumExpiresAt = $student->premium_expires_at;
+        $hasActiveSubscription = (int) ($student->active_subscriptions_count ?? 0) > 0;
+        $isPremiumActive = ((bool) $student->has_premium)
+            && (null === $premiumExpiresAt || $premiumExpiresAt->isFuture());
+        $isPremiumActive = $isPremiumActive || $hasActiveSubscription;
 
         $status = 'active';
-        if ($student->has_premium) {
+        if ($isPremiumActive) {
             $status = 'premium';
         } elseif ($trialExpiresAt && $trialExpiresAt->isPast()) {
             $status = 'expired';
         }
 
         $trialStatus = 'active';
-        if ($student->has_premium) {
+        if ($isPremiumActive) {
             $trialStatus = 'premium';
         } elseif ($trialExpiresAt && $trialExpiresAt->isPast()) {
             $trialStatus = 'expired';
@@ -533,7 +612,10 @@ class AdminStudentController extends Controller
             'student_expires_at' => $student->student_expires_at,
             'free_trial_expires_at' => $student->free_trial_expires_at,
             'trial_ends_at' => $trialExpiresAt,
+            'premium_expires_at' => $student->premium_expires_at,
             'has_premium' => $student->has_premium,
+            'is_premium_active' => $isPremiumActive,
+            'active_subscriptions_count' => (int) ($student->active_subscriptions_count ?? 0),
             'created_at' => $student->created_at,
             'email_verified_at' => $student->email_verified_at,
             'is_active' => null !== $student->email_verified_at,
