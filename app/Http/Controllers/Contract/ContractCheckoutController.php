@@ -56,6 +56,25 @@ class ContractCheckoutController extends Controller
 
             $contract = Contract::with(['brand', 'creator', 'offer.chatRoom'])->find($request->contract_id);
 
+            if ($contract->hasEscrowFundingRecord()) {
+                if ('active' !== $contract->status || 'active' !== $contract->workflow_status) {
+                    $contract->update([
+                        'status' => 'active',
+                        'workflow_status' => 'active',
+                        'started_at' => $contract->started_at ?? now(),
+                    ]);
+                    $contract->refresh();
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contract funding was already confirmed. Refresh the contract and continue the workflow.',
+                    'already_funded' => true,
+                    'contract_status' => $contract->status,
+                    'workflow_status' => $contract->workflow_status,
+                ], 409);
+            }
+
             if ('pending' !== $contract->status || 'payment_pending' !== $contract->workflow_status) {
                 return response()->json([
                     'success' => false,
