@@ -600,6 +600,19 @@ class AdminStudentController extends Controller
             $daysRemaining = $now->diffInDays($trialExpiresAt, false);
         }
 
+        $effectiveAccessSource = 'none';
+        $effectiveAccessExpiresAt = null;
+        if ($isPremiumActive) {
+            $effectiveAccessSource = 'premium';
+            $effectiveAccessExpiresAt = $premiumExpiresAt;
+        } elseif ($trialExpiresAt && $trialExpiresAt->isFuture()) {
+            $effectiveAccessSource = 'student';
+            $effectiveAccessExpiresAt = $trialExpiresAt;
+        } elseif ($trialExpiresAt && $trialExpiresAt->isPast()) {
+            $effectiveAccessSource = 'student_expired';
+            $effectiveAccessExpiresAt = $trialExpiresAt;
+        }
+
         return [
             'id' => $student->id,
             'name' => $student->name,
@@ -623,6 +636,8 @@ class AdminStudentController extends Controller
             'status' => $status,
             'trial_status' => $trialStatus,
             'days_remaining' => $daysRemaining,
+            'effective_access_source' => $effectiveAccessSource,
+            'effective_access_expires_at' => $effectiveAccessExpiresAt,
         ];
     }
 

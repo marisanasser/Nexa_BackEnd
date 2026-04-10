@@ -252,6 +252,29 @@ class AdminUserController extends Controller
             && null !== $freeTrialExpiresAt
             && $freeTrialExpiresAt->isFuture();
 
+        $effectiveAccessSource = 'none';
+        $effectiveAccessExpiresAt = null;
+
+        if ($isPremiumActive) {
+            $effectiveAccessSource = 'premium';
+            $effectiveAccessExpiresAt = $premiumExpiresAt;
+        } elseif ($isStudentAccessActive) {
+            $effectiveAccessSource = 'student';
+            $effectiveAccessExpiresAt = $studentExpiresAt;
+        } elseif ($isFreeTrialActive) {
+            $effectiveAccessSource = 'free_trial';
+            $effectiveAccessExpiresAt = $freeTrialExpiresAt;
+        } elseif ($user->has_premium && null !== $premiumExpiresAt && $premiumExpiresAt->isPast()) {
+            $effectiveAccessSource = 'premium_expired';
+            $effectiveAccessExpiresAt = $premiumExpiresAt;
+        } elseif ($isStudent && null !== $studentExpiresAt && $studentExpiresAt->isPast()) {
+            $effectiveAccessSource = 'student_expired';
+            $effectiveAccessExpiresAt = $studentExpiresAt;
+        } elseif (!$isStudent && null !== $freeTrialExpiresAt && $freeTrialExpiresAt->isPast()) {
+            $effectiveAccessSource = 'free_trial_expired';
+            $effectiveAccessExpiresAt = $freeTrialExpiresAt;
+        }
+
         $status = 'Criador';
         $statusColor = 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200';
 
@@ -304,6 +327,8 @@ class AdminUserController extends Controller
             'premium_expires_at' => $premiumExpiresAt,
             'free_trial_expires_at' => $freeTrialExpiresAt,
             'student_expires_at' => $studentExpiresAt,
+            'effective_access_source' => $effectiveAccessSource,
+            'effective_access_expires_at' => $effectiveAccessExpiresAt,
         ];
     }
 
