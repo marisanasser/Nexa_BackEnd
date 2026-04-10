@@ -477,13 +477,21 @@ class User extends Authenticatable
             return true;
         }
 
+        if ($this->hasActivePremiumSubscription()) {
+            return true;
+        }
+
         if (! $this->has_premium) {
             return false;
         }
 
         $premiumExpiresAt = $this->getCarbonDate($this->premium_expires_at);
 
-        return $premiumExpiresAt === null || $premiumExpiresAt->isFuture();
+        if (null === $premiumExpiresAt) {
+            return false;
+        }
+
+        return $premiumExpiresAt->isFuture();
     }
 
     public function getStudentAccessExpiresAt(): ?\Carbon\Carbon
@@ -550,6 +558,19 @@ class User extends Authenticatable
         }
 
         return $this->isPremium();
+    }
+
+    public function hasActivePremiumSubscription(): bool
+    {
+        return $this->subscriptions()
+            ->where('status', 'active')
+            ->where(function ($query): void {
+                $query
+                    ->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now())
+                ;
+            })
+            ->exists();
     }
 
     public function isVerifiedStudent(): bool

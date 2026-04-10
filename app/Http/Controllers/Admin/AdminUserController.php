@@ -66,6 +66,9 @@ class AdminUserController extends Controller
                 $q->where('status', 'approved');
             },
             'campaigns as created_campaigns',
+            'subscriptions as active_subscriptions_count' => function ($subscriptionQuery): void {
+                $this->applyActiveSubscriptionFilter($subscriptionQuery);
+            },
         ])
             ->orderBy('created_at', 'desc')
             ->paginate($perPage, ['*'], 'page', $page)
@@ -242,9 +245,11 @@ class AdminUserController extends Controller
             ? $user->free_trial_expires_at
             : ($user->free_trial_expires_at ? Carbon::parse($user->free_trial_expires_at) : null);
         $studentExpiresAt = $user->getStudentAccessExpiresAt();
+        $hasActiveSubscription = (int) ($user->active_subscriptions_count ?? 0) > 0;
 
         $isPremiumActive = (bool) $user->has_premium
-            && (null === $premiumExpiresAt || $premiumExpiresAt->isFuture());
+            && (null !== $premiumExpiresAt && $premiumExpiresAt->isFuture());
+        $isPremiumActive = $isPremiumActive || $hasActiveSubscription;
         $isStudentAccessActive = $isStudent
             && (null === $studentExpiresAt || $studentExpiresAt->isFuture());
         $isFreeTrialActive = !$isPremiumActive
@@ -337,8 +342,9 @@ class AdminUserController extends Controller
      */
     private function getUserTimeStatus(User $user): string
     {
+        $hasActiveSubscription = (int) ($user->active_subscriptions_count ?? 0) > 0;
         if ($user->has_premium && null === $user->premium_expires_at) {
-            return 'Ilimitado';
+            return $hasActiveSubscription ? 'Assinatura ativa' : 'Sem validade premium';
         }
 
         if ($user->has_premium && $user->premium_expires_at) {
@@ -363,6 +369,24 @@ class AdminUserController extends Controller
         }
 
         return $this->formatTimeDistance($user->created_at, false);
+    }
+
+    /**
+     * Filter active subscriptions for premium checks.
+     *
+     * @param mixed $subscriptionQuery
+     */
+    private function applyActiveSubscriptionFilter($subscriptionQuery): void
+    {
+        $subscriptionQuery
+            ->where('status', 'active')
+            ->where(function ($expiryQuery): void {
+                $expiryQuery
+                    ->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now())
+                ;
+            })
+        ;
     }
 
     /**

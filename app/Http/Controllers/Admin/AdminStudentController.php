@@ -455,8 +455,12 @@ class AdminStudentController extends Controller
                     ->orWhere(function ($premiumExpiredQuery) use ($now): void {
                         $premiumExpiredQuery
                             ->where('has_premium', true)
-                            ->whereNotNull('premium_expires_at')
-                            ->where('premium_expires_at', '<=', $now)
+                            ->where(function ($premiumStateQuery) use ($now): void {
+                                $premiumStateQuery
+                                    ->whereNull('premium_expires_at')
+                                    ->orWhere('premium_expires_at', '<=', $now)
+                                ;
+                            })
                         ;
                     })
                 ;
@@ -470,8 +474,8 @@ class AdminStudentController extends Controller
                             ->where('has_premium', true)
                             ->where(function ($expiryQuery) use ($now): void {
                                 $expiryQuery
-                                    ->whereNull('premium_expires_at')
-                                    ->orWhere('premium_expires_at', '>', $now)
+                                    ->whereNotNull('premium_expires_at')
+                                    ->where('premium_expires_at', '>', $now)
                                 ;
                             })
                         ;
@@ -578,7 +582,7 @@ class AdminStudentController extends Controller
         $premiumExpiresAt = $this->normalizeDate($student->premium_expires_at);
         $hasActiveSubscription = (int) ($student->active_subscriptions_count ?? 0) > 0;
         $isPremiumActive = ((bool) $student->has_premium)
-            && (null === $premiumExpiresAt || $premiumExpiresAt->isFuture());
+            && (null !== $premiumExpiresAt && $premiumExpiresAt->isFuture());
         $isPremiumActive = $isPremiumActive || $hasActiveSubscription;
 
         $status = 'active';
