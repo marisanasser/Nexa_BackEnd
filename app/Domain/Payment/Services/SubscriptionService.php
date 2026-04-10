@@ -560,12 +560,27 @@ class SubscriptionService
         \Stripe\Subscription $stripeSubscription
     ): void {
         $isPremium = in_array($status, ['active', 'trialing']);
+        $premiumExpiresAt = null;
+
+        if ($isPremium) {
+            $periodEnd = $stripeSubscription->current_period_end ?? null;
+            $premiumExpiresAt = $periodEnd
+                ? Carbon::createFromTimestamp((int) $periodEnd)
+                : now()->addMonth();
+
+            if (!$periodEnd) {
+                Log::warning('Stripe subscription missing current_period_end while updating premium status', [
+                    'user_id' => $user->id,
+                    'stripe_subscription_id' => $stripeSubscription->id ?? null,
+                    'status' => $status,
+                    'fallback_premium_expires_at' => $premiumExpiresAt->toDateTimeString(),
+                ]);
+            }
+        }
 
         $user->update([
             'has_premium' => $isPremium,
-            'premium_expires_at' => $isPremium
-                ? Carbon::createFromTimestamp($stripeSubscription->current_period_end)
-                : null,
+            'premium_expires_at' => $premiumExpiresAt,
         ]);
     }
 }

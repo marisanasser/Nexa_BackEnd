@@ -298,6 +298,11 @@ class CreateSubscriptionAction
             $currentPeriodStart = isset($stripeSub->current_period_start)
                 ? Carbon::createFromTimestamp($stripeSub->current_period_start)
                 : null;
+            $premiumExpiresAt = $currentPeriodEnd;
+            if (!$premiumExpiresAt) {
+                $durationMonths = max(1, (int) ($subscription->plan->duration_months ?? 1));
+                $premiumExpiresAt = Carbon::now()->addMonths($durationMonths);
+            }
 
             $subscription->update([
                 'status' => Subscription::STATUS_ACTIVE,
@@ -313,7 +318,7 @@ class CreateSubscriptionAction
 
             $user->update([
                 'has_premium' => true,
-                'premium_expires_at' => $currentPeriodEnd,
+                'premium_expires_at' => $premiumExpiresAt,
             ]);
 
             DB::commit();

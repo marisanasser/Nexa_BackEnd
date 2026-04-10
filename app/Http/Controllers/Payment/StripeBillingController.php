@@ -308,6 +308,7 @@ class StripeBillingController extends Controller
                     $currentPeriodStart = isset($stripeSub->current_period_start)
                         ? Carbon::createFromTimestamp($stripeSub->current_period_start)
                         : null;
+                    $premiumExpiresAt = $currentPeriodEnd ?: now()->addMonths(max(1, (int) ($plan->duration_months ?? 1)));
 
                     $invoiceId = null;
                     if ($invoice && is_object($invoice) && isset($invoice->id)) {
@@ -339,7 +340,7 @@ class StripeBillingController extends Controller
 
                     $user->update([
                         'has_premium' => true,
-                        'premium_expires_at' => $currentPeriodEnd,
+                        'premium_expires_at' => $premiumExpiresAt,
                     ]);
 
                     DB::commit();
@@ -348,7 +349,7 @@ class StripeBillingController extends Controller
                         'user_id' => $user->id,
                         'subscription_id' => $localSub->id,
                         'transaction_id' => $localTx->id,
-                        'premium_expires_at' => $currentPeriodEnd?->toISOString(),
+                        'premium_expires_at' => $premiumExpiresAt->toISOString(),
                     ]);
 
                     return response()->json([
@@ -1282,6 +1283,7 @@ class StripeBillingController extends Controller
                     $currentPeriodStart = isset($stripeSub->current_period_start)
                         ? Carbon::createFromTimestamp($stripeSub->current_period_start)
                         : null;
+                    $premiumExpiresAt = $currentPeriodEnd ?: now()->addMonths(max(1, (int) ($plan->duration_months ?? 1)));
 
                     $invoiceId = null;
                     if (isset($stripeSub->latest_invoice)) {
@@ -1315,7 +1317,7 @@ class StripeBillingController extends Controller
                     if ($user) {
                         $user->update([
                             'has_premium' => true,
-                            'premium_expires_at' => $currentPeriodEnd,
+                            'premium_expires_at' => $premiumExpiresAt,
                         ]);
                     }
 
@@ -1324,7 +1326,7 @@ class StripeBillingController extends Controller
                     Log::info('Pending subscription activated after sync', [
                         'subscription_id' => $localSub->id,
                         'user_id' => $user->id ?? null,
-                        'premium_expires_at' => $currentPeriodEnd?->toISOString(),
+                        'premium_expires_at' => $premiumExpiresAt->toISOString(),
                     ]);
                 } catch (Exception $e) {
                     DB::rollBack();

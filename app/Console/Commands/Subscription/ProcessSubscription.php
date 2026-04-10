@@ -89,6 +89,8 @@ class ProcessSubscription extends Command
             $plan = SubscriptionPlan::find($existingSub->subscription_plan_id);
             if ($plan) {
                 $currentPeriodEnd = Carbon::now()->addMonths($plan->duration_months);
+            } else {
+                $currentPeriodEnd = Carbon::now()->addMonth();
             }
         }
 
