@@ -12,6 +12,7 @@ use App\Domain\Shared\Traits\HasAuthenticatedUser;
 use App\Http\Controllers\Base\Controller;
 use App\Models\User\StudentVerificationRequest;
 use App\Models\User\User;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -574,7 +575,7 @@ class AdminStudentController extends Controller
     {
         $now = now();
         $trialExpiresAt = $student->getStudentAccessExpiresAt();
-        $premiumExpiresAt = $student->premium_expires_at;
+        $premiumExpiresAt = $this->normalizeDate($student->premium_expires_at);
         $hasActiveSubscription = (int) ($student->active_subscriptions_count ?? 0) > 0;
         $isPremiumActive = ((bool) $student->has_premium)
             && (null === $premiumExpiresAt || $premiumExpiresAt->isFuture());
@@ -612,7 +613,7 @@ class AdminStudentController extends Controller
             'student_expires_at' => $student->student_expires_at,
             'free_trial_expires_at' => $student->free_trial_expires_at,
             'trial_ends_at' => $trialExpiresAt,
-            'premium_expires_at' => $student->premium_expires_at,
+            'premium_expires_at' => $premiumExpiresAt,
             'has_premium' => $student->has_premium,
             'is_premium_active' => $isPremiumActive,
             'active_subscriptions_count' => (int) ($student->active_subscriptions_count ?? 0),
@@ -623,5 +624,30 @@ class AdminStudentController extends Controller
             'trial_status' => $trialStatus,
             'days_remaining' => $daysRemaining,
         ];
+    }
+
+    private function normalizeDate(mixed $value): ?Carbon
+    {
+        if (!$value) {
+            return null;
+        }
+
+        if ($value instanceof Carbon) {
+            return $value;
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return Carbon::instance($value);
+        }
+
+        if (is_string($value)) {
+            try {
+                return Carbon::parse($value);
+            } catch (Throwable) {
+                return null;
+            }
+        }
+
+        return null;
     }
 }
