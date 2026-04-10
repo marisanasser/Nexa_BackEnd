@@ -12,6 +12,7 @@ use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 /**
  * AdminUserController handles admin user management operations.
@@ -21,6 +22,9 @@ use Illuminate\Http\Request;
 class AdminUserController extends Controller
 {
     use HasAuthenticatedUser;
+
+    private const ROLE_CONVERSION_CONFIRMATION = 'CONVERTER';
+    private const ROLE_CONVERSION_ALLOWED_ROLES = ['creator', 'brand'];
 
     /**
      * Get paginated list of users with filters.
@@ -178,6 +182,87 @@ class AdminUserController extends Controller
     }
 
     /**
+     * Preview impact for a role conversion request.
+     */
+    public function getRoleConversionImpact(Request $request, User $user): JsonResponse
+    {
+        $request->validate([
+            'target_role' => 'required|in:creator,brand',
+        ]);
+
+        $targetRole = (string) $request->input('target_role');
+        $impact = $this->buildRoleConversionImpact($user, $targetRole);
+
+        return response()->json([
+            'success' => true,
+            'data' => $impact,
+        ]);
+    }
+
+    /**
+     * Convert account role with strict safety guards.
+     */
+    public function convertRole(Request $request, User $user): JsonResponse
+    {
+        $request->validate([
+            'target_role' => 'required|in:creator,brand',
+            'confirmation' => 'required|string|max:32',
+        ]);
+
+        $targetRole = (string) $request->input('target_role');
+        $confirmation = trim((string) $request->input('confirmation'));
+        $impact = $this->buildRoleConversionImpact($user, $targetRole);
+
+        if (self::ROLE_CONVERSION_CONFIRMATION !== $confirmation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Confirmation keyword is invalid.',
+                'expected_confirmation' => self::ROLE_CONVERSION_CONFIRMATION,
+            ], 422);
+        }
+
+        if (!$impact['can_convert']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Role conversion is blocked due to linked data or policy restrictions.',
+                'data' => $impact,
+            ], 422);
+        }
+
+        $admin = $this->getAuthenticatedUser();
+        $fromRole = (string) $user->role;
+
+        $updateData = ['role' => $targetRole];
+
+        // Avoid legacy student flags leaking into brand behavior checks.
+        if ('brand' === $targetRole) {
+            $updateData['student_verified'] = false;
+            $updateData['student_expires_at'] = null;
+            $updateData['free_trial_expires_at'] = null;
+        }
+
+        $user->update($updateData);
+
+        Log::warning('Admin converted account role', [
+            'admin_id' => $admin?->id,
+            'admin_email' => $admin?->email,
+            'user_id' => $user->id,
+            'user_email' => $user->email,
+            'from_role' => $fromRole,
+            'to_role' => $targetRole,
+            'impact_snapshot' => $impact,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "User role converted from {$fromRole} to {$targetRole} successfully.",
+            'user' => $this->transformUserData($user->fresh()),
+        ]);
+    }
+
+    /**
      * Apply status filter to query.
      *
      * @param mixed $query
@@ -222,6 +307,118 @@ class AdminUserController extends Controller
         $user->delete();
 
         return 'User removed successfully';
+    }
+
+    /**
+     * Build role conversion impact, blockers, and linked record snapshot.
+     */
+    private function buildRoleConversionImpact(User $user, string $targetRole): array
+    {
+        $sourceRole = (string) $user->role;
+        $linkedRecords = $this->collectLinkedRecords($user);
+        $nonZeroLinks = array_filter(
+            $linkedRecords,
+            static fn (int $count): bool => $count > 0
+        );
+
+        $blockers = [];
+
+        if ($user->trashed()) {
+            $blockers[] = [
+                'code' => 'removed_account',
+                'message' => 'Removed accounts cannot be converted.',
+            ];
+        }
+
+        if ($user->isAdmin()) {
+            $blockers[] = [
+                'code' => 'admin_account_protected',
+                'message' => 'Admin accounts cannot be converted.',
+            ];
+        }
+
+        if (!in_array($sourceRole, self::ROLE_CONVERSION_ALLOWED_ROLES, true)) {
+            $blockers[] = [
+                'code' => 'unsupported_source_role',
+                'message' => "Source role '{$sourceRole}' is not eligible for direct conversion.",
+            ];
+        }
+
+        if (!in_array($targetRole, self::ROLE_CONVERSION_ALLOWED_ROLES, true)) {
+            $blockers[] = [
+                'code' => 'unsupported_target_role',
+                'message' => "Target role '{$targetRole}' is not allowed.",
+            ];
+        }
+
+        if ($sourceRole === $targetRole) {
+            $blockers[] = [
+                'code' => 'same_role',
+                'message' => 'Source role and target role are the same.',
+            ];
+        }
+
+        if (!empty($nonZeroLinks)) {
+            $blockers[] = [
+                'code' => 'linked_records_found',
+                'message' => 'Account has linked operational records and cannot be converted automatically.',
+                'details' => $nonZeroLinks,
+            ];
+        }
+
+        $canConvert = 0 === count($blockers);
+        $riskLevel = $canConvert ? 'low' : (!empty($nonZeroLinks) ? 'critical' : 'high');
+
+        return [
+            'user_id' => $user->id,
+            'source_role' => $sourceRole,
+            'target_role' => $targetRole,
+            'can_convert' => $canConvert,
+            'risk_level' => $riskLevel,
+            'confirmation_keyword' => self::ROLE_CONVERSION_CONFIRMATION,
+            'blockers' => $blockers,
+            'linked_records' => $linkedRecords,
+            'summary' => [
+                'total_linked_records' => array_sum($linkedRecords),
+                'non_zero_links' => $nonZeroLinks,
+            ],
+        ];
+    }
+
+    /**
+     * Snapshot of linked records that can be impacted by role conversion.
+     *
+     * @return array<string, int>
+     */
+    private function collectLinkedRecords(User $user): array
+    {
+        return [
+            // Brand side
+            'brand_campaigns' => $user->campaigns()->count(),
+            'brand_sent_offers' => $user->sentOffers()->count(),
+            'brand_contracts' => $user->brandContracts()->count(),
+            'brand_job_payments' => $user->brandPayments()->count(),
+            'brand_chat_rooms' => $user->brandChatRooms()->count(),
+            'brand_direct_chat_rooms' => $user->brandDirectChatRooms()->count(),
+            'brand_payment_methods' => $user->brandPaymentMethods()->count(),
+            'brand_balance_record' => $user->brandBalance()->exists() ? 1 : 0,
+
+            // Creator side
+            'creator_bids' => $user->bids()->count(),
+            'creator_campaign_applications' => $user->campaignApplications()->count(),
+            'creator_favorites' => $user->favorites()->count(),
+            'creator_received_offers' => $user->receivedOffers()->count(),
+            'creator_contracts' => $user->creatorContracts()->count(),
+            'creator_job_payments' => $user->creatorPayments()->count(),
+            'creator_withdrawals' => $user->withdrawals()->count(),
+            'creator_balance_record' => $user->creatorBalance()->exists() ? 1 : 0,
+            'creator_portfolio' => $user->portfolio()->exists() ? 1 : 0,
+            'creator_chat_rooms' => $user->creatorChatRooms()->count(),
+            'creator_direct_chat_rooms' => $user->creatorDirectChatRooms()->count(),
+
+            // Shared financial/subscription history
+            'active_subscriptions' => $user->subscriptions()->where('status', 'active')->count(),
+        ];
     }
 
     /**

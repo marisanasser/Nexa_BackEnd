@@ -57,6 +57,8 @@ Route::prefix('users')->group(function (): void {
     Route::get('/creators', [AdminUserController::class, 'getCreators']);
     Route::get('/brands', [AdminUserController::class, 'getBrands']);
     Route::get('/statistics', [AdminUserController::class, 'getStatistics']);
+    Route::get('/{user}/role-impact', [AdminUserController::class, 'getRoleConversionImpact'])->where('user', '[0-9]+');
+    Route::patch('/{user}/role', [AdminUserController::class, 'convertRole'])->where('user', '[0-9]+');
     Route::patch('/{user}/status', [AdminUserController::class, 'updateStatus'])->where('user', '[0-9]+');
 });
 

@@ -334,7 +334,7 @@ class GoogleController extends Controller
             ;
 
             if ($user) {
-                $updateData = ['role' => $request->role];
+                $updateData = [];
 
                 if (!$user->google_id) {
                     $updateData = array_merge($updateData, [
@@ -345,7 +345,18 @@ class GoogleController extends Controller
                     ]);
                 }
 
-                $user->update($updateData);
+                if (!empty($updateData)) {
+                    $user->update($updateData);
+                }
+
+                if ($user->role !== $request->role) {
+                    Log::warning('Blocked role mutation via Google auth for existing account', [
+                        'user_id' => $user->id,
+                        'email' => $user->email,
+                        'current_role' => $user->role,
+                        'requested_role' => $request->role,
+                    ]);
+                }
 
                 $token = $user->createToken('auth_token')->plainTextToken;
 

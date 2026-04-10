@@ -187,8 +187,16 @@ class AdminStudentController extends Controller
                 'free_trial_expires_at' => $expiresAt,
             ];
 
-            if (!$user->has_premium) {
+            if (
+                !$user->has_premium
+                && in_array((string) $user->role, ['creator', 'student'], true)
+            ) {
                 $updateData['role'] = 'student';
+            } elseif (!$user->has_premium && 'brand' === (string) $user->role) {
+                Log::warning('Skipping student role mutation for brand account during verification approval', [
+                    'user_id' => $user->id,
+                    'user_email' => $user->email,
+                ]);
             }
 
             $user->update($updateData);
