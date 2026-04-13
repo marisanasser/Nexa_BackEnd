@@ -13,6 +13,7 @@ use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Stripe\Customer as StripeCustomer;
 use Stripe\Stripe;
 use Stripe\Subscription as StripeSubscription;
 
@@ -547,15 +548,11 @@ class AdminUserController extends Controller
             return false;
         }
 
-        return !empty($user->stripe_customer_id);
+        return !empty($user->stripe_customer_id) || !empty($user->email);
     }
 
     private function getLatestStripeSubscriptionExpiry(User $user): ?Carbon
     {
-        if (empty($user->stripe_customer_id)) {
-            return null;
-        }
-
         $stripeSecret = config('services.stripe.secret');
         if (!$stripeSecret) {
             return null;
@@ -563,8 +560,17 @@ class AdminUserController extends Controller
 
         try {
             Stripe::setApiKey($stripeSecret);
+            $customerId = $user->stripe_customer_id ?: $this->findStripeCustomerIdByEmail($user->email);
+            if (!$customerId) {
+                return null;
+            }
+
+            if ($customerId !== $user->stripe_customer_id) {
+                $user->forceFill(['stripe_customer_id' => $customerId])->saveQuietly();
+            }
+
             $stripeSubscriptions = StripeSubscription::all([
-                'customer' => $user->stripe_customer_id,
+                'customer' => $customerId,
                 'status' => 'all',
                 'limit' => 20,
             ]);
@@ -596,5 +602,30 @@ class AdminUserController extends Controller
 
             return null;
         }
+    }
+
+    private function findStripeCustomerIdByEmail(?string $email): ?string
+    {
+        if (!$email) {
+            return null;
+        }
+
+        try {
+            $customers = StripeCustomer::all([
+                'email' => $email,
+                'limit' => 10,
+            ]);
+
+            if (!empty($customers->data)) {
+                return $customers->data[0]->id ?? null;
+            }
+        } catch (Exception $e) {
+            Log::warning('Failed to find Stripe customer by email', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return null;
     }
 }
