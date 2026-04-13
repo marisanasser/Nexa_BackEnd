@@ -303,12 +303,8 @@ class SubscriptionService
             DB::beginTransaction();
 
             try {
-                $currentPeriodEnd = isset($stripeSub->current_period_end)
-                    ? Carbon::createFromTimestamp($stripeSub->current_period_end)
-                    : null;
-                $currentPeriodStart = isset($stripeSub->current_period_start)
-                    ? Carbon::createFromTimestamp($stripeSub->current_period_start)
-                    : null;
+                $currentPeriodEnd = $this->extractStripePeriodEnd($stripeSub);
+                $currentPeriodStart = $this->extractStripePeriodStart($stripeSub);
 
                 $invoiceId = $invoice->id ?? null;
                 $paymentIntentId = null;
@@ -437,12 +433,8 @@ class SubscriptionService
             }
         }
 
-        $currentPeriodStart = isset($stripeSubscription->current_period_start)
-            ? Carbon::createFromTimestamp((int) $stripeSubscription->current_period_start)
-            : null;
-        $currentPeriodEnd = isset($stripeSubscription->current_period_end)
-            ? Carbon::createFromTimestamp((int) $stripeSubscription->current_period_end)
-            : null;
+        $currentPeriodStart = $this->extractStripePeriodStart($stripeSubscription);
+        $currentPeriodEnd = $this->extractStripePeriodEnd($stripeSubscription);
         $unitAmount = $stripeSubscription->items->data[0]->price->unit_amount ?? 0;
         $amountPaid = $plan ? (float) $plan->price : ((float) $unitAmount / 100);
         $isFixedTerm = $plan && (int) $plan->duration_months > 1;
@@ -507,9 +499,7 @@ class SubscriptionService
             return;
         }
 
-        $currentPeriodStart = isset($stripeSubscription->current_period_start)
-            ? Carbon::createFromTimestamp((int) $stripeSubscription->current_period_start)
-            : Carbon::now();
+        $currentPeriodStart = $this->extractStripePeriodStart($stripeSubscription) ?? Carbon::now();
 
         $targetCancelAt = $currentPeriodStart->copy()->addMonths($durationMonths)->timestamp;
         $existingCancelAt = isset($stripeSubscription->cancel_at)
@@ -560,12 +550,41 @@ class SubscriptionService
         \Stripe\Subscription $stripeSubscription
     ): void {
         $isPremium = in_array($status, ['active', 'trialing']);
+        $premiumExpiresAt = $this->extractStripePeriodEnd($stripeSubscription);
 
         $user->update([
             'has_premium' => $isPremium,
             'premium_expires_at' => $isPremium
-                ? Carbon::createFromTimestamp($stripeSubscription->current_period_end)
+                ? $premiumExpiresAt
                 : null,
         ]);
+    }
+
+    private function extractStripePeriodStart(\Stripe\Subscription $stripeSubscription): ?Carbon
+    {
+        if (isset($stripeSubscription->current_period_start) && $stripeSubscription->current_period_start) {
+            return Carbon::createFromTimestamp((int) $stripeSubscription->current_period_start);
+        }
+
+        $itemStart = $stripeSubscription->items->data[0]->current_period_start ?? null;
+        if ($itemStart) {
+            return Carbon::createFromTimestamp((int) $itemStart);
+        }
+
+        return null;
+    }
+
+    private function extractStripePeriodEnd(\Stripe\Subscription $stripeSubscription): ?Carbon
+    {
+        if (isset($stripeSubscription->current_period_end) && $stripeSubscription->current_period_end) {
+            return Carbon::createFromTimestamp((int) $stripeSubscription->current_period_end);
+        }
+
+        $itemEnd = $stripeSubscription->items->data[0]->current_period_end ?? null;
+        if ($itemEnd) {
+            return Carbon::createFromTimestamp((int) $itemEnd);
+        }
+
+        return null;
     }
 }

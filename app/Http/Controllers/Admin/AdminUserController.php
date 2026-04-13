@@ -582,11 +582,11 @@ class AdminUserController extends Controller
                     continue;
                 }
 
-                if (!isset($stripeSubscription->current_period_end)) {
+                $expiresAt = $this->extractStripePeriodEnd($stripeSubscription);
+                if (!$expiresAt) {
                     continue;
                 }
 
-                $expiresAt = Carbon::createFromTimestamp((int) $stripeSubscription->current_period_end);
                 if (!$latestExpiry || $expiresAt->gt($latestExpiry)) {
                     $latestExpiry = $expiresAt;
                 }
@@ -624,6 +624,20 @@ class AdminUserController extends Controller
                 'email' => $email,
                 'error' => $e->getMessage(),
             ]);
+        }
+
+        return null;
+    }
+
+    private function extractStripePeriodEnd(object $stripeSubscription): ?Carbon
+    {
+        if (isset($stripeSubscription->current_period_end) && $stripeSubscription->current_period_end) {
+            return Carbon::createFromTimestamp((int) $stripeSubscription->current_period_end);
+        }
+
+        $itemEnd = $stripeSubscription->items->data[0]->current_period_end ?? null;
+        if ($itemEnd) {
+            return Carbon::createFromTimestamp((int) $itemEnd);
         }
 
         return null;
