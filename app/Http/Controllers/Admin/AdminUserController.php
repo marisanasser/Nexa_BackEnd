@@ -12,6 +12,9 @@ use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Stripe\Stripe;
+use Stripe\Subscription as StripeSubscription;
 
 /**
  * AdminUserController handles admin user management operations.
@@ -408,6 +411,9 @@ class AdminUserController extends Controller
     {
         $storedPremiumExpiresAt = $this->parseToCarbon($user->premium_expires_at);
         $latestSubscriptionExpiresAt = $this->getLatestSubscriptionExpiry($user);
+        $latestStripeExpiry = $this->shouldFetchStripeExpiry($user, $storedPremiumExpiresAt, $latestSubscriptionExpiresAt)
+            ? $this->getLatestStripeSubscriptionExpiry($user)
+            : null;
 
         $premiumExpiresAt = $storedPremiumExpiresAt;
         if (
@@ -415,7 +421,18 @@ class AdminUserController extends Controller
             && (!$storedPremiumExpiresAt || $latestSubscriptionExpiresAt->gt($storedPremiumExpiresAt))
         ) {
             $premiumExpiresAt = $latestSubscriptionExpiresAt;
+        }
+        if (
+            $latestStripeExpiry
+            && (!$premiumExpiresAt || $latestStripeExpiry->gt($premiumExpiresAt))
+        ) {
+            $premiumExpiresAt = $latestStripeExpiry;
+        }
 
+        if (
+            $premiumExpiresAt
+            && (!$storedPremiumExpiresAt || $premiumExpiresAt->gt($storedPremiumExpiresAt))
+        ) {
             // Keep users table in sync when subscription table has a fresher expiration.
             $user->forceFill([
                 'has_premium' => true,
@@ -511,5 +528,73 @@ class AdminUserController extends Controller
         }
 
         return null;
+    }
+
+    private function shouldFetchStripeExpiry(
+        User $user,
+        ?Carbon $storedPremiumExpiresAt,
+        ?Carbon $latestSubscriptionExpiresAt
+    ): bool {
+        if ('creator' !== $user->role || !(bool) $user->has_premium) {
+            return false;
+        }
+
+        if (null === $storedPremiumExpiresAt || $storedPremiumExpiresAt->isFuture()) {
+            return false;
+        }
+
+        if ($latestSubscriptionExpiresAt && $latestSubscriptionExpiresAt->isFuture()) {
+            return false;
+        }
+
+        return !empty($user->stripe_customer_id);
+    }
+
+    private function getLatestStripeSubscriptionExpiry(User $user): ?Carbon
+    {
+        if (empty($user->stripe_customer_id)) {
+            return null;
+        }
+
+        $stripeSecret = config('services.stripe.secret');
+        if (!$stripeSecret) {
+            return null;
+        }
+
+        try {
+            Stripe::setApiKey($stripeSecret);
+            $stripeSubscriptions = StripeSubscription::all([
+                'customer' => $user->stripe_customer_id,
+                'status' => 'all',
+                'limit' => 20,
+            ]);
+
+            $latestExpiry = null;
+            foreach ($stripeSubscriptions->data as $stripeSubscription) {
+                $stripeStatus = strtolower((string) ($stripeSubscription->status ?? ''));
+                if (!in_array($stripeStatus, ['active', 'trialing', 'past_due', 'unpaid'], true)) {
+                    continue;
+                }
+
+                if (!isset($stripeSubscription->current_period_end)) {
+                    continue;
+                }
+
+                $expiresAt = Carbon::createFromTimestamp((int) $stripeSubscription->current_period_end);
+                if (!$latestExpiry || $expiresAt->gt($latestExpiry)) {
+                    $latestExpiry = $expiresAt;
+                }
+            }
+
+            return $latestExpiry;
+        } catch (Exception $e) {
+            Log::warning('Failed to read Stripe subscription expiry for admin access resolution', [
+                'user_id' => $user->id,
+                'stripe_customer_id' => $user->stripe_customer_id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 }
