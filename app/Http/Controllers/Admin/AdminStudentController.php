@@ -500,9 +500,14 @@ class AdminStudentController extends Controller
     {
         $now = now();
         $trialExpiresAt = $student->getStudentAccessExpiresAt();
+        $premiumExpiresAt = $student->premium_expires_at;
+        $effectiveAccessExpiresAt = $student->getPremiumAccessExpiresAt();
+        $isPremiumActive = $student->hasPremiumAccess();
+        $isStudentActive = $student->isVerifiedStudent();
+        $isTrialActive = $student->isOnTrial();
 
         $status = 'active';
-        if ($student->has_premium) {
+        if ($isPremiumActive) {
             $status = 'premium';
         } elseif ($trialExpiresAt && $trialExpiresAt->isPast()) {
             $status = 'expired';
@@ -520,6 +525,13 @@ class AdminStudentController extends Controller
             $daysRemaining = $now->diffInDays($trialExpiresAt, false);
         }
 
+        $effectiveAccessSource = 'none';
+        if ($isPremiumActive) {
+            $effectiveAccessSource = 'premium';
+        } elseif ($trialExpiresAt && $trialExpiresAt->isPast()) {
+            $effectiveAccessSource = 'student_expired';
+        }
+
         return [
             'id' => $student->id,
             'name' => $student->name,
@@ -534,6 +546,12 @@ class AdminStudentController extends Controller
             'free_trial_expires_at' => $student->free_trial_expires_at,
             'trial_ends_at' => $trialExpiresAt,
             'has_premium' => $student->has_premium,
+            'is_premium_active' => $isPremiumActive,
+            'is_student_active' => $isStudentActive,
+            'is_trial_active' => $isTrialActive,
+            'premium_expires_at' => $premiumExpiresAt,
+            'effective_access_source' => $effectiveAccessSource,
+            'effective_access_expires_at' => $effectiveAccessExpiresAt,
             'created_at' => $student->created_at,
             'email_verified_at' => $student->email_verified_at,
             'is_active' => null !== $student->email_verified_at,
