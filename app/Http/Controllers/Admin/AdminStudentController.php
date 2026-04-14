@@ -507,7 +507,7 @@ class AdminStudentController extends Controller
         $isTrialActive = $student->isOnTrial();
 
         $status = 'active';
-        if ($isPremiumActive) {
+        if ($student->has_premium) {
             $status = 'premium';
         } elseif ($trialExpiresAt && $trialExpiresAt->isPast()) {
             $status = 'expired';
@@ -526,8 +526,10 @@ class AdminStudentController extends Controller
         }
 
         $effectiveAccessSource = 'none';
-        if ($isPremiumActive) {
+        if ($student->has_premium && $isPremiumActive) {
             $effectiveAccessSource = 'premium';
+        } elseif ($isStudentActive || $isTrialActive) {
+            $effectiveAccessSource = 'student';
         } elseif ($trialExpiresAt && $trialExpiresAt->isPast()) {
             $effectiveAccessSource = 'student_expired';
         }
