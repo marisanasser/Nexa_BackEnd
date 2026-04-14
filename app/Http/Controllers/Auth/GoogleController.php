@@ -112,7 +112,7 @@ class GoogleController extends Controller
 
                 $isStudent = $request->boolean('is_student', false);
                 if ($isStudent && !$user->student_verified) {
-                    $updateData['free_trial_expires_at'] = now()->addMonth();
+                    $updateData['free_trial_expires_at'] = now()->addYear();
                 }
 
                 if (!empty($updateData)) {
@@ -199,7 +199,7 @@ class GoogleController extends Controller
             ];
 
             if ($isStudent) {
-                $userData['free_trial_expires_at'] = now()->addMonth();
+                $userData['free_trial_expires_at'] = now()->addYear();
             }
 
             $user = User::create($userData);

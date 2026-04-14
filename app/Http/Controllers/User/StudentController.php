@@ -158,9 +158,11 @@ class StudentController extends Controller
                 'student_verified' => $user->student_verified ?? false,
                 'student_expires_at' => $formatDate($studentAccessExpiresAt),
                 'free_trial_expires_at' => $formatDate($user->free_trial_expires_at),
+                'student_initial_expires_at' => $formatDate($user->free_trial_expires_at),
                 'has_premium' => $user->has_premium ?? false,
                 'is_premium_active' => $user->hasPremiumAccess(),
                 'is_on_trial' => $user->isOnTrial(),
+                'is_student_initial_active' => $user->isOnTrial(),
                 'is_premium' => $user->isPremium(),
                 'access_expires_at' => $formatDate($user->getPremiumAccessExpiresAt()),
             ]);

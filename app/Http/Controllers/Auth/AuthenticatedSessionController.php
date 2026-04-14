@@ -81,8 +81,10 @@ class AuthenticatedSessionController extends Controller
                 'has_premium' => $user->has_premium,
                 'premium_expires_at' => $user->premium_expires_at,
                 'free_trial_expires_at' => $user->free_trial_expires_at,
+                'student_initial_expires_at' => $user->free_trial_expires_at,
                 'is_premium_active' => $user->hasPremiumAccess(),
                 'is_on_trial' => $user->isOnTrial(),
+                'is_student_initial_active' => $user->isOnTrial(),
                 'access_expires_at' => $user->getPremiumAccessExpiresAt(),
             ],
         ], 200);

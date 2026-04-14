@@ -13,6 +13,10 @@ use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Stripe\Customer as StripeCustomer;
+use Stripe\Stripe;
+use Stripe\Subscription as StripeSubscription;
 
 /**
  * AdminUserController handles admin user management operations.
@@ -29,7 +33,7 @@ class AdminUserController extends Controller
     public function index(Request $request): JsonResponse
     {
         $request->validate([
-            'role' => 'nullable|in:creator,brand,admin',
+            'role' => 'nullable|in:creator,brand,admin,student',
             'status' => 'nullable|in:active,blocked,removed,pending,unverified,premium,premium_expired,student_period',
             'access' => 'nullable|in:premium,premium_expired,student_period',
             'search' => 'nullable|string|max:255',
@@ -47,7 +51,16 @@ class AdminUserController extends Controller
         $query = User::query();
 
         if ($role) {
-            $query->where('role', $role);
+            if ('student' === $role) {
+                $query->where(function ($studentQuery): void {
+                    $studentQuery
+                        ->where('role', 'student')
+                        ->orWhere('student_verified', true)
+                    ;
+                });
+            } else {
+                $query->where('role', $role);
+            }
         }
 
         if ($status) {
@@ -78,6 +91,17 @@ class AdminUserController extends Controller
             },
             'campaigns as created_campaigns',
         ])
+            ->with([
+                'subscriptions' => function ($q): void {
+                    $q->select([
+                        'id',
+                        'user_id',
+                        'status',
+                        'stripe_status',
+                        'expires_at',
+                    ])->orderByDesc('expires_at');
+                },
+            ])
             ->orderBy('created_at', 'desc')
             ->paginate($perPage, ['*'], 'page', $page)
         ;
@@ -315,7 +339,12 @@ class AdminUserController extends Controller
         $isCreator = 'creator' === $user->role;
         $accountStatus = $this->getAccountStatus($user);
         $isActive = null !== $user->email_verified_at && 'Removido' !== $accountStatus;
-        $timeOnPlatform = $this->getUserTimeStatus($user);
+        $accessState = $this->resolveAccessState($user);
+        $timeOnPlatform = $this->getUserTimeStatus(
+            $user,
+            $accessState['has_premium'],
+            $accessState['premium_expires_at']
+        );
         $displayName = $user->company_name ?: $user->name;
         $profileImage = $user->avatar ?: $user->avatar_url;
 
@@ -323,7 +352,7 @@ class AdminUserController extends Controller
             $status = 'Criador';
             $statusColor = 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-200';
 
-            if ($user->has_premium) {
+            if ($accessState['has_premium']) {
                 $status = 'Pagante';
                 $statusColor = 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-200';
             }
@@ -348,10 +377,19 @@ class AdminUserController extends Controller
                 'total_campaigns' => (int) ($user->created_campaigns ?? 0),
                 'total_applications' => (int) ($user->applied_campaigns ?? 0),
                 'company_name' => null,
-                'has_premium' => $user->has_premium,
-                'student_verified' => $user->student_verified,
-                'premium_expires_at' => $user->premium_expires_at,
-                'free_trial_expires_at' => $user->free_trial_expires_at,
+                'has_premium' => $accessState['has_premium'],
+                'student_verified' => $accessState['student_verified'],
+                'is_premium_active' => $accessState['is_premium_active'],
+                'is_student_active' => $accessState['is_student_active'],
+                'is_trial_active' => $accessState['is_trial_active'],
+                'is_student_initial_active' => $accessState['is_student_initial_active'],
+                'premium_expires_at' => $accessState['premium_expires_at'],
+                'free_trial_expires_at' => $accessState['free_trial_expires_at'],
+                'student_initial_expires_at' => $accessState['student_initial_expires_at'],
+                'student_expires_at' => $accessState['student_expires_at'],
+                'effective_access_source' => $accessState['effective_access_source'],
+                'effective_access_source_normalized' => $accessState['effective_access_source_normalized'],
+                'effective_access_expires_at' => $accessState['effective_access_expires_at'],
             ];
         }
 
@@ -359,7 +397,7 @@ class AdminUserController extends Controller
         $status = 'Marca';
         $statusColor = 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-200';
 
-        if ($user->has_premium) {
+        if ($accessState['has_premium']) {
             $status = 'Pagante';
             $statusColor = 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-200';
         }
@@ -386,25 +424,36 @@ class AdminUserController extends Controller
             'email_verified_at' => $user->email_verified_at,
             'total_campaigns' => (int) ($user->created_campaigns ?? 0),
             'total_applications' => (int) ($user->applied_campaigns ?? 0),
-            'has_premium' => $user->has_premium,
-            'premium_expires_at' => $user->premium_expires_at,
-            'free_trial_expires_at' => $user->free_trial_expires_at,
+            'has_premium' => $accessState['has_premium'],
+            'student_verified' => $accessState['student_verified'],
+            'is_premium_active' => $accessState['is_premium_active'],
+            'is_student_active' => $accessState['is_student_active'],
+            'is_trial_active' => $accessState['is_trial_active'],
+            'is_student_initial_active' => $accessState['is_student_initial_active'],
+            'premium_expires_at' => $accessState['premium_expires_at'],
+            'free_trial_expires_at' => $accessState['free_trial_expires_at'],
+            'student_initial_expires_at' => $accessState['student_initial_expires_at'],
+            'student_expires_at' => $accessState['student_expires_at'],
+            'effective_access_source' => $accessState['effective_access_source'],
+            'effective_access_source_normalized' => $accessState['effective_access_source_normalized'],
+            'effective_access_expires_at' => $accessState['effective_access_expires_at'],
         ];
     }
 
     /**
      * Get user time status string.
      */
-    private function getUserTimeStatus(User $user): string
+    private function getUserTimeStatus(
+        User $user,
+        bool $hasPremium,
+        ?Carbon $premiumExpiresAt
+    ): string
     {
-        if ($user->has_premium && null === $user->premium_expires_at) {
+        if ($hasPremium && null === $premiumExpiresAt) {
             return 'Ilimitado';
         }
 
-        if ($user->has_premium && $user->premium_expires_at) {
-            $premiumExpiresAt = $user->premium_expires_at instanceof Carbon
-                ? $user->premium_expires_at
-                : Carbon::parse($user->premium_expires_at);
+        if ($hasPremium && $premiumExpiresAt) {
             $months = $premiumExpiresAt->diffInMonths(now());
 
             return $months.' meses';
@@ -442,5 +491,320 @@ class AdminUserController extends Controller
         }
 
         return 'Pendente';
+    }
+
+    /**
+     * Build effective access state for admin payload and self-heal stale premium expiration.
+     *
+     * @return array{
+     *     has_premium: bool,
+     *     student_verified: bool,
+     *     is_premium_active: bool,
+     *     is_student_active: bool,
+     *     is_trial_active: bool,
+     *     is_student_initial_active: bool,
+     *     premium_expires_at: ?Carbon,
+     *     free_trial_expires_at: ?Carbon,
+     *     student_initial_expires_at: ?Carbon,
+     *     student_expires_at: ?Carbon,
+     *     effective_access_source: string,
+     *     effective_access_source_normalized: string,
+     *     effective_access_expires_at: ?Carbon
+     * }
+     */
+    private function resolveAccessState(User $user): array
+    {
+        $storedPremiumExpiresAt = $this->parseToCarbon($user->premium_expires_at);
+        $latestSubscriptionExpiresAt = $this->getLatestSubscriptionExpiry($user);
+        $latestStripeExpiry = $this->shouldFetchStripeExpiry($user, $storedPremiumExpiresAt, $latestSubscriptionExpiresAt)
+            ? $this->getLatestStripeSubscriptionExpiry($user)
+            : null;
+
+        $premiumExpiresAt = $storedPremiumExpiresAt;
+        if (
+            $latestSubscriptionExpiresAt
+            && (!$storedPremiumExpiresAt || $latestSubscriptionExpiresAt->gt($storedPremiumExpiresAt))
+        ) {
+            $premiumExpiresAt = $latestSubscriptionExpiresAt;
+        }
+        if (
+            $latestStripeExpiry
+            && (!$premiumExpiresAt || $latestStripeExpiry->gt($premiumExpiresAt))
+        ) {
+            $premiumExpiresAt = $latestStripeExpiry;
+        }
+
+        if (
+            $premiumExpiresAt
+            && (!$storedPremiumExpiresAt || $premiumExpiresAt->gt($storedPremiumExpiresAt))
+        ) {
+            // Keep users table in sync when subscription table has a fresher expiration.
+            $user->forceFill([
+                'has_premium' => true,
+                'premium_expires_at' => $premiumExpiresAt,
+            ])->saveQuietly();
+        }
+
+        $studentExpiresAt = $this->parseToCarbon($user->student_expires_at);
+        $trialExpiresAt = $this->parseToCarbon($user->free_trial_expires_at);
+        $studentVerified = (bool) $user->student_verified;
+
+        $hasPremium = (bool) $user->has_premium || null !== $premiumExpiresAt;
+        $isStudentActive = $studentVerified
+            && (null === $studentExpiresAt || $studentExpiresAt->isFuture());
+        $isBillingPremiumActive = $hasPremium && (null === $premiumExpiresAt || $premiumExpiresAt->isFuture());
+        // Verified student window extends effective premium access.
+        $isPremiumActive = $isBillingPremiumActive || $isStudentActive;
+        $isTrialActive = !$isPremiumActive
+            && !$studentVerified
+            && null !== $trialExpiresAt
+            && $trialExpiresAt->isFuture();
+
+        $effectiveAccessSource = 'none';
+        $effectiveAccessExpiresAt = null;
+
+        if ($isPremiumActive) {
+            $effectiveAccessSource = 'premium';
+            $effectiveAccessExpiresAt = $this->resolvePremiumEffectiveExpiry(
+                $isBillingPremiumActive,
+                $premiumExpiresAt,
+                $isStudentActive,
+                $studentExpiresAt
+            );
+        } elseif ($isStudentActive) {
+            $effectiveAccessSource = 'student';
+            $effectiveAccessExpiresAt = $studentExpiresAt;
+        } elseif ($isTrialActive) {
+            $effectiveAccessSource = 'free_trial';
+            $effectiveAccessExpiresAt = $trialExpiresAt;
+        } elseif ($hasPremium && null !== $premiumExpiresAt) {
+            $effectiveAccessSource = 'premium_expired';
+            $effectiveAccessExpiresAt = $premiumExpiresAt;
+        } elseif ($studentVerified || null !== $studentExpiresAt) {
+            $effectiveAccessSource = 'student_expired';
+            $effectiveAccessExpiresAt = $studentExpiresAt;
+        } elseif (null !== $trialExpiresAt) {
+            $effectiveAccessSource = 'free_trial_expired';
+            $effectiveAccessExpiresAt = $trialExpiresAt;
+        }
+
+        $effectiveAccessSourceNormalized = $this->normalizeEffectiveAccessSource($effectiveAccessSource);
+
+        return [
+            'has_premium' => $hasPremium,
+            'student_verified' => $studentVerified,
+            'is_premium_active' => $isPremiumActive,
+            'is_student_active' => $isStudentActive,
+            'is_trial_active' => $isTrialActive,
+            'is_student_initial_active' => $isTrialActive,
+            'premium_expires_at' => $premiumExpiresAt,
+            'free_trial_expires_at' => $trialExpiresAt,
+            'student_initial_expires_at' => $trialExpiresAt,
+            'student_expires_at' => $studentExpiresAt,
+            'effective_access_source' => $effectiveAccessSource,
+            'effective_access_source_normalized' => $effectiveAccessSourceNormalized,
+            'effective_access_expires_at' => $effectiveAccessExpiresAt,
+        ];
+    }
+
+    private function normalizeEffectiveAccessSource(string $source): string
+    {
+        return match ($source) {
+            'free_trial' => 'student_initial',
+            'free_trial_expired' => 'student_initial_expired',
+            default => $source,
+        };
+    }
+
+    private function resolvePremiumEffectiveExpiry(
+        bool $isBillingPremiumActive,
+        ?Carbon $premiumExpiresAt,
+        bool $isStudentActive,
+        ?Carbon $studentExpiresAt
+    ): ?Carbon {
+        if ($isBillingPremiumActive && null === $premiumExpiresAt) {
+            // Premium without end date means unlimited access.
+            return null;
+        }
+
+        if ($isStudentActive && null === $studentExpiresAt) {
+            // Verified student access without end date means unlimited access.
+            return null;
+        }
+
+        if ($isBillingPremiumActive && $isStudentActive) {
+            if (!$premiumExpiresAt) {
+                return $studentExpiresAt;
+            }
+
+            if (!$studentExpiresAt) {
+                return $premiumExpiresAt;
+            }
+
+            return $studentExpiresAt->gt($premiumExpiresAt)
+                ? $studentExpiresAt
+                : $premiumExpiresAt;
+        }
+
+        if ($isBillingPremiumActive) {
+            return $premiumExpiresAt;
+        }
+
+        if ($isStudentActive) {
+            return $studentExpiresAt;
+        }
+
+        return null;
+    }
+
+    private function parseToCarbon(mixed $value): ?Carbon
+    {
+        if ($value instanceof Carbon) {
+            return $value;
+        }
+
+        if (is_string($value) && '' !== trim($value)) {
+            try {
+                return Carbon::parse($value);
+            } catch (Exception) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private function getLatestSubscriptionExpiry(User $user): ?Carbon
+    {
+        $subscriptions = $user->relationLoaded('subscriptions')
+            ? $user->subscriptions
+            : $user->subscriptions()
+                ->select(['id', 'user_id', 'status', 'stripe_status', 'expires_at'])
+                ->orderByDesc('expires_at')
+                ->get()
+        ;
+
+        foreach ($subscriptions as $subscription) {
+            $expiresAt = $this->parseToCarbon($subscription->expires_at);
+            if (!$expiresAt) {
+                continue;
+            }
+
+            return $expiresAt;
+        }
+
+        return null;
+    }
+
+    private function shouldFetchStripeExpiry(
+        User $user,
+        ?Carbon $storedPremiumExpiresAt,
+        ?Carbon $latestSubscriptionExpiresAt
+    ): bool {
+        if ('creator' !== $user->role || !(bool) $user->has_premium) {
+            return false;
+        }
+
+        if (null === $storedPremiumExpiresAt || $storedPremiumExpiresAt->isFuture()) {
+            return false;
+        }
+
+        if ($latestSubscriptionExpiresAt && $latestSubscriptionExpiresAt->isFuture()) {
+            return false;
+        }
+
+        return !empty($user->stripe_customer_id) || !empty($user->email);
+    }
+
+    private function getLatestStripeSubscriptionExpiry(User $user): ?Carbon
+    {
+        $stripeSecret = config('services.stripe.secret');
+        if (!$stripeSecret) {
+            return null;
+        }
+
+        try {
+            Stripe::setApiKey($stripeSecret);
+            $customerId = $user->stripe_customer_id ?: $this->findStripeCustomerIdByEmail($user->email);
+            if (!$customerId) {
+                return null;
+            }
+
+            if ($customerId !== $user->stripe_customer_id) {
+                $user->forceFill(['stripe_customer_id' => $customerId])->saveQuietly();
+            }
+
+            $stripeSubscriptions = StripeSubscription::all([
+                'customer' => $customerId,
+                'status' => 'all',
+                'limit' => 20,
+            ]);
+
+            $latestExpiry = null;
+            foreach ($stripeSubscriptions->data as $stripeSubscription) {
+                $stripeStatus = strtolower((string) ($stripeSubscription->status ?? ''));
+                if (!in_array($stripeStatus, ['active', 'trialing', 'past_due', 'unpaid'], true)) {
+                    continue;
+                }
+
+                $expiresAt = $this->extractStripePeriodEnd($stripeSubscription);
+                if (!$expiresAt) {
+                    continue;
+                }
+
+                if (!$latestExpiry || $expiresAt->gt($latestExpiry)) {
+                    $latestExpiry = $expiresAt;
+                }
+            }
+
+            return $latestExpiry;
+        } catch (Exception $e) {
+            Log::warning('Failed to read Stripe subscription expiry for admin access resolution', [
+                'user_id' => $user->id,
+                'stripe_customer_id' => $user->stripe_customer_id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    private function findStripeCustomerIdByEmail(?string $email): ?string
+    {
+        if (!$email) {
+            return null;
+        }
+
+        try {
+            $customers = StripeCustomer::all([
+                'email' => $email,
+                'limit' => 10,
+            ]);
+
+            if (!empty($customers->data)) {
+                return $customers->data[0]->id ?? null;
+            }
+        } catch (Exception $e) {
+            Log::warning('Failed to find Stripe customer by email', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return null;
+    }
+
+    private function extractStripePeriodEnd(object $stripeSubscription): ?Carbon
+    {
+        if (isset($stripeSubscription->current_period_end) && $stripeSubscription->current_period_end) {
+            return Carbon::createFromTimestamp((int) $stripeSubscription->current_period_end);
+        }
+
+        $itemEnd = $stripeSubscription->items->data[0]->current_period_end ?? null;
+        if ($itemEnd) {
+            return Carbon::createFromTimestamp((int) $itemEnd);
+        }
+
+        return null;
     }
 }
