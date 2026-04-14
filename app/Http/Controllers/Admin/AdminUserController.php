@@ -340,11 +340,7 @@ class AdminUserController extends Controller
         $accountStatus = $this->getAccountStatus($user);
         $isActive = null !== $user->email_verified_at && 'Removido' !== $accountStatus;
         $accessState = $this->resolveAccessState($user);
-        $timeOnPlatform = $this->getUserTimeStatus(
-            $user,
-            $accessState['has_premium'],
-            $accessState['premium_expires_at']
-        );
+        $timeOnPlatform = $this->getUserTimeStatus($user, $accessState);
         $displayName = $user->company_name ?: $user->name;
         $profileImage = $user->avatar ?: $user->avatar_url;
 
@@ -443,19 +439,22 @@ class AdminUserController extends Controller
     /**
      * Get user time status string.
      */
-    private function getUserTimeStatus(
-        User $user,
-        bool $hasPremium,
-        ?Carbon $premiumExpiresAt
-    ): string
+    private function getUserTimeStatus(User $user, array $accessState): string
     {
-        if ($hasPremium && null === $premiumExpiresAt) {
+        $effectiveAccessSource = $accessState['effective_access_source_normalized']
+            ?? $accessState['effective_access_source']
+            ?? 'none';
+        $effectiveAccessExpiresAt = $accessState['effective_access_expires_at'] ?? null;
+
+        if (
+            in_array($effectiveAccessSource, ['premium', 'student', 'student_initial', 'free_trial'], true)
+            && null === $effectiveAccessExpiresAt
+        ) {
             return 'Ilimitado';
         }
 
-        if ($hasPremium && $premiumExpiresAt) {
-            $months = $premiumExpiresAt->diffInMonths(now());
-
+        if ($effectiveAccessExpiresAt instanceof Carbon) {
+            $months = max(0, now()->diffInMonths($effectiveAccessExpiresAt, false));
             return $months.' meses';
         }
 
@@ -463,7 +462,7 @@ class AdminUserController extends Controller
             $trialExpiresAt = $user->free_trial_expires_at instanceof Carbon
                 ? $user->free_trial_expires_at
                 : Carbon::parse($user->free_trial_expires_at);
-            $months = $trialExpiresAt->diffInMonths(now());
+            $months = max(0, now()->diffInMonths($trialExpiresAt, false));
 
             return $months.' meses';
         }
