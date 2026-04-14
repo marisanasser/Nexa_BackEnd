@@ -34,7 +34,7 @@ class AdminUserController extends Controller
     {
         $request->validate([
             'role' => 'nullable|in:creator,brand,admin,student',
-            'status' => 'nullable|in:active,blocked,removed,pending,unverified',
+            'status' => 'nullable|in:active,blocked,removed,pending,unverified,premium,student_period',
             'access' => 'nullable|in:premium,student_period',
             'search' => 'nullable|string|max:255',
             'per_page' => 'nullable|integer|min:1|max:100',
@@ -64,7 +64,11 @@ class AdminUserController extends Controller
         }
 
         if ($status) {
-            $this->applyStatusFilter($query, $status);
+            if (in_array($status, ['premium', 'student_period'], true)) {
+                $this->applyAccessFilter($query, $status);
+            } else {
+                $this->applyStatusFilter($query, $status);
+            }
         }
 
         if ($access) {
