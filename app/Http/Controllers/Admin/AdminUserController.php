@@ -34,8 +34,8 @@ class AdminUserController extends Controller
     {
         $request->validate([
             'role' => 'nullable|in:creator,brand,admin,student',
-            'status' => 'nullable|in:active,blocked,removed,pending,unverified,premium,student_period',
-            'access' => 'nullable|in:premium,student_period',
+            'status' => 'nullable|in:active,blocked,removed,pending,unverified,premium,premium_expired,student_period',
+            'access' => 'nullable|in:premium,premium_expired,student_period',
             'search' => 'nullable|string|max:255',
             'per_page' => 'nullable|integer|min:1|max:100',
             'page' => 'nullable|integer|min:1',
@@ -64,7 +64,7 @@ class AdminUserController extends Controller
         }
 
         if ($status) {
-            if (in_array($status, ['premium', 'student_period'], true)) {
+            if (in_array($status, ['premium', 'premium_expired', 'student_period'], true)) {
                 $this->applyAccessFilter($query, $status);
             } else {
                 $this->applyStatusFilter($query, $status);
@@ -268,6 +268,33 @@ class AdminUserController extends Controller
                     $studentQuery
                         ->whereNull('student_expires_at')
                         ->orWhere('student_expires_at', '>', $now)
+                    ;
+                }),
+            'premium_expired' => $query
+                ->where('has_premium', true)
+                ->whereNotNull('premium_expires_at')
+                ->where('premium_expires_at', '<=', $now)
+                ->where(function ($studentWindowQuery) use ($now): void {
+                    $studentWindowQuery
+                        ->where('student_verified', false)
+                        ->orWhere(function ($expiredStudentQuery) use ($now): void {
+                            $expiredStudentQuery
+                                ->where('student_verified', true)
+                                ->whereNotNull('student_expires_at')
+                                ->where('student_expires_at', '<=', $now)
+                            ;
+                        })
+                    ;
+                })
+                ->whereDoesntHave('subscriptions', function ($subscriptionQuery) use ($now): void {
+                    $subscriptionQuery
+                        ->where('status', Subscription::STATUS_ACTIVE)
+                        ->where(function ($expirationQuery) use ($now): void {
+                            $expirationQuery
+                                ->whereNull('expires_at')
+                                ->orWhere('expires_at', '>', $now)
+                            ;
+                        })
                     ;
                 }),
             default => null,
