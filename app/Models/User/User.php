@@ -499,12 +499,29 @@ class User extends Authenticatable
 
     public function getPremiumAccessExpiresAt(): ?\Carbon\Carbon
     {
-        if ($this->isPremium()) {
-            return $this->getCarbonDate($this->premium_expires_at);
-        }
+        $premiumExpiresAt = $this->isPremium()
+            ? $this->getCarbonDate($this->premium_expires_at)
+            : null;
 
         if ($this->isStudent()) {
-            return $this->getStudentAccessExpiresAt();
+            $studentExpiresAt = $this->getStudentAccessExpiresAt();
+
+            // Student entitlement extends effective premium access when it ends later.
+            if (null === $premiumExpiresAt) {
+                return $studentExpiresAt;
+            }
+
+            if (null === $studentExpiresAt) {
+                return $premiumExpiresAt;
+            }
+
+            return $studentExpiresAt->gt($premiumExpiresAt)
+                ? $studentExpiresAt
+                : $premiumExpiresAt;
+        }
+
+        if (null !== $premiumExpiresAt) {
+            return $premiumExpiresAt;
         }
 
         return $this->getCarbonDate($this->free_trial_expires_at);
@@ -517,7 +534,9 @@ class User extends Authenticatable
             return false;
         }
 
-        if ($this->has_premium) {
+        // Keep non-students blocked from trial fallback after buying premium,
+        // but let verified students keep access during the student window.
+        if ($this->has_premium && ! $this->isStudent()) {
             return false;
         }
 
@@ -546,7 +565,7 @@ class User extends Authenticatable
         }
 
         if ($this->isStudent()) {
-            return $this->isPremium() || $this->isOnTrial();
+            return $this->isPremium() || $this->isVerifiedStudent() || $this->isOnTrial();
         }
 
         return $this->isPremium();

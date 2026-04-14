@@ -443,15 +443,16 @@ class AdminUserController extends Controller
 
         $studentExpiresAt = $this->parseToCarbon($user->student_expires_at);
         $trialExpiresAt = $this->parseToCarbon($user->free_trial_expires_at);
+        $studentVerified = (bool) $user->student_verified;
 
         $hasPremium = (bool) $user->has_premium || null !== $premiumExpiresAt;
-        $isPremiumActive = $hasPremium && (null === $premiumExpiresAt || $premiumExpiresAt->isFuture());
-        $isStudentActive = !$isPremiumActive
-            && (bool) $user->student_verified
+        $isStudentActive = $studentVerified
             && (null === $studentExpiresAt || $studentExpiresAt->isFuture());
+        $isBillingPremiumActive = $hasPremium && (null === $premiumExpiresAt || $premiumExpiresAt->isFuture());
+        // Verified student window extends effective premium access.
+        $isPremiumActive = $isBillingPremiumActive || $isStudentActive;
         $isTrialActive = !$isPremiumActive
-            && !$isStudentActive
-            && !(bool) $user->student_verified
+            && !$studentVerified
             && null !== $trialExpiresAt
             && $trialExpiresAt->isFuture();
 
@@ -460,7 +461,12 @@ class AdminUserController extends Controller
 
         if ($isPremiumActive) {
             $effectiveAccessSource = 'premium';
-            $effectiveAccessExpiresAt = $premiumExpiresAt;
+            $effectiveAccessExpiresAt = $this->resolvePremiumEffectiveExpiry(
+                $isBillingPremiumActive,
+                $premiumExpiresAt,
+                $isStudentActive,
+                $studentExpiresAt
+            );
         } elseif ($isStudentActive) {
             $effectiveAccessSource = 'student';
             $effectiveAccessExpiresAt = $studentExpiresAt;
@@ -470,7 +476,7 @@ class AdminUserController extends Controller
         } elseif ($hasPremium && null !== $premiumExpiresAt) {
             $effectiveAccessSource = 'premium_expired';
             $effectiveAccessExpiresAt = $premiumExpiresAt;
-        } elseif ((bool) $user->student_verified || null !== $studentExpiresAt) {
+        } elseif ($studentVerified || null !== $studentExpiresAt) {
             $effectiveAccessSource = 'student_expired';
             $effectiveAccessExpiresAt = $studentExpiresAt;
         } elseif (null !== $trialExpiresAt) {
@@ -480,7 +486,7 @@ class AdminUserController extends Controller
 
         return [
             'has_premium' => $hasPremium,
-            'student_verified' => (bool) $user->student_verified,
+            'student_verified' => $studentVerified,
             'is_premium_active' => $isPremiumActive,
             'is_student_active' => $isStudentActive,
             'is_trial_active' => $isTrialActive,
@@ -490,6 +496,47 @@ class AdminUserController extends Controller
             'effective_access_source' => $effectiveAccessSource,
             'effective_access_expires_at' => $effectiveAccessExpiresAt,
         ];
+    }
+
+    private function resolvePremiumEffectiveExpiry(
+        bool $isBillingPremiumActive,
+        ?Carbon $premiumExpiresAt,
+        bool $isStudentActive,
+        ?Carbon $studentExpiresAt
+    ): ?Carbon {
+        if ($isBillingPremiumActive && null === $premiumExpiresAt) {
+            // Premium without end date means unlimited access.
+            return null;
+        }
+
+        if ($isStudentActive && null === $studentExpiresAt) {
+            // Verified student access without end date means unlimited access.
+            return null;
+        }
+
+        if ($isBillingPremiumActive && $isStudentActive) {
+            if (!$premiumExpiresAt) {
+                return $studentExpiresAt;
+            }
+
+            if (!$studentExpiresAt) {
+                return $premiumExpiresAt;
+            }
+
+            return $studentExpiresAt->gt($premiumExpiresAt)
+                ? $studentExpiresAt
+                : $premiumExpiresAt;
+        }
+
+        if ($isBillingPremiumActive) {
+            return $premiumExpiresAt;
+        }
+
+        if ($isStudentActive) {
+            return $studentExpiresAt;
+        }
+
+        return null;
     }
 
     private function parseToCarbon(mixed $value): ?Carbon
