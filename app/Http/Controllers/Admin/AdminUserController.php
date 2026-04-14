@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Notification\Services\UserNotificationService;
 use App\Domain\Shared\Traits\HasAuthenticatedUser;
 use App\Http\Controllers\Base\Controller;
+use App\Models\Payment\Subscription;
 use App\Models\User\User;
 use Carbon\Carbon;
 use Exception;
@@ -29,7 +30,8 @@ class AdminUserController extends Controller
     {
         $request->validate([
             'role' => 'nullable|in:creator,brand,admin',
-            'status' => 'nullable|in:active,blocked,removed,pending,unverified',
+            'status' => 'nullable|in:active,blocked,removed,pending,unverified,premium,premium_expired,student_period',
+            'access' => 'nullable|in:premium,premium_expired,student_period',
             'search' => 'nullable|string|max:255',
             'per_page' => 'nullable|integer|min:1|max:100',
             'page' => 'nullable|integer|min:1',
@@ -37,6 +39,7 @@ class AdminUserController extends Controller
 
         $role = $request->input('role');
         $status = $request->input('status');
+        $access = $request->input('access');
         $search = $request->input('search');
         $perPage = $request->input('per_page', 10);
         $page = $request->input('page', 1);
@@ -48,7 +51,15 @@ class AdminUserController extends Controller
         }
 
         if ($status) {
-            $this->applyStatusFilter($query, $status);
+            if (in_array($status, ['premium', 'premium_expired', 'student_period'], true)) {
+                $this->applyAccessFilter($query, $status);
+            } else {
+                $this->applyStatusFilter($query, $status);
+            }
+        }
+
+        if ($access) {
+            $this->applyAccessFilter($query, $access);
         }
 
         if ($search) {
@@ -187,6 +198,81 @@ class AdminUserController extends Controller
             'removed' => $query->where('deleted_at', '!=', null),
             'pending' => $query->where('email_verified_at', '=', null),
             'unverified' => $query->where('email_verified_at', '=', null),
+            default => null,
+        };
+    }
+
+    /**
+     * Apply premium/student access filter to query.
+     *
+     * @param mixed $query
+     */
+    private function applyAccessFilter($query, string $access): void
+    {
+        $now = now();
+
+        match ($access) {
+            'premium' => $query->where(function ($premiumQuery) use ($now): void {
+                $premiumQuery
+                    ->where(function ($billingPremiumQuery) use ($now): void {
+                        $billingPremiumQuery
+                            ->where('has_premium', true)
+                            ->where(function ($expirationQuery) use ($now): void {
+                                $expirationQuery
+                                    ->whereNull('premium_expires_at')
+                                    ->orWhere('premium_expires_at', '>', $now)
+                                ;
+                            })
+                        ;
+                    })
+                    ->orWhereHas('subscriptions', function ($subscriptionQuery) use ($now): void {
+                        $subscriptionQuery
+                            ->where('status', Subscription::STATUS_ACTIVE)
+                            ->where(function ($expirationQuery) use ($now): void {
+                                $expirationQuery
+                                    ->whereNull('expires_at')
+                                    ->orWhere('expires_at', '>', $now)
+                                ;
+                            })
+                        ;
+                    })
+                ;
+            }),
+            'student_period' => $query
+                ->where('student_verified', true)
+                ->where(function ($studentQuery) use ($now): void {
+                    $studentQuery
+                        ->whereNull('student_expires_at')
+                        ->orWhere('student_expires_at', '>', $now)
+                    ;
+                }),
+            'premium_expired' => $query
+                ->where('has_premium', true)
+                ->whereNotNull('premium_expires_at')
+                ->where('premium_expires_at', '<=', $now)
+                ->where(function ($studentWindowQuery) use ($now): void {
+                    $studentWindowQuery
+                        ->where('student_verified', false)
+                        ->orWhere(function ($expiredStudentQuery) use ($now): void {
+                            $expiredStudentQuery
+                                ->where('student_verified', true)
+                                ->whereNotNull('student_expires_at')
+                                ->where('student_expires_at', '<=', $now)
+                            ;
+                        })
+                    ;
+                })
+                ->whereDoesntHave('subscriptions', function ($subscriptionQuery) use ($now): void {
+                    $subscriptionQuery
+                        ->where('status', Subscription::STATUS_ACTIVE)
+                        ->where(function ($expirationQuery) use ($now): void {
+                            $expirationQuery
+                                ->whereNull('expires_at')
+                                ->orWhere('expires_at', '>', $now)
+                            ;
+                        })
+                    ;
+                }),
             default => null,
         };
     }
