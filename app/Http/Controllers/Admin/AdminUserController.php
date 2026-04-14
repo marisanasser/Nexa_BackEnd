@@ -32,7 +32,7 @@ class AdminUserController extends Controller
     public function index(Request $request): JsonResponse
     {
         $request->validate([
-            'role' => 'nullable|in:creator,brand,admin',
+            'role' => 'nullable|in:creator,brand,admin,student',
             'status' => 'nullable|in:active,blocked,removed,pending,unverified',
             'search' => 'nullable|string|max:255',
             'per_page' => 'nullable|integer|min:1|max:100',
@@ -48,7 +48,16 @@ class AdminUserController extends Controller
         $query = User::query();
 
         if ($role) {
-            $query->where('role', $role);
+            if ('student' === $role) {
+                $query->where(function ($studentQuery): void {
+                    $studentQuery
+                        ->where('role', 'student')
+                        ->orWhere('student_verified', true)
+                    ;
+                });
+            } else {
+                $query->where('role', $role);
+            }
         }
 
         if ($status) {
