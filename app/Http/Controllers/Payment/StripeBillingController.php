@@ -425,6 +425,11 @@ class StripeBillingController extends Controller
                 ], 404);
             }
 
+            $checkoutBlockedResponse = $this->buildCheckoutBlockedResponseForExistingAccess($user);
+            if (null !== $checkoutBlockedResponse) {
+                return $checkoutBlockedResponse;
+            }
+
             if (!$user->stripe_customer_id) {
                 $customer = Customer::create([
                     'email' => $user->email,
@@ -560,6 +565,32 @@ class StripeBillingController extends Controller
             ],
             'quantity' => 1,
         ];
+    }
+
+    private function buildCheckoutBlockedResponseForExistingAccess(User $user): ?JsonResponse
+    {
+        if (!$user->hasPremiumAccess()) {
+            return null;
+        }
+
+        $accessExpiresAt = $user->getPremiumAccessExpiresAt();
+        $isStudentAccess = $user->isStudent() && $user->isVerifiedStudent();
+
+        $message = $isStudentAccess
+            ? 'Student access already grants Premium access'
+            : 'User already has premium access'
+        ;
+
+        if ($accessExpiresAt?->isFuture()) {
+            $message .= ' until '.$accessExpiresAt->format('d/m/Y');
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => $message,
+            'reason' => $isStudentAccess ? 'student_access_active' : 'premium_access_active',
+            'access_expires_at' => $accessExpiresAt?->format('Y-m-d H:i:s'),
+        ], 409);
     }
 
     /**
