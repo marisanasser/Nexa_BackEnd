@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Auth;
 
 use App\Domain\Notification\Services\AdminNotificationService;
+use App\Domain\Tracking\Services\MetaConversionsApiService;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
@@ -26,6 +27,11 @@ use Throwable;
 
 class RegisteredUserController extends Controller
 {
+    public function __construct(
+        private MetaConversionsApiService $metaConversionsApiService
+    ) {
+    }
+
     /**
      * Handle user registration.
      */
@@ -64,6 +70,7 @@ class RegisteredUserController extends Controller
         // Send welcome email and notify admins
         $this->sendWelcomeEmail($user, $tokenResult);
         AdminNotificationService::notifyAdminOfNewRegistration($user);
+        $this->trackBrandRegistrationForMeta($user, $request);
 
         Log::info('User registration completed successfully', ['user_id' => $user->id, 'email' => $user->email]);
 
@@ -184,6 +191,7 @@ class RegisteredUserController extends Controller
             'state' => ['nullable', 'string', 'max:100', 'regex:/^[a-zA-Z\s\-]+$/'],
             'language' => ['nullable', 'string', 'max:10', Rule::in(['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'zh', 'ja', 'ko', 'ar'])],
             'isStudent' => ['nullable', 'boolean'],
+            'meta_event_id' => ['nullable', 'string', 'max:120'],
         ];
     }
 
@@ -420,8 +428,10 @@ class RegisteredUserController extends Controller
                 'has_premium' => $user->has_premium,
                 'premium_expires_at' => $user->premium_expires_at,
                 'free_trial_expires_at' => $user->free_trial_expires_at,
+                'student_initial_expires_at' => $user->free_trial_expires_at,
                 'is_premium_active' => $user->hasPremiumAccess(),
                 'is_on_trial' => $user->isOnTrial(),
+                'is_student_initial_active' => $user->isOnTrial(),
                 'access_expires_at' => $user->getPremiumAccessExpiresAt(),
                 'isStudent' => $isStudent,
             ],
@@ -504,6 +514,31 @@ class RegisteredUserController extends Controller
                 }
             }
         }
+    }
+
+    private function trackBrandRegistrationForMeta(User $user, Request $request): void
+    {
+        if ('brand' !== $user->role) {
+            return;
+        }
+
+        $eventId = (string) $request->input('meta_event_id', '');
+        if ('' === trim($eventId)) {
+            $eventId = 'brand_signup_'.$user->id.'_'.time();
+        }
+
+        $this->metaConversionsApiService->trackCompleteRegistration(
+            $user,
+            $eventId,
+            [
+                'content_name' => 'Registro de marca',
+                'event_source_url' => rtrim((string) config('app.frontend_url'), '/').'/signup/brand',
+                'client_user_agent' => (string) $request->userAgent(),
+                'client_ip_address' => (string) $request->ip(),
+                'fbp' => (string) $request->cookie('_fbp'),
+                'fbc' => (string) $request->cookie('_fbc'),
+            ]
+        );
     }
 
     private function formatPhoneNumber(string $phone): string

@@ -533,6 +533,7 @@ class AdminStudentController extends Controller
         } elseif ($trialExpiresAt && $trialExpiresAt->isPast()) {
             $effectiveAccessSource = 'student_expired';
         }
+        $effectiveAccessSourceNormalized = $effectiveAccessSource;
 
         return [
             'id' => $student->id,
@@ -546,13 +547,16 @@ class AdminStudentController extends Controller
             'student_verified_at' => $student->student_verified ? ($student->updated_at ?? $student->created_at) : null,
             'student_expires_at' => $student->student_expires_at,
             'free_trial_expires_at' => $student->free_trial_expires_at,
+            'student_initial_expires_at' => $student->free_trial_expires_at,
             'trial_ends_at' => $trialExpiresAt,
             'has_premium' => $student->has_premium,
             'is_premium_active' => $isPremiumActive,
             'is_student_active' => $isStudentActive,
             'is_trial_active' => $isTrialActive,
+            'is_student_initial_active' => $isTrialActive,
             'premium_expires_at' => $premiumExpiresAt,
             'effective_access_source' => $effectiveAccessSource,
+            'effective_access_source_normalized' => $effectiveAccessSourceNormalized,
             'effective_access_expires_at' => $effectiveAccessExpiresAt,
             'created_at' => $student->created_at,
             'email_verified_at' => $student->email_verified_at,

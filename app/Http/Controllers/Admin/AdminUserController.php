@@ -382,10 +382,13 @@ class AdminUserController extends Controller
                 'is_premium_active' => $accessState['is_premium_active'],
                 'is_student_active' => $accessState['is_student_active'],
                 'is_trial_active' => $accessState['is_trial_active'],
+                'is_student_initial_active' => $accessState['is_student_initial_active'],
                 'premium_expires_at' => $accessState['premium_expires_at'],
                 'free_trial_expires_at' => $accessState['free_trial_expires_at'],
+                'student_initial_expires_at' => $accessState['student_initial_expires_at'],
                 'student_expires_at' => $accessState['student_expires_at'],
                 'effective_access_source' => $accessState['effective_access_source'],
+                'effective_access_source_normalized' => $accessState['effective_access_source_normalized'],
                 'effective_access_expires_at' => $accessState['effective_access_expires_at'],
             ];
         }
@@ -426,10 +429,13 @@ class AdminUserController extends Controller
             'is_premium_active' => $accessState['is_premium_active'],
             'is_student_active' => $accessState['is_student_active'],
             'is_trial_active' => $accessState['is_trial_active'],
+            'is_student_initial_active' => $accessState['is_student_initial_active'],
             'premium_expires_at' => $accessState['premium_expires_at'],
             'free_trial_expires_at' => $accessState['free_trial_expires_at'],
+            'student_initial_expires_at' => $accessState['student_initial_expires_at'],
             'student_expires_at' => $accessState['student_expires_at'],
             'effective_access_source' => $accessState['effective_access_source'],
+            'effective_access_source_normalized' => $accessState['effective_access_source_normalized'],
             'effective_access_expires_at' => $accessState['effective_access_expires_at'],
         ];
     }
@@ -496,10 +502,13 @@ class AdminUserController extends Controller
      *     is_premium_active: bool,
      *     is_student_active: bool,
      *     is_trial_active: bool,
+     *     is_student_initial_active: bool,
      *     premium_expires_at: ?Carbon,
      *     free_trial_expires_at: ?Carbon,
+     *     student_initial_expires_at: ?Carbon,
      *     student_expires_at: ?Carbon,
      *     effective_access_source: string,
+     *     effective_access_source_normalized: string,
      *     effective_access_expires_at: ?Carbon
      * }
      */
@@ -579,18 +588,32 @@ class AdminUserController extends Controller
             $effectiveAccessExpiresAt = $trialExpiresAt;
         }
 
+        $effectiveAccessSourceNormalized = $this->normalizeEffectiveAccessSource($effectiveAccessSource);
+
         return [
             'has_premium' => $hasPremium,
             'student_verified' => $studentVerified,
             'is_premium_active' => $isPremiumActive,
             'is_student_active' => $isStudentActive,
             'is_trial_active' => $isTrialActive,
+            'is_student_initial_active' => $isTrialActive,
             'premium_expires_at' => $premiumExpiresAt,
             'free_trial_expires_at' => $trialExpiresAt,
+            'student_initial_expires_at' => $trialExpiresAt,
             'student_expires_at' => $studentExpiresAt,
             'effective_access_source' => $effectiveAccessSource,
+            'effective_access_source_normalized' => $effectiveAccessSourceNormalized,
             'effective_access_expires_at' => $effectiveAccessExpiresAt,
         ];
+    }
+
+    private function normalizeEffectiveAccessSource(string $source): string
+    {
+        return match ($source) {
+            'free_trial' => 'student_initial',
+            'free_trial_expired' => 'student_initial_expired',
+            default => $source,
+        };
     }
 
     private function resolvePremiumEffectiveExpiry(
