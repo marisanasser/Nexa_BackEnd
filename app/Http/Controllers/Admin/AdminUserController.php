@@ -362,6 +362,8 @@ class AdminUserController extends Controller
                 'name' => $user->name,
                 'role' => $user->role,
                 'email' => $user->email,
+                'whatsapp' => $user->whatsapp ?: $user->whatsapp_number,
+                'whatsapp_number' => $user->whatsapp_number ?: $user->whatsapp,
                 'profile_image' => $profileImage,
                 'is_active' => $isActive,
                 'last_login_at' => null,
@@ -410,6 +412,8 @@ class AdminUserController extends Controller
             'brandName' => $user->company_name ?: $user->name,
             'company_name' => $user->company_name ?: $user->name,
             'email' => $user->email,
+            'whatsapp' => $user->whatsapp ?: $user->whatsapp_number,
+            'whatsapp_number' => $user->whatsapp_number ?: $user->whatsapp,
             'profile_image' => $profileImage,
             'is_active' => $isActive,
             'last_login_at' => null,
@@ -515,26 +519,42 @@ class AdminUserController extends Controller
     private function resolveAccessState(User $user): array
     {
         $storedPremiumExpiresAt = $this->parseToCarbon($user->premium_expires_at);
+        $hasActiveUnlimitedSubscription = $this->hasActiveUnlimitedSubscription($user);
         $latestSubscriptionExpiresAt = $this->getLatestSubscriptionExpiry($user);
-        $latestStripeExpiry = $this->shouldFetchStripeExpiry($user, $storedPremiumExpiresAt, $latestSubscriptionExpiresAt)
+        $latestStripeExpiry = $this->shouldFetchStripeExpiry(
+            $user,
+            $storedPremiumExpiresAt,
+            $latestSubscriptionExpiresAt,
+            $hasActiveUnlimitedSubscription
+        )
             ? $this->getLatestStripeSubscriptionExpiry($user)
             : null;
 
-        $premiumExpiresAt = $storedPremiumExpiresAt;
+        $premiumExpiresAt = $hasActiveUnlimitedSubscription ? null : $storedPremiumExpiresAt;
         if (
+            !$hasActiveUnlimitedSubscription &&
             $latestSubscriptionExpiresAt
             && (!$storedPremiumExpiresAt || $latestSubscriptionExpiresAt->gt($storedPremiumExpiresAt))
         ) {
             $premiumExpiresAt = $latestSubscriptionExpiresAt;
         }
         if (
+            !$hasActiveUnlimitedSubscription &&
             $latestStripeExpiry
             && (!$premiumExpiresAt || $latestStripeExpiry->gt($premiumExpiresAt))
         ) {
             $premiumExpiresAt = $latestStripeExpiry;
         }
 
-        if (
+        if ($hasActiveUnlimitedSubscription) {
+            if (!(bool) $user->has_premium || null !== $user->premium_expires_at) {
+                // Keep users table in sync when an active subscription has no end date.
+                $user->forceFill([
+                    'has_premium' => true,
+                    'premium_expires_at' => null,
+                ])->saveQuietly();
+            }
+        } elseif (
             $premiumExpiresAt
             && (!$storedPremiumExpiresAt || $premiumExpiresAt->gt($storedPremiumExpiresAt))
         ) {
@@ -549,10 +569,16 @@ class AdminUserController extends Controller
         $trialExpiresAt = $this->parseToCarbon($user->free_trial_expires_at);
         $studentVerified = (bool) $user->student_verified;
 
-        $hasPremium = (bool) $user->has_premium || null !== $premiumExpiresAt;
+        $hasActiveTimedSubscription = null !== $latestSubscriptionExpiresAt && $latestSubscriptionExpiresAt->isFuture();
+        $hasActiveSubscription = $hasActiveUnlimitedSubscription || $hasActiveTimedSubscription;
+        $hasPremium =
+            (bool) $user->has_premium ||
+            null !== $premiumExpiresAt ||
+            null !== $latestSubscriptionExpiresAt ||
+            $hasActiveSubscription;
         $isStudentActive = $studentVerified
             && (null === $studentExpiresAt || $studentExpiresAt->isFuture());
-        $isBillingPremiumActive = $hasPremium && (null === $premiumExpiresAt || $premiumExpiresAt->isFuture());
+        $isBillingPremiumActive = $hasActiveSubscription || ($hasPremium && (null === $premiumExpiresAt || $premiumExpiresAt->isFuture()));
         // Verified student window extends effective premium access.
         $isPremiumActive = $isBillingPremiumActive || $isStudentActive;
         $isTrialActive = !$isPremiumActive
@@ -676,32 +702,59 @@ class AdminUserController extends Controller
 
     private function getLatestSubscriptionExpiry(User $user): ?Carbon
     {
-        $subscriptions = $user->relationLoaded('subscriptions')
+        $latestExpiry = null;
+        foreach ($this->getSubscriptionsSnapshot($user) as $subscription) {
+            $expiresAt = $this->parseToCarbon($subscription->expires_at);
+            if (!$expiresAt) {
+                continue;
+            }
+
+            if (!$latestExpiry || $expiresAt->gt($latestExpiry)) {
+                $latestExpiry = $expiresAt;
+            }
+        }
+
+        return $latestExpiry;
+    }
+
+    private function hasActiveUnlimitedSubscription(User $user): bool
+    {
+        foreach ($this->getSubscriptionsSnapshot($user) as $subscription) {
+            if (Subscription::STATUS_ACTIVE !== (string) $subscription->status) {
+                continue;
+            }
+
+            $expiresAt = $this->parseToCarbon($subscription->expires_at);
+            if (null === $expiresAt) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function getSubscriptionsSnapshot(User $user)
+    {
+        return $user->relationLoaded('subscriptions')
             ? $user->subscriptions
             : $user->subscriptions()
                 ->select(['id', 'user_id', 'status', 'stripe_status', 'expires_at'])
                 ->orderByDesc('expires_at')
                 ->get()
         ;
-
-        foreach ($subscriptions as $subscription) {
-            $expiresAt = $this->parseToCarbon($subscription->expires_at);
-            if (!$expiresAt) {
-                continue;
-            }
-
-            return $expiresAt;
-        }
-
-        return null;
     }
 
     private function shouldFetchStripeExpiry(
         User $user,
         ?Carbon $storedPremiumExpiresAt,
-        ?Carbon $latestSubscriptionExpiresAt
+        ?Carbon $latestSubscriptionExpiresAt,
+        bool $hasActiveUnlimitedSubscription
     ): bool {
         if ('creator' !== $user->role || !(bool) $user->has_premium) {
+            return false;
+        }
+
+        if ($hasActiveUnlimitedSubscription) {
             return false;
         }
 
