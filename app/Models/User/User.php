@@ -74,6 +74,20 @@ class User extends Authenticatable
         return \Database\Factories\UserFactory::new();
     }
 
+    protected static function booted(): void
+    {
+        static::saving(function (self $user): void {
+            if ('admin' === (string) $user->role) {
+                return;
+            }
+
+            $premiumExpiresAt = $user->getCarbonDate($user->premium_expires_at);
+            if ((bool) $user->has_premium && (null === $premiumExpiresAt || !$premiumExpiresAt->isFuture())) {
+                $user->has_premium = false;
+            }
+        });
+    }
+
     protected $fillable = [
         'name',
         'email',
@@ -483,7 +497,7 @@ class User extends Authenticatable
 
         $premiumExpiresAt = $this->getCarbonDate($this->premium_expires_at);
 
-        return $premiumExpiresAt === null || $premiumExpiresAt->isFuture();
+        return $premiumExpiresAt !== null && $premiumExpiresAt->isFuture();
     }
 
     public function getStudentAccessExpiresAt(): ?\Carbon\Carbon
@@ -536,7 +550,7 @@ class User extends Authenticatable
 
         // Keep non-students blocked from trial fallback after buying premium,
         // but let verified students keep access during the student window.
-        if ($this->has_premium && ! $this->isStudent()) {
+        if ($this->hasBoughtPremium() && ! $this->isStudent()) {
             return false;
         }
 
@@ -550,7 +564,15 @@ class User extends Authenticatable
 
     public function hasBoughtPremium(): bool
     {
-        return $this->has_premium;
+        if ($this->has_premium) {
+            return true;
+        }
+
+        if ($this->relationLoaded('subscriptions')) {
+            return $this->subscriptions->isNotEmpty();
+        }
+
+        return $this->subscriptions()->exists();
     }
 
     public function hasPremiumAccess(): bool

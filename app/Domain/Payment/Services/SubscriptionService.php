@@ -349,9 +349,14 @@ class SubscriptionService
                     'expires_at' => $currentPeriodEnd,
                 ]);
 
+                $fallbackPremiumExpiry = null;
+                if (null === $currentPeriodEnd) {
+                    $fallbackPremiumExpiry = now()->addMonths(max(1, (int) $plan->duration_months));
+                }
+
                 $user->update([
                     'has_premium' => true,
-                    'premium_expires_at' => $currentPeriodEnd,
+                    'premium_expires_at' => $currentPeriodEnd ?? $fallbackPremiumExpiry,
                 ]);
 
                 DB::commit();
@@ -549,8 +554,10 @@ class SubscriptionService
         string $status,
         \Stripe\Subscription $stripeSubscription
     ): void {
-        $isPremium = in_array($status, ['active', 'trialing']);
         $premiumExpiresAt = $this->extractStripePeriodEnd($stripeSubscription);
+        $isPremium = in_array($status, ['active', 'trialing'], true)
+            && null !== $premiumExpiresAt
+            && $premiumExpiresAt->isFuture();
 
         $user->update([
             'has_premium' => $isPremium,

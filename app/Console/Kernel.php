@@ -21,6 +21,11 @@ class Kernel extends ConsoleKernel
 
         $schedule->command('milestones:check-deadlines')->hourly();
 
+        $schedule->command('subscriptions:enforce-premium-conformity')
+            ->everyThirtyMinutes()
+            ->withoutOverlapping()
+        ;
+
         if ((bool) config('backup.enabled', true)) {
             $schedule->command('maintenance:db-backup')
                 ->dailyAt((string) config('backup.schedule_time', '03:30'))

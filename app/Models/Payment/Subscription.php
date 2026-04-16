@@ -74,6 +74,35 @@ class Subscription extends Model
         'cancelled_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        static::saving(function (self $subscription): void {
+            $expiresAt = $subscription->expires_at;
+            if (is_string($expiresAt) && '' !== trim($expiresAt)) {
+                try {
+                    $expiresAt = Carbon::parse($expiresAt);
+                } catch (\Throwable) {
+                    $expiresAt = null;
+                }
+            }
+
+            if (self::STATUS_ACTIVE !== (string) $subscription->status) {
+                return;
+            }
+
+            if (null !== $expiresAt && $expiresAt->isFuture()) {
+                return;
+            }
+
+            $subscription->status = self::STATUS_EXPIRED;
+
+            $stripeStatus = strtolower((string) ($subscription->stripe_status ?? ''));
+            if ('' === $stripeStatus || in_array($stripeStatus, ['active', 'trialing', 'past_due', 'unpaid'], true)) {
+                $subscription->stripe_status = self::STATUS_EXPIRED;
+            }
+        });
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
