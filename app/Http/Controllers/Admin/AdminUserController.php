@@ -261,9 +261,34 @@ class AdminUserController extends Controller
                     ;
                 }),
             'premium_expired' => $query
-                ->where('has_premium', true)
-                ->whereNotNull('premium_expires_at')
-                ->where('premium_expires_at', '<=', $now)
+                // "Premium expirado" is historical access that is no longer active.
+                // It must include users normalized with has_premium=false but with expired premium history.
+                ->where(function ($premiumHistoryQuery) use ($now): void {
+                    $premiumHistoryQuery
+                        ->where(function ($premiumExpiresQuery) use ($now): void {
+                            $premiumExpiresQuery
+                                ->whereNotNull('premium_expires_at')
+                                ->where('premium_expires_at', '<=', $now)
+                            ;
+                        })
+                        ->orWhereHas('subscriptions', function ($subscriptionHistoryQuery) use ($now): void {
+                            $subscriptionHistoryQuery
+                                ->whereIn('status', [
+                                    Subscription::STATUS_EXPIRED,
+                                    Subscription::STATUS_CANCELLED,
+                                ])
+                                ->whereNotNull('expires_at')
+                                ->where('expires_at', '<=', $now)
+                            ;
+                        })
+                    ;
+                })
+                ->where(function ($notCurrentlyActiveByDateQuery) use ($now): void {
+                    $notCurrentlyActiveByDateQuery
+                        ->whereNull('premium_expires_at')
+                        ->orWhere('premium_expires_at', '<=', $now)
+                    ;
+                })
                 ->where(function ($studentWindowQuery) use ($now): void {
                     $studentWindowQuery
                         ->where('student_verified', false)
