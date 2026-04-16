@@ -350,11 +350,7 @@ class AdminUserController extends Controller
         $accountStatus = $this->getAccountStatus($user);
         $isActive = null !== $user->email_verified_at && 'Removido' !== $accountStatus;
         $accessState = $this->resolveAccessState($user);
-        $timeOnPlatform = $this->getUserTimeStatus(
-            $user,
-            $accessState['has_premium'],
-            $accessState['premium_expires_at']
-        );
+        $timeOnPlatform = $this->getUserTimeStatus($user);
         $displayName = $user->company_name ?: $user->name;
         $profileImage = $user->avatar ?: $user->avatar_url;
 
@@ -457,35 +453,33 @@ class AdminUserController extends Controller
     /**
      * Get user time status string.
      */
-    private function getUserTimeStatus(
-        User $user,
-        bool $hasPremium,
-        ?Carbon $premiumExpiresAt
-    ): string
+    private function getUserTimeStatus(User $user): string
     {
-        if ($hasPremium && null === $premiumExpiresAt) {
-            // Null expiration is treated as missing data, never as unlimited premium.
-            return 'Sem data';
+        $createdAt = $this->parseToCarbon($user->created_at) ?? now();
+        $now = now();
+
+        if ($createdAt->gt($now)) {
+            return '0 dias';
         }
 
-        if ($hasPremium && $premiumExpiresAt) {
-            $months = $premiumExpiresAt->diffInMonths(now());
-
-            return $months.' meses';
+        $days = $createdAt->diffInDays($now);
+        if ($days < 30) {
+            return $days.' '.(1 === $days ? 'dia' : 'dias');
         }
 
-        if ($user->free_trial_expires_at) {
-            $trialExpiresAt = $user->free_trial_expires_at instanceof Carbon
-                ? $user->free_trial_expires_at
-                : Carbon::parse($user->free_trial_expires_at);
-            $months = $trialExpiresAt->diffInMonths(now());
-
-            return $months.' meses';
+        $months = $createdAt->diffInMonths($now);
+        if ($months < 12) {
+            return $months.' '.(1 === $months ? 'mes' : 'meses');
         }
 
-        $months = $user->created_at->diffInMonths(now());
+        $years = intdiv($months, 12);
+        $remainingMonths = $months % 12;
 
-        return $months.' meses';
+        if (0 === $remainingMonths) {
+            return $years.' '.(1 === $years ? 'ano' : 'anos');
+        }
+
+        return $years.' '.(1 === $years ? 'ano' : 'anos').' e '.$remainingMonths.' '.(1 === $remainingMonths ? 'mes' : 'meses');
     }
 
     /**
