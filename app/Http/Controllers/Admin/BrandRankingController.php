@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Log;
 
 use App\Http\Controllers\Base\Controller;
 use App\Models\User\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 
 class BrandRankingController extends Controller
@@ -62,9 +63,7 @@ class BrandRankingController extends Controller
                     },
                 ])
                 ->withSum(['transactions as total_investment' => function ($query): void {
-                    $query->whereIn('status', ['paid', 'succeeded'])
-                        ->where('payment_method', '!=', 'platform_escrow_legacy')
-                    ;
+                    $this->applyCampaignInvestmentFilters($query);
                 }], 'amount')
                 ->get()
                 ->filter(fn ($brand) => $brand->total_campaigns > 0 || $brand->total_contracts > 0 || ((float) ($brand->total_investment ?? 0)) > 0)
@@ -201,12 +200,10 @@ class BrandRankingController extends Controller
             $brands = User::where('role', 'brand')
                 ->withCount(['campaigns as total_campaigns'])
                 ->withSum(['transactions as total_investment' => function ($query): void {
-                    $query->whereIn('status', ['paid', 'succeeded'])
-                        ->where('payment_method', '!=', 'platform_escrow_legacy')
-                    ;
+                    $this->applyCampaignInvestmentFilters($query);
                 }], 'amount')
                 ->get()
-                ->filter(fn ($brand) => (float) ($brand->total_investment ?? 0) > 0)
+                ->filter(fn ($brand) => (float) ($brand->total_investment ?? 0) > 0 && (int) ($brand->total_campaigns ?? 0) > 0)
                 ->sortByDesc('total_investment')
                 ->take(10)
                 ->values()
@@ -236,6 +233,23 @@ class BrandRankingController extends Controller
 
             return [];
         }
+    }
+
+    private function applyCampaignInvestmentFilters(Builder $query): void
+    {
+        $query
+            ->whereIn('status', ['paid', 'succeeded'])
+            ->where('payment_method', '!=', 'platform_escrow_legacy')
+            ->whereNotNull('contract_id')
+            ->whereHas('contract', function (Builder $contractQuery): void {
+                $contractQuery
+                    ->whereColumn('contracts.brand_id', 'transactions.user_id')
+                    ->whereHas('offer', function (Builder $offerQuery): void {
+                        $offerQuery->whereNotNull('campaign_id');
+                    })
+                ;
+            })
+        ;
     }
 
     private function calculateRankingScore(int $campaigns, int $contracts, float $payments): float
