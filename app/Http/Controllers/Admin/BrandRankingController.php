@@ -62,7 +62,9 @@ class BrandRankingController extends Controller
                     },
                 ])
                 ->withSum(['transactions as total_investment' => function ($query): void {
-                    $query->whereIn('status', ['paid', 'succeeded']);
+                    $query->whereIn('status', ['paid', 'succeeded'])
+                        ->where('payment_method', '!=', 'platform_escrow_legacy')
+                    ;
                 }], 'amount')
                 ->get()
                 ->filter(fn ($brand) => $brand->total_campaigns > 0 || $brand->total_contracts > 0 || ((float) ($brand->total_investment ?? 0)) > 0)
@@ -198,7 +200,9 @@ class BrandRankingController extends Controller
         try {
             $brands = User::where('role', 'brand')
                 ->withSum(['transactions as total_investment' => function ($query): void {
-                    $query->whereIn('status', ['paid', 'succeeded']);
+                    $query->whereIn('status', ['paid', 'succeeded'])
+                        ->where('payment_method', '!=', 'platform_escrow_legacy')
+                    ;
                 }], 'amount')
                 ->get()
                 ->filter(fn ($brand) => (float) ($brand->total_investment ?? 0) > 0)
