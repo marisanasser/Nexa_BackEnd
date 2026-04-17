@@ -155,7 +155,7 @@ class Contract extends Model
 
     public function payment(): HasOne
     {
-        return $this->hasOne(JobPayment::class);
+        return $this->hasOne(JobPayment::class)->latestOfMany();
     }
 
     public function milestones(): HasMany
@@ -869,7 +869,10 @@ class Contract extends Model
         $creatorIdsToRecalculate = [];
 
         foreach ($completedContracts as $contract) {
-            $payment = JobPayment::where('contract_id', $contract->id)->first();
+            $payment = JobPayment::where('contract_id', $contract->id)
+                ->orderByDesc('id')
+                ->first()
+            ;
 
             if (!$payment) {
                 Log::warning('No payment found for completed contract', [

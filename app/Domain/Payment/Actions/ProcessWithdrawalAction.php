@@ -6,7 +6,6 @@ namespace App\Domain\Payment\Actions;
 
 use App\Domain\Notification\Services\PaymentNotificationService;
 use App\Domain\Payment\DTOs\WithdrawalProcessResult;
-use App\Models\Payment\CreatorBalance;
 use App\Models\Payment\Transaction;
 use App\Models\Payment\Withdrawal;
 use Exception;
@@ -42,62 +41,67 @@ class ProcessWithdrawalAction
         }
 
         try {
-            return DB::transaction(function () use ($withdrawal, $transactionId) {
-                // Mark as processing
-                $withdrawal->update(['status' => 'processing']);
+            $transaction = DB::transaction(function () use ($withdrawal, $transactionId): Transaction {
+                if (!$withdrawal->process()) {
+                    $withdrawal->refresh();
+                    $message = is_string($withdrawal->failure_reason) && '' !== trim($withdrawal->failure_reason)
+                        ? $withdrawal->failure_reason
+                        : 'Failed to process withdrawal'
+                    ;
 
-                // Deduct from creator balance
-                $balance = CreatorBalance::where('user_id', $withdrawal->creator_id)->first();
-
-                if (!$balance || $balance->available_balance < $withdrawal->amount) {
-                    throw new Exception('Insufficient available balance for withdrawal');
+                    throw new Exception($message);
                 }
 
-                $balance->update([
-                    'available_balance' => $balance->available_balance - $withdrawal->amount,
-                ]);
+                if ($transactionId) {
+                    $withdrawal->update(['transaction_id' => $transactionId]);
+                }
 
-                // Create transaction record
-                $transaction = Transaction::create([
+                $withdrawal->refresh();
+
+                $transaction = Transaction::query()
+                    ->where('user_id', $withdrawal->creator_id)
+                    ->where(function ($query) use ($withdrawal): void {
+                        $query->whereJsonContains('payment_data->withdrawal_id', (string) $withdrawal->id)
+                            ->orWhereJsonContains('payment_data->withdrawal_id', $withdrawal->id)
+                            ->orWhereJsonContains('metadata->withdrawal_id', (string) $withdrawal->id)
+                            ->orWhereJsonContains('metadata->withdrawal_id', $withdrawal->id)
+                        ;
+                    })
+                    ->latest('id')
+                    ->first()
+                ;
+
+                if ($transaction instanceof Transaction) {
+                    return $transaction;
+                }
+
+                return Transaction::create([
                     'user_id' => $withdrawal->creator_id,
-                    'type' => 'withdrawal',
-                    'amount' => -$withdrawal->amount,
-                    'status' => 'completed',
-                    'description' => 'Saque processado via ' . $withdrawal->withdrawal_method_label,
-                    'reference_type' => Withdrawal::class,
-                    'reference_id' => $withdrawal->id,
-                ]);
-
-                // Mark withdrawal as completed
-                $withdrawal->update([
-                    'status' => 'completed',
-                    'transaction_id' => $transactionId ?? $transaction->id,
-                    'processed_at' => now(),
-                ]);
-
-                // Send notification
-                try {
-                    PaymentNotificationService::notifyUserOfWithdrawalStatus(
-                        $withdrawal,
-                        'completed'
-                    );
-                } catch (Exception $notificationError) {
-                    Log::warning('Failed to send withdrawal completion notification', [
-                        'withdrawal_id' => $withdrawal->id,
-                        'error' => $notificationError->getMessage(),
-                    ]);
-                }
-
-                Log::info('Withdrawal processed successfully', [
-                    'withdrawal_id' => $withdrawal->id,
-                    'creator_id' => $withdrawal->creator_id,
+                    'status' => 'paid',
                     'amount' => $withdrawal->amount,
-                    'net_amount' => $withdrawal->net_amount,
-                    'method' => $withdrawal->withdrawal_method,
+                    'payment_method' => 'withdrawal',
+                    'payment_data' => [
+                        'withdrawal_id' => $withdrawal->id,
+                        'withdrawal_method' => $withdrawal->withdrawal_method,
+                        'transaction_id' => $withdrawal->transaction_id,
+                    ],
+                    'metadata' => [
+                        'withdrawal_id' => $withdrawal->id,
+                        'source' => 'process_withdrawal_action_fallback',
+                    ],
+                    'paid_at' => $withdrawal->processed_at ?? now(),
                 ]);
-
-                return WithdrawalProcessResult::success($withdrawal, $transaction);
             });
+
+            Log::info('Withdrawal processed successfully via action', [
+                'withdrawal_id' => $withdrawal->id,
+                'creator_id' => $withdrawal->creator_id,
+                'amount' => $withdrawal->amount,
+                'net_amount' => $withdrawal->net_amount,
+                'method' => $withdrawal->withdrawal_method,
+            ]);
+
+            return WithdrawalProcessResult::success($withdrawal->fresh(), $transaction);
         } catch (Exception $e) {
             Log::error('Withdrawal processing failed', [
                 'withdrawal_id' => $withdrawal->id,
@@ -133,6 +137,6 @@ class ProcessWithdrawalAction
      */
     private function canProcess(Withdrawal $withdrawal): bool
     {
-        return in_array($withdrawal->status, ['pending', 'approved']);
+        return in_array($withdrawal->status, ['pending'], true);
     }
 }

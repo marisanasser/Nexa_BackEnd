@@ -71,6 +71,7 @@ class Transaction extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'payment_data' => 'array',
+        'metadata' => 'array',
         'paid_at' => 'datetime',
         'expires_at' => 'datetime',
     ];

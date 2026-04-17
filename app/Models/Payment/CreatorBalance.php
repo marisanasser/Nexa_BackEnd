@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models\Payment;
 
 use App\Models\Contract\Contract;
+use App\Models\Payment\CreatorBalanceAdjustment;
 use App\Models\User\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * CreatorBalance model for tracking creator earnings and withdrawals.
@@ -41,6 +43,7 @@ use Illuminate\Support\Facades\Log;
  * @property null|User               $creator
  * @property Collection|Withdrawal[] $withdrawals
  * @property Collection|JobPayment[] $payments
+ * @property Collection|CreatorBalanceAdjustment[] $adjustments
  */
 class CreatorBalance extends Model
 {
@@ -74,6 +77,11 @@ class CreatorBalance extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(JobPayment::class, 'creator_id', 'creator_id');
+    }
+
+    public function adjustments(): HasMany
+    {
+        return $this->hasMany(CreatorBalanceAdjustment::class, 'creator_id', 'creator_id');
     }
 
     public function formattedTotalBalance(): string
@@ -284,13 +292,39 @@ class CreatorBalance extends Model
             ->filter(fn(JobPayment $payment) => 'pending' === $payment->status)
             ->filter(fn(JobPayment $payment) => $this->hasSettledFundingReference($payment));
 
-        $totalEarned = $completedPayments->sum('creator_amount');
+        $activeAdjustments = Schema::hasTable('creator_balance_adjustments')
+            ? $this->adjustments()
+                ->where('is_active', true)
+                ->get()
+            : collect()
+        ;
 
-        $withdrawals = $this->withdrawals()
-            ->whereIn('status', ['completed', 'processing'])
+        $manualEarnedAdjustments = (float) $activeAdjustments->sum(
+            fn(CreatorBalanceAdjustment $adjustment) => 'debit' === $adjustment->kind
+                ? -((float) $adjustment->amount)
+                : (float) $adjustment->amount
+        );
+
+        $manualAvailableAdjustments = (float) $activeAdjustments
+            ->filter(fn(CreatorBalanceAdjustment $adjustment) => true === $adjustment->affects_available)
+            ->sum(fn(CreatorBalanceAdjustment $adjustment) => 'debit' === $adjustment->kind
+                ? -((float) $adjustment->amount)
+                : (float) $adjustment->amount
+            )
+        ;
+
+        $totalEarned = $completedPayments->sum('creator_amount') + $manualEarnedAdjustments;
+
+        $completedWithdrawals = $this->withdrawals()
+            ->where('status', 'completed')
             ->get();
 
-        $totalWithdrawn = $withdrawals->sum('amount');
+        $reservedWithdrawals = $this->withdrawals()
+            ->whereIn('status', ['pending', 'processing'])
+            ->get();
+
+        $totalWithdrawn = $completedWithdrawals->sum('amount');
+        $reservedWithdrawalAmount = $reservedWithdrawals->sum('amount');
 
         $pendingBalance = $pendingPayments->sum('creator_amount');
 
@@ -298,6 +332,8 @@ class CreatorBalance extends Model
             ->filter(fn($payment) => $payment->contract
                 && 'payment_available' === $payment->contract->workflow_status)
             ->sum('creator_amount');
+
+        $availableFromCompleted += $manualAvailableAdjustments;
 
         $contractsWithAvailablePayment = Contract::where('creator_id', $this->creator_id)
             ->where('workflow_status', 'payment_available')
@@ -338,7 +374,9 @@ class CreatorBalance extends Model
             }
         }
 
-        $availableBalance = max(0, $availableFromCompleted - $totalWithdrawn);
+        // Available balance must subtract both completed withdrawals and funds reserved
+        // for pending/processing requests.
+        $availableBalance = max(0, $availableFromCompleted - $totalWithdrawn - $reservedWithdrawalAmount);
 
         $this->update([
             'total_earned' => $totalEarned,
@@ -356,6 +394,9 @@ class CreatorBalance extends Model
             'pending_balance' => $this->pending_balance,
             'available_balance' => $this->available_balance,
             'available_from_completed' => $availableFromCompleted,
+            'manual_earned_adjustments' => $manualEarnedAdjustments,
+            'manual_available_adjustments' => $manualAvailableAdjustments,
+            'reserved_withdrawals_amount' => $reservedWithdrawalAmount,
             'completed_payments_count' => $completedPayments->count(),
             'pending_payments_count' => $pendingPayments->count(),
         ]);
@@ -377,6 +418,25 @@ class CreatorBalance extends Model
 
         if (!in_array((string) $transaction->status, ['paid', 'succeeded'], true)) {
             return false;
+        }
+
+        $transactionMetadata = is_array($transaction->metadata) ? $transaction->metadata : [];
+        $paymentMethod = (string) ($transaction->payment_method ?? '');
+
+        // Legacy settlement rows created during data normalization are considered
+        // financially settled for historical balance reconciliation.
+        if (
+            'platform_escrow_legacy' === $paymentMethod
+            && true === ($transactionMetadata['legacy_settlement_backfill'] ?? false)
+        ) {
+            return true;
+        }
+
+        if (
+            'platform_escrow' === $paymentMethod
+            && str_starts_with((string) ($transaction->stripe_payment_intent_id ?? ''), 'contract_completed_')
+        ) {
+            return true;
         }
 
         $paymentIntentId = (string) ($transaction->stripe_payment_intent_id ?? '');

@@ -107,6 +107,7 @@ class ContractPaymentService
     public function releasePaymentToCreator(Contract $contract): void
     {
         $jobPayment = JobPayment::where('contract_id', $contract->id)
+            ->orderByDesc('id')
             ->first()
         ;
 
@@ -180,6 +181,7 @@ class ContractPaymentService
     {
         $jobPayment = JobPayment::where('contract_id', $contract->id)
             ->whereIn('status', ['pending', 'processing', 'completed'])
+            ->orderByDesc('id')
             ->first()
         ;
 
@@ -432,7 +434,10 @@ class ContractPaymentService
             }
             
             // Return existing job payment if transaction exists
-            $jobPayment = JobPayment::where('contract_id', $contract->id)->first();
+            $jobPayment = JobPayment::where('contract_id', $contract->id)
+                ->orderByDesc('id')
+                ->first()
+            ;
             if ($jobPayment) {
                 return $jobPayment;
             }

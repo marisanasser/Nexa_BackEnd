@@ -10,6 +10,7 @@ use App\Models\Payment\JobPayment;
 use App\Models\Payment\Withdrawal;
 use Exception;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
@@ -21,6 +22,8 @@ class AdminPayoutService
     public function getMetrics(): array
     {
         try {
+            $latestCompletedPaymentIds = $this->latestCompletedJobPaymentIds();
+
             return [
                 'total_pending_withdrawals' => Withdrawal::where('status', 'pending')->count(),
                 'total_processing_withdrawals' => Withdrawal::where('status', 'processing')->count(),
@@ -34,8 +37,9 @@ class AdminPayoutService
                     ->where('workflow_status', 'payment_available')->count(),
                 'contracts_payment_withdrawn' => Contract::where('status', 'completed')
                     ->where('workflow_status', 'payment_withdrawn')->count(),
-                'total_platform_fees' => JobPayment::where('status', 'completed')->sum('platform_fee'),
-                'total_creator_payments' => JobPayment::where('status', 'completed')->sum('creator_amount'),
+                'completed_job_payments_unique' => $latestCompletedPaymentIds->count(),
+                'total_platform_fees' => JobPayment::whereIn('id', $latestCompletedPaymentIds)->sum('platform_fee'),
+                'total_creator_payments' => JobPayment::whereIn('id', $latestCompletedPaymentIds)->sum('creator_amount'),
             ];
         } catch (Exception $e) {
             Log::error('Error fetching payout metrics', ['error' => $e->getMessage()]);
@@ -405,5 +409,21 @@ class AdminPayoutService
         }
 
         return 'failed';
+    }
+
+    /**
+     * Return the canonical completed payment rows (latest by contract).
+     *
+     * Historical duplicates can exist due legacy idempotency bugs, so all
+     * aggregates should operate on latest completed row per contract.
+     */
+    private function latestCompletedJobPaymentIds(): Collection
+    {
+        return JobPayment::query()
+            ->where('status', 'completed')
+            ->selectRaw('MAX(id) as id')
+            ->groupBy('contract_id')
+            ->pluck('id')
+        ;
     }
 }
