@@ -273,12 +273,18 @@ class AdminUserController extends Controller
                         })
                         ->orWhereHas('subscriptions', function ($subscriptionHistoryQuery) use ($now): void {
                             $subscriptionHistoryQuery
-                                ->whereIn('status', [
-                                    Subscription::STATUS_EXPIRED,
-                                    Subscription::STATUS_CANCELLED,
-                                ])
                                 ->whereNotNull('expires_at')
                                 ->where('expires_at', '<=', $now)
+                                ->where(function ($subscriptionStatusQuery): void {
+                                    $subscriptionStatusQuery
+                                        ->whereIn('status', [
+                                            Subscription::STATUS_EXPIRED,
+                                            Subscription::STATUS_CANCELLED,
+                                        ])
+                                        // Defensive guard for stale records not yet normalized.
+                                        ->orWhere('status', Subscription::STATUS_ACTIVE)
+                                    ;
+                                })
                             ;
                         })
                     ;
@@ -347,6 +353,9 @@ class AdminUserController extends Controller
     private function transformUserData(User $user): array
     {
         $isCreator = 'creator' === $user->role;
+        $isBrand = 'brand' === $user->role;
+        $isStudent = 'student' === $user->role;
+        $isAdmin = 'admin' === $user->role;
         $accountStatus = $this->getAccountStatus($user);
         $isActive = null !== $user->email_verified_at && 'Removido' !== $accountStatus;
         $accessState = $this->resolveAccessState($user);
@@ -401,22 +410,66 @@ class AdminUserController extends Controller
             ];
         }
 
-        // Brand user
-        $status = 'Marca';
-        $statusColor = 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-200';
+        if ($isBrand) {
+            $status = 'Marca';
+            $statusColor = 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-200';
 
-        if ($accessState['has_premium']) {
-            $status = 'Pagante';
-            $statusColor = 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-200';
+            if ($accessState['has_premium']) {
+                $status = 'Pagante';
+                $statusColor = 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-200';
+            }
+
+            return [
+                'id' => $user->id,
+                'name' => $displayName,
+                'role' => $user->role,
+                'company' => $user->company_name ?: $user->name,
+                'brandName' => $user->company_name ?: $user->name,
+                'company_name' => $user->company_name ?: $user->name,
+                'email' => $user->email,
+                'whatsapp' => $user->whatsapp ?: $user->whatsapp_number,
+                'whatsapp_number' => $user->whatsapp_number ?: $user->whatsapp,
+                'profile_image' => $profileImage,
+                'is_active' => $isActive,
+                'last_login_at' => null,
+                'status' => $status,
+                'statusColor' => $statusColor,
+                'time' => $timeOnPlatform,
+                'time_on_platform' => $timeOnPlatform,
+                'campaigns' => $user->created_campaigns,
+                'accountStatus' => $accountStatus,
+                'account_status' => $accountStatus,
+                'created_at' => $user->created_at,
+                'email_verified_at' => $user->email_verified_at,
+                'total_campaigns' => (int) ($user->created_campaigns ?? 0),
+                'total_applications' => (int) ($user->applied_campaigns ?? 0),
+                'has_premium' => $accessState['has_premium'],
+                'student_verified' => $accessState['student_verified'],
+                'is_premium_active' => $accessState['is_premium_active'],
+                'is_student_active' => $accessState['is_student_active'],
+                'is_trial_active' => $accessState['is_trial_active'],
+                'is_student_initial_active' => $accessState['is_student_initial_active'],
+                'premium_expires_at' => $accessState['premium_expires_at'],
+                'free_trial_expires_at' => $accessState['free_trial_expires_at'],
+                'student_initial_expires_at' => $accessState['student_initial_expires_at'],
+                'student_expires_at' => $accessState['student_expires_at'],
+                'effective_access_source' => $accessState['effective_access_source'],
+                'effective_access_source_normalized' => $accessState['effective_access_source_normalized'],
+                'effective_access_expires_at' => $accessState['effective_access_expires_at'],
+            ];
         }
+
+        $status = $isStudent ? 'Estudante' : ($isAdmin ? 'Admin' : 'Usuário');
+        $statusColor = $isStudent
+            ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-200'
+            : ($isAdmin
+                ? 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-200'
+                : 'bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-200');
 
         return [
             'id' => $user->id,
             'name' => $displayName,
             'role' => $user->role,
-            'company' => $user->company_name ?: $user->name,
-            'brandName' => $user->company_name ?: $user->name,
-            'company_name' => $user->company_name ?: $user->name,
             'email' => $user->email,
             'whatsapp' => $user->whatsapp ?: $user->whatsapp_number,
             'whatsapp_number' => $user->whatsapp_number ?: $user->whatsapp,
@@ -427,13 +480,14 @@ class AdminUserController extends Controller
             'statusColor' => $statusColor,
             'time' => $timeOnPlatform,
             'time_on_platform' => $timeOnPlatform,
-            'campaigns' => $user->created_campaigns,
+            'campaigns' => ($user->applied_campaigns ?? 0).' aplicadas / '.($user->approved_campaigns ?? 0).' aprovadas',
             'accountStatus' => $accountStatus,
             'account_status' => $accountStatus,
             'created_at' => $user->created_at,
             'email_verified_at' => $user->email_verified_at,
             'total_campaigns' => (int) ($user->created_campaigns ?? 0),
             'total_applications' => (int) ($user->applied_campaigns ?? 0),
+            'company_name' => null,
             'has_premium' => $accessState['has_premium'],
             'student_verified' => $accessState['student_verified'],
             'is_premium_active' => $accessState['is_premium_active'],
@@ -455,7 +509,11 @@ class AdminUserController extends Controller
      */
     private function getUserTimeStatus(User $user): string
     {
-        $createdAt = $this->parseToCarbon($user->created_at) ?? now();
+        $createdAt = $this->parseToCarbon($user->created_at);
+        if (!$createdAt) {
+            return '-';
+        }
+
         $now = now();
 
         if ($createdAt->gt($now)) {
@@ -467,7 +525,7 @@ class AdminUserController extends Controller
             return $days.' '.(1 === $days ? 'dia' : 'dias');
         }
 
-        $months = $createdAt->diffInMonths($now);
+        $months = intdiv($days, 30);
         if ($months < 12) {
             return $months.' '.(1 === $months ? 'mes' : 'meses');
         }
