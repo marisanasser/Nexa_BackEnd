@@ -199,6 +199,7 @@ class BrandRankingController extends Controller
     {
         try {
             $brands = User::where('role', 'brand')
+                ->withCount(['campaigns as total_campaigns'])
                 ->withSum(['transactions as total_investment' => function ($query): void {
                     $query->whereIn('status', ['paid', 'succeeded'])
                         ->where('payment_method', '!=', 'platform_escrow_legacy')
@@ -215,6 +216,7 @@ class BrandRankingController extends Controller
                     'name' => $brand->name,
                     'company_name' => $brand->company_name,
                     'display_name' => $brand->company_name ?: $brand->name,
+                    'total_campaigns' => $brand->total_campaigns,
                     'total_investment' => (float) ($brand->total_investment ?? 0),
                     // Backward compatibility with existing frontend parser.
                     'total_paid' => (float) ($brand->total_investment ?? 0),
