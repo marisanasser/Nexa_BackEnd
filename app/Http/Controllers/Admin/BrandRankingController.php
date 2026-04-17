@@ -61,11 +61,11 @@ class BrandRankingController extends Controller
                         $query->where('status', 'completed');
                     },
                 ])
-                ->withSum(['brandPayments as total_paid' => function ($query): void {
-                    $query->where('status', 'completed');
-                }], 'total_amount')
+                ->withSum(['transactions as total_investment' => function ($query): void {
+                    $query->whereIn('status', ['paid', 'succeeded']);
+                }], 'amount')
                 ->get()
-                ->filter(fn ($brand) => $brand->total_campaigns > 0 || $brand->total_contracts > 0 || ($brand->total_paid ?? 0) > 0)
+                ->filter(fn ($brand) => $brand->total_campaigns > 0 || $brand->total_contracts > 0 || ((float) ($brand->total_investment ?? 0)) > 0)
                 ->map(fn ($brand, $index) => [
                     'rank' => $index + 1,
                     'id' => $brand->id,
@@ -74,15 +74,17 @@ class BrandRankingController extends Controller
                     'display_name' => $brand->company_name ?: $brand->name,
                     'total_campaigns' => $brand->total_campaigns,
                     'total_contracts' => $brand->total_contracts,
-                    'total_paid' => (float) ($brand->total_paid ?? 0),
-                    'total_paid_formatted' => 'R$ '.number_format((float) ($brand->total_paid ?? 0), 2, ',', '.'),
+                    'total_investment' => (float) ($brand->total_investment ?? 0),
+                    // Backward compatibility with existing frontend parser.
+                    'total_paid' => (float) ($brand->total_investment ?? 0),
+                    'total_paid_formatted' => 'R$ '.number_format((float) ($brand->total_investment ?? 0), 2, ',', '.'),
                     'avatar_url' => $brand->avatar_url,
                     'has_premium' => $brand->has_premium,
                     'created_at' => $brand->created_at,
                     'score' => $this->calculateRankingScore(
                         (int) $brand->total_campaigns,
                         (int) $brand->total_contracts,
-                        (float) ($brand->total_paid ?? 0)
+                        (float) ($brand->total_investment ?? 0)
                     ),
                 ])
                 ->sortByDesc('score')
@@ -128,6 +130,7 @@ class BrandRankingController extends Controller
                 ->filter(fn ($brand) => $brand->total_campaigns > 0)
                 ->sortByDesc('total_campaigns')
                 ->take(10)
+                ->values()
                 ->map(fn ($brand, $index) => [
                     'rank' => $index + 1,
                     'id' => $brand->id,
@@ -165,6 +168,7 @@ class BrandRankingController extends Controller
                 ->filter(fn ($brand) => $brand->total_contracts > 0)
                 ->sortByDesc('total_contracts')
                 ->take(10)
+                ->values()
                 ->map(fn ($brand, $index) => [
                     'rank' => $index + 1,
                     'id' => $brand->id,
@@ -193,21 +197,24 @@ class BrandRankingController extends Controller
     {
         try {
             $brands = User::where('role', 'brand')
-                ->withSum(['brandPayments as total_paid' => function ($query): void {
-                    $query->where('status', 'completed');
-                }], 'total_amount')
+                ->withSum(['transactions as total_investment' => function ($query): void {
+                    $query->whereIn('status', ['paid', 'succeeded']);
+                }], 'amount')
                 ->get()
-                ->filter(fn ($brand) => $brand->total_paid > 0)
-                ->sortByDesc('total_paid')
+                ->filter(fn ($brand) => (float) ($brand->total_investment ?? 0) > 0)
+                ->sortByDesc('total_investment')
                 ->take(10)
+                ->values()
                 ->map(fn ($brand, $index) => [
                     'rank' => $index + 1,
                     'id' => $brand->id,
                     'name' => $brand->name,
                     'company_name' => $brand->company_name,
                     'display_name' => $brand->company_name ?: $brand->name,
-                    'total_paid' => (float) $brand->total_paid,
-                    'total_paid_formatted' => 'R$ '.number_format((float) $brand->total_paid, 2, ',', '.'),
+                    'total_investment' => (float) ($brand->total_investment ?? 0),
+                    // Backward compatibility with existing frontend parser.
+                    'total_paid' => (float) ($brand->total_investment ?? 0),
+                    'total_paid_formatted' => 'R$ '.number_format((float) ($brand->total_investment ?? 0), 2, ',', '.'),
                     'avatar_url' => $brand->avatar_url,
                     'has_premium' => $brand->has_premium,
                     'created_at' => $brand->created_at,
