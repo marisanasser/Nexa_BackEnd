@@ -48,9 +48,6 @@ class CampaignController extends Controller
             $user = $this->getAuthenticatedUser();
             assert($user instanceof User);
 
-            // HOTFIX: Ensure all approved campaigns are active
-            Campaign::where('status', 'approved')->where('is_active', false)->update(['is_active' => true]);
-
             $query = Campaign::with(['brand', 'bids'])->withCount('applications');
 
             if ($user->isBrand() || $user->isAdmin()) {
@@ -389,7 +386,7 @@ class CampaignController extends Controller
                     ], 403);
                 }
 
-                $query->approved();
+                $query->approved()->active();
             } elseif ($user->isBrand()) {
                 $query->where('brand_id', $user->id)
                     ->where('status', $status)
@@ -848,9 +845,6 @@ class CampaignController extends Controller
             $user = $this->getAuthenticatedUser();
             assert($user instanceof User);
 
-            // HOTFIX: Ensure all approved campaigns are active (Consistency with index method)
-            Campaign::where('status', 'approved')->where('is_active', false)->update(['is_active' => true]);
-
             $query = Campaign::query();
 
             if ($user->isCreator()) {
@@ -1076,6 +1070,132 @@ class CampaignController extends Controller
                 'success' => false,
                 'error' => 'Failed to archive campaign',
                 'message' => 'An error occurred while archiving the campaign',
+            ], 500);
+        }
+    }
+
+    public function close(Campaign $campaign): JsonResponse
+    {
+        try {
+            $user = $this->getAuthenticatedUser();
+            assert($user instanceof User);
+
+            if (!$this->canManageCampaign($user, $campaign)) {
+                return response()->json(['error' => 'Unauthorized to close this campaign'], 403);
+            }
+
+            if (!$campaign->isApproved()) {
+                return response()->json(['error' => 'Only approved campaigns can be closed'], 422);
+            }
+
+            if (!$campaign->is_active) {
+                return response()->json(['error' => 'Campaign is already closed'], 422);
+            }
+
+            $campaign->update([
+                'is_active' => false,
+            ]);
+
+            try {
+                app(CampaignAuditService::class)->log(
+                    $campaign,
+                    'campaign_closed_by_brand',
+                    [
+                        'closed_by' => $user->id,
+                        'closed_by_name' => $user->name,
+                    ]
+                );
+            } catch (Exception $auditException) {
+                Log::warning('Failed to create campaign close audit log', [
+                    'campaign_id' => $campaign->id,
+                    'error' => $auditException->getMessage(),
+                ]);
+            }
+
+            AdminNotificationService::notifyAdminOfSystemActivity('campaign_closed', [
+                'campaign_id' => $campaign->id,
+                'campaign_title' => $campaign->title,
+                'brand_name' => $campaign->brand->name,
+                'closed_by' => $user->name,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Campaign closed successfully',
+                'data' => $campaign->load(['brand']),
+            ]);
+        } catch (Exception $e) {
+            Log::error('Failed to close campaign: ' . $e->getMessage(), [
+                'campaign_id' => $campaign->id ?? null,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to close campaign',
+                'message' => 'An error occurred while closing the campaign',
+            ], 500);
+        }
+    }
+
+    public function reopen(Campaign $campaign): JsonResponse
+    {
+        try {
+            $user = $this->getAuthenticatedUser();
+            assert($user instanceof User);
+
+            if (!$this->canManageCampaign($user, $campaign)) {
+                return response()->json(['error' => 'Unauthorized to reopen this campaign'], 403);
+            }
+
+            if (!$campaign->isApproved()) {
+                return response()->json(['error' => 'Only approved campaigns can be reopened'], 422);
+            }
+
+            if ($campaign->is_active) {
+                return response()->json(['error' => 'Campaign is already active'], 422);
+            }
+
+            $campaign->update([
+                'is_active' => true,
+            ]);
+
+            try {
+                app(CampaignAuditService::class)->log(
+                    $campaign,
+                    'campaign_reopened_by_brand',
+                    [
+                        'reopened_by' => $user->id,
+                        'reopened_by_name' => $user->name,
+                    ]
+                );
+            } catch (Exception $auditException) {
+                Log::warning('Failed to create campaign reopen audit log', [
+                    'campaign_id' => $campaign->id,
+                    'error' => $auditException->getMessage(),
+                ]);
+            }
+
+            AdminNotificationService::notifyAdminOfSystemActivity('campaign_reopened', [
+                'campaign_id' => $campaign->id,
+                'campaign_title' => $campaign->title,
+                'brand_name' => $campaign->brand->name,
+                'reopened_by' => $user->name,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Campaign reopened successfully',
+                'data' => $campaign->load(['brand']),
+            ]);
+        } catch (Exception $e) {
+            Log::error('Failed to reopen campaign: ' . $e->getMessage(), [
+                'campaign_id' => $campaign->id ?? null,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to reopen campaign',
+                'message' => 'An error occurred while reopening the campaign',
             ], 500);
         }
     }

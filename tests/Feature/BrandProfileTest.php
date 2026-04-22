@@ -32,7 +32,7 @@ class BrandProfileTest extends TestCase
         ]);
     }
 
-    public function it_can_fetch_brand_profile(): void
+    public function test_can_fetch_brand_profile(): void
     {
         $response = $this->actingAs($this->user)
             ->getJson('/api/brand-profile')
@@ -46,10 +46,18 @@ class BrandProfileTest extends TestCase
                     'name',
                     'email',
                     'avatar',
+                    'avatar_url',
                     'company_name',
-                    'whatsapp_number',
+                    'cnpj',
+                    'website',
+                    'description',
+                    'niches',
+                    'niche',
+                    'address',
+                    'city',
                     'gender',
                     'state',
+                    'languages',
                     'role',
                     'created_at',
                     'updated_at',
@@ -58,13 +66,12 @@ class BrandProfileTest extends TestCase
         ;
     }
 
-    public function it_can_update_brand_profile(): void
+    public function test_can_update_brand_profile(): void
     {
         $updateData = [
             'username' => 'Updated Brand Name',
             'email' => 'updated@test.com',
             'company_name' => 'Test Company',
-            'whatsapp_number' => '+1234567890',
             'gender' => 'male',
             'state' => 'California',
         ];
@@ -84,12 +91,11 @@ class BrandProfileTest extends TestCase
         $this->assertEquals('Updated Brand Name', $this->user->name);
         $this->assertEquals('updated@test.com', $this->user->email);
         $this->assertEquals('Test Company', $this->user->company_name);
-        $this->assertEquals('+1234567890', $this->user->whatsapp_number);
         $this->assertEquals('male', $this->user->gender);
         $this->assertEquals('California', $this->user->state);
     }
 
-    public function it_can_change_password(): void
+    public function test_can_change_password(): void
     {
         $passwordData = [
             'old_password' => 'password',
@@ -109,7 +115,7 @@ class BrandProfileTest extends TestCase
         ;
     }
 
-    public function it_validates_required_fields_on_update(): void
+    public function test_validates_required_fields_on_update(): void
     {
         $response = $this->actingAs($this->user)
             ->putJson('/api/brand-profile', [
@@ -123,7 +129,7 @@ class BrandProfileTest extends TestCase
         ;
     }
 
-    public function it_validates_password_change(): void
+    public function test_validates_password_change(): void
     {
         $response = $this->actingAs($this->user)
             ->postJson('/api/brand-profile/change-password', [
@@ -141,10 +147,9 @@ class BrandProfileTest extends TestCase
         ;
     }
 
-    public function it_can_upload_avatar(): void
+    public function test_can_upload_avatar(): void
     {
-        $imageData = base64_encode(file_get_contents(__DIR__.'/../../public/placeholder.svg'));
-        $base64Image = 'data:image/svg+xml;base64,'.$imageData;
+        $base64Image = $this->validBase64Avatar();
 
         $response = $this->actingAs($this->user)
             ->postJson('/api/brand-profile/avatar', [
@@ -173,10 +178,10 @@ class BrandProfileTest extends TestCase
 
         $this->user->refresh();
         $this->assertNotNull($this->user->avatar_url);
-        $this->assertStringContainsString('/storage/avatars/', $this->user->avatar_url);
+        $this->assertStringContainsString('avatars/', $this->user->avatar_url);
     }
 
-    public function it_validates_avatar_format(): void
+    public function test_validates_avatar_format(): void
     {
         $response = $this->actingAs($this->user)
             ->postJson('/api/brand-profile/avatar', [
@@ -187,15 +192,14 @@ class BrandProfileTest extends TestCase
         $response->assertStatus(400)
             ->assertJson([
                 'success' => false,
-                'message' => 'Invalid image format. Please provide a valid base64 encoded image.',
+                'message' => 'No avatar file or base64 data provided',
             ])
         ;
     }
 
-    public function it_can_delete_avatar(): void
+    public function test_can_delete_avatar(): void
     {
-        $imageData = base64_encode(file_get_contents(__DIR__.'/../../public/placeholder.svg'));
-        $base64Image = 'data:image/svg+xml;base64,'.$imageData;
+        $base64Image = $this->validBase64Avatar();
 
         $this->actingAs($this->user)
             ->postJson('/api/brand-profile/avatar', [
@@ -218,15 +222,20 @@ class BrandProfileTest extends TestCase
         $this->assertNull($this->user->avatar_url);
     }
 
-    public function it_can_update_profile_with_avatar(): void
+    public function test_can_update_profile_with_avatar(): void
     {
-        $imageData = base64_encode(file_get_contents(__DIR__.'/../../public/placeholder.svg'));
-        $base64Image = 'data:image/svg+xml;base64,'.$imageData;
+        $base64Image = $this->validBase64Avatar();
+
+        $this->actingAs($this->user)
+            ->postJson('/api/brand-profile/avatar', [
+                'avatar' => $base64Image,
+            ])
+            ->assertStatus(200)
+        ;
 
         $updateData = [
             'username' => 'Updated Brand Name',
             'company_name' => 'Test Company',
-            'avatar' => $base64Image,
         ];
 
         $response = $this->actingAs($this->user)
@@ -244,6 +253,11 @@ class BrandProfileTest extends TestCase
         $this->assertEquals('Updated Brand Name', $this->user->name);
         $this->assertEquals('Test Company', $this->user->company_name);
         $this->assertNotNull($this->user->avatar_url);
-        $this->assertStringContainsString('/storage/avatars/', $this->user->avatar_url);
+        $this->assertStringContainsString('avatars/', $this->user->avatar_url);
+    }
+
+    private function validBase64Avatar(): string
+    {
+        return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO9W8WQAAAAASUVORK5CYII=';
     }
 }

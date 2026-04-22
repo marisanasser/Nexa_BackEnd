@@ -121,6 +121,8 @@ Route::middleware(['auth:sanctum', 'user.status'])->group(function () {
         Route::patch('/{campaign}/approve', [CampaignController::class, 'approve']);
         Route::patch('/{campaign}/reject', [CampaignController::class, 'reject']);
         Route::patch('/{campaign}/archive', [CampaignController::class, 'archive']);
+        Route::patch('/{campaign}/close', [CampaignController::class, 'close']);
+        Route::patch('/{campaign}/reopen', [CampaignController::class, 'reopen']);
         Route::patch('/{campaign}/toggle-featured', [CampaignController::class, 'toggleFeatured']);
         Route::post('/{campaign}/toggle-active', [CampaignController::class, 'toggleActive']);
         Route::post('/{campaign}/toggle-favorite', [CampaignController::class, 'toggleFavorite']);
