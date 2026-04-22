@@ -612,11 +612,6 @@ class StripeBillingController extends Controller
 
     public function createSubscriptionFromCheckout(Request $request): JsonResponse
     {
-        Log::info('HHHHHHHHHHHHHHHHHHHHHHHHHHHH', [
-            'user_id' => auth()->id(),
-            'session_id' => $request->session_id,
-        ]);
-
         try {
             $user = $this->getAuthenticatedUser();
             if (!$user) {
@@ -654,6 +649,16 @@ class StripeBillingController extends Controller
 
             $existingSub = Subscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
             if ($existingSub) {
+                $existingSub->loadMissing('plan');
+                $purchasePayload = null;
+                if ($existingSub->plan) {
+                    $purchasePayload = [
+                        'value' => (float) $existingSub->amount_paid,
+                        'currency' => 'BRL',
+                        'content_name' => (string) $existingSub->plan->name,
+                    ];
+                }
+
                 Log::info('Subscription already exists', [
                     'subscription_id' => $existingSub->id,
                     'user_id' => $user->id,
@@ -663,6 +668,7 @@ class StripeBillingController extends Controller
                     'success' => true,
                     'message' => 'Subscription already exists',
                     'subscription_id' => $existingSub->id,
+                    'purchase' => $purchasePayload,
                 ]);
             }
 
@@ -835,6 +841,11 @@ class StripeBillingController extends Controller
                     'id' => $subscription->id,
                     'status' => $subscription->status,
                     'expires_at' => $subscription->expires_at?->format('Y-m-d H:i:s'),
+                ],
+                'purchase' => [
+                    'value' => (float) $plan->price,
+                    'currency' => 'BRL',
+                    'content_name' => (string) $plan->name,
                 ],
             ]);
         } catch (Exception $e) {

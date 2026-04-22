@@ -33,4 +33,11 @@ return [
         'publishable_key' => env('STRIPE_PUBLISHABLE_KEY', env('STRIPE_KEY')),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
+
+    'meta' => [
+        'pixel_id' => env('META_PIXEL_ID'),
+        'access_token' => env('META_CONVERSIONS_API_ACCESS_TOKEN'),
+        'test_event_code' => env('META_CONVERSIONS_TEST_EVENT_CODE'),
+        'api_version' => env('META_CONVERSIONS_API_VERSION', 'v22.0'),
+    ],
 ];
