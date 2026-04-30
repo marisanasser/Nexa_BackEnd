@@ -58,88 +58,22 @@ class PremiumAccessMiddleware
         }
 
         $currentPath = $request->path();
-        $method = $request->method();
 
         $premiumRequiredPaths = [
             'api/connections',
             'api/direct-chat',
+            'api/campaigns',
+            'api/applications',
+            'api/bids',
         ];
 
         $requiresPremium = false;
         foreach ($premiumRequiredPaths as $premiumPath) {
             if (str_starts_with($currentPath, $premiumPath)) {
-                if ('GET' === $method) {
-                    Log::info('PremiumAccessMiddleware: Allowing GET request without premium', [
-                        'path' => $currentPath,
-                        'method' => $method,
-                        'userId' => $user->id,
-                    ]);
-
-                    return $next($request);
-                }
                 $requiresPremium = true;
 
                 break;
             }
-        }
-
-        if (str_starts_with($currentPath, 'api/campaigns')) {
-            if ('GET' === $method) {
-                Log::info('PremiumAccessMiddleware: Allowing campaign viewing without premium', [
-                    'path' => $currentPath,
-                    'method' => $method,
-                    'userId' => $user->id,
-                ]);
-
-                return $next($request);
-            }
-
-            $premiumCampaignPaths = [
-                'api/campaigns/{campaign}/applications',
-                'api/campaigns/{campaign}/bids',
-            ];
-
-            $isPremiumAction = false;
-            foreach ($premiumCampaignPaths as $premiumPath) {
-                $pattern = str_replace('{campaign}', '[^/]+', $premiumPath);
-                if (preg_match('#'.$pattern.'#', $currentPath)) {
-                    $isPremiumAction = true;
-
-                    break;
-                }
-            }
-
-            if ($isPremiumAction) {
-                $requiresPremium = true;
-            }
-        }
-
-        if (str_starts_with($currentPath, 'api/applications')) {
-            if ('GET' === $method) {
-                Log::info('PremiumAccessMiddleware: Allowing application viewing without premium', [
-                    'path' => $currentPath,
-                    'method' => $method,
-                    'userId' => $user->id,
-                ]);
-
-                return $next($request);
-            }
-
-            $requiresPremium = true;
-        }
-
-        if (str_starts_with($currentPath, 'api/bids')) {
-            if ('GET' === $method) {
-                Log::info('PremiumAccessMiddleware: Allowing bid viewing without premium', [
-                    'path' => $currentPath,
-                    'method' => $method,
-                    'userId' => $user->id,
-                ]);
-
-                return $next($request);
-            }
-
-            $requiresPremium = true;
         }
 
         if (!$requiresPremium) {
