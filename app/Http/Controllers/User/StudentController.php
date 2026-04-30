@@ -175,7 +175,7 @@ class StudentController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to get student status: '.$e->getMessage(),
+                'message' => 'Failed to get student status.',
             ], 500);
         }
     }

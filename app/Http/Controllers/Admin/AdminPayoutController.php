@@ -124,7 +124,7 @@ class AdminPayoutController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => $status === 404 ? 'Withdrawal not found' : 'Failed to process withdrawal.',
             ], $status);
         }
     }
@@ -196,7 +196,7 @@ class AdminPayoutController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => $status === 404 ? 'Disputed contract not found' : 'Failed to resolve dispute.',
             ], $status);
         }
     }

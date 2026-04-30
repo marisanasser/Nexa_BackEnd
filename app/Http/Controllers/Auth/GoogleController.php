@@ -59,8 +59,6 @@ class GoogleController extends Controller
         return response()->json([
             'success' => true,
             'redirect_url' => $url,
-            'debug_client_id' => $clientId,
-            'debug_redirect_uri' => $redirectUri,
         ]);
     }
 
@@ -68,7 +66,6 @@ class GoogleController extends Controller
     {
         try {
             Log::info('Google OAuth callback received', [
-                'query_params' => $request->query(),
                 'has_code' => $request->has('code'),
                 'has_role' => $request->has('role'),
                 'role' => $request->input('role'),
@@ -234,13 +231,13 @@ class GoogleController extends Controller
         } catch (Exception $e) {
             Log::error('Google OAuth callback failed', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'query_params' => $request->query(),
+                'has_code' => $request->has('code'),
+                'role' => $request->input('role'),
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Google authentication failed: ' . $e->getMessage(),
+                'message' => 'Google authentication failed.',
             ], 422);
         }
     }
@@ -314,7 +311,7 @@ class GoogleController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Registration failed: ' . $e->getMessage(),
+                'message' => 'Registration failed.',
             ], 422);
         }
     }
@@ -400,9 +397,14 @@ class GoogleController extends Controller
                 'message' => 'Registration successful',
             ], 201);
         } catch (Exception $e) {
+            Log::error('Google OAuth with role failed', [
+                'error' => $e->getMessage(),
+                'role' => $request->input('role'),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Google authentication failed: '.$e->getMessage(),
+                'message' => 'Google authentication failed.',
             ], 422);
         }
     }

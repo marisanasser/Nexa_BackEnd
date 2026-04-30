@@ -28,6 +28,9 @@ public_html/hot
 .phpunit.cache
 /.phpunit.cache
 
+# One-off local diagnostics
+tmp_*
+
 # IDE & Editor folders
 /.idea/
 /.vscode/

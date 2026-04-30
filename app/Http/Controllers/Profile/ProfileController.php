@@ -79,22 +79,29 @@ class ProfileController extends Controller
                 'message' => 'Profile retrieved successfully',
             ]);
         } catch (Exception $e) {
+            Log::error('Failed to retrieve profile', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to retrieve profile: ' . $e->getMessage(),
+                'message' => 'Failed to retrieve profile.',
             ], 500);
         }
     }
 
     public function update(Request $request): JsonResponse
     {
-        error_log('Content-Type: ' . $request->header('Content-Type'));
-        error_log('Request method: ' . $request->method());
-        error_log('Request role: ' . $request->input('role'));
-        error_log('Request state: ' . $request->input('state'));
-        error_log('Request all data: ' . json_encode($request->all()));
-        error_log('Request files: ' . json_encode($request->allFiles()));
-        error_log('Raw content length: ' . strlen($request->getContent()));
+        Log::debug('Profile update request received', [
+            'content_type' => $request->header('Content-Type'),
+            'method' => $request->method(),
+            'role' => $request->input('role'),
+            'state' => $request->input('state'),
+            'input_keys' => array_keys($request->except(['password', 'current_password', 'new_password', 'new_password_confirmation'])),
+            'file_keys' => array_keys($request->allFiles()),
+            'raw_content_length' => strlen($request->getContent()),
+        ]);
 
         try {
             $user = $this->getAuthenticatedUser();
@@ -109,12 +116,16 @@ class ProfileController extends Controller
             $contentType = $request->header('Content-Type');
             $isMultipart = str_contains($contentType, 'multipart/form-data');
 
-            error_log('Is multipart: ' . ($isMultipart ? 'true' : 'false'));
+            Log::debug('Profile update multipart state', [
+                'is_multipart' => $isMultipart,
+            ]);
 
             if ($isMultipart && empty($request->all()) && !empty($request->getContent())) {
-                error_log('Attempting manual multipart parsing');
+                Log::debug('Profile update manual multipart parsing started');
                 $parsedData = $this->parseMultipartData($request);
-                error_log('Manually parsed data: ' . json_encode($parsedData));
+                Log::debug('Profile update manual multipart parsing finished', [
+                    'fields' => array_keys($parsedData),
+                ]);
 
                 foreach ($parsedData as $key => $value) {
                     if ('avatar' !== $key) {
@@ -139,27 +150,34 @@ class ProfileController extends Controller
             // Handle project_links JSON string from FormData
             if ($request->has('project_links')) {
                 $links = $request->input('project_links');
-                error_log('Received project_links type: ' . gettype($links));
+                Log::debug('Profile project_links received', [
+                    'type' => gettype($links),
+                ]);
 
                 if (is_string($links)) {
-                    error_log('Received project_links string: ' . substr($links, 0, 100) . '...');
                     $decodedLinks = json_decode($links, true);
 
                     if (json_last_error() !== JSON_ERROR_NONE) {
-                        error_log('JSON decode error: ' . json_last_error_msg());
+                        Log::debug('Profile project_links JSON decode failed', [
+                            'error' => json_last_error_msg(),
+                        ]);
                         // Try stripslashes (sometimes needed for double-encoded JSON)
                         $decodedLinks = json_decode(stripslashes($links), true);
                     }
 
                     if (is_array($decodedLinks)) {
-                        error_log('Successfully decoded project_links to array count: ' . count($decodedLinks));
+                        Log::debug('Profile project_links decoded', [
+                            'count' => count($decodedLinks),
+                        ]);
                         $request->merge(['project_links' => $decodedLinks]);
                     } else {
-                        error_log('Failed to decode project_links, resetting to empty array');
+                        Log::debug('Profile project_links reset to empty array');
                         $request->merge(['project_links' => []]);
                     }
                 } elseif (is_array($links)) {
-                    error_log('Received project_links as array count: ' . count($links));
+                    Log::debug('Profile project_links array received', [
+                        'count' => count($links),
+                    ]);
                 }
             } else {
                 // Ensure it's not present if not sent, or handle as empty if required
@@ -171,7 +189,9 @@ class ProfileController extends Controller
             }
 
             // DEBUG: Log project_links in request right before validation
-            error_log('Request project_links before validation: ' . json_encode($request->input('project_links')));
+            Log::debug('Profile project_links validation state', [
+                'count' => is_array($request->input('project_links')) ? count($request->input('project_links')) : null,
+            ]);
 
             $validationRules = [
                 'name' => 'sometimes|string|max:255',
@@ -222,14 +242,14 @@ class ProfileController extends Controller
             if ($request->hasFile('avatar')) {
                 $hasAvatarFile = true;
                 $avatarFile = $request->file('avatar');
-                error_log('Avatar file found via hasFile()');
+                Log::debug('Profile avatar file found via hasFile');
             } else {
                 if ($isMultipart && !empty($request->getContent())) {
                     $parsedData = $this->parseMultipartData($request);
                     if (isset($parsedData['avatar']) && $parsedData['avatar'] instanceof UploadedFile) {
                         $hasAvatarFile = true;
                         $avatarFile = $parsedData['avatar'];
-                        error_log('Avatar file found via manual parsing');
+                        Log::debug('Profile avatar file found via manual parsing');
                     }
                 }
             }
@@ -426,9 +446,14 @@ class ProfileController extends Controller
                 'message' => 'Profile updated successfully',
             ]);
         } catch (Exception $e) {
+            Log::error('Failed to update profile', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update profile: ' . $e->getMessage(),
+                'message' => 'Failed to update profile.',
             ], 500);
         }
     }
@@ -502,9 +527,14 @@ class ProfileController extends Controller
                 ],
             ]);
         } catch (Exception $e) {
+            Log::error('Failed to remove avatar', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Falha ao remover avatar: ' . $e->getMessage(),
+                'message' => 'Falha ao remover avatar.',
             ], 500);
         }
     }
@@ -564,9 +594,14 @@ class ProfileController extends Controller
                 'avatar_url' => $resolvedAvatarUrl,
             ]);
         } catch (Exception $e) {
+            Log::error('Failed to upload avatar', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Falha ao enviar avatar: ' . $e->getMessage(),
+                'message' => 'Falha ao enviar avatar.',
             ], 500);
         }
     }
@@ -662,9 +697,14 @@ class ProfileController extends Controller
                 ],
             ]);
         } catch (Exception $e) {
+            Log::error('Failed to upload avatar from base64', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Falha ao enviar avatar: ' . $e->getMessage(),
+                'message' => 'Falha ao enviar avatar.',
             ], 500);
         }
     }

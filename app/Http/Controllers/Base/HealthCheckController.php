@@ -8,7 +8,7 @@ use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Log;
 
 class HealthCheckController extends Controller
 {
@@ -55,31 +55,20 @@ class HealthCheckController extends Controller
         } catch (Exception $e) {
             $default = config('database.default');
             $cfg = config("database.connections.$default");
-            $host = is_array($cfg) ? ($cfg['host'] ?? null) : null;
-            $port = is_array($cfg) ? ($cfg['port'] ?? null) : null;
-            $database = is_array($cfg) ? ($cfg['database'] ?? null) : null;
-            $username = is_array($cfg) ? ($cfg['username'] ?? null) : null;
             $driver = is_array($cfg) ? ($cfg['driver'] ?? null) : null;
-            $url = env('DATABASE_URL');
-            $missing = [];
-            foreach (['DB_CONNECTION','DB_HOST','DB_PORT','DB_DATABASE','DB_USERNAME','DB_PASSWORD','DB_SSLMODE','DATABASE_URL'] as $k) {
-                $v = env($k);
-                if ($v === null || $v === '') {
-                    $missing[] = $k;
-                }
-            }
+
+            Log::warning('Health check database connection failed', [
+                'connection' => $default,
+                'driver' => $driver,
+                'error' => $e->getMessage(),
+            ]);
+
             return [
                 'status' => 'error',
                 'message' => 'Could not connect to the database',
                 'error' => config('app.debug') ? $e->getMessage() : null,
-                'config_host' => $host,
-                'config_port' => $port,
-                'config_database' => $database,
-                'config_username' => $username ? '***' : null,
-                'config_driver' => $driver,
                 'connection_name' => $default,
-                'env_database_url' => $url,
-                'missing_env' => $missing,
+                'driver' => $driver,
             ];
         }
     }
@@ -141,31 +130,38 @@ class HealthCheckController extends Controller
                 }
             }
 
-            return [
+            $response = [
                 'status' => 'ok',
                 'default' => $default,
-                'from' => [
-                    'address' => $fromAddress,
-                    'name' => $fromName,
-                ],
                 'providers' => [
                     'ses' => [
                         'configured' => $sesConfigured,
-                        'region' => env('AWS_SES_REGION', env('AWS_DEFAULT_REGION')),
                     ],
                     'smtp' => [
                         'configured' => $smtpConfigured,
-                        'host' => env('MAIL_HOST'),
-                        'port' => env('MAIL_PORT'),
-                        'encryption' => env('MAIL_ENCRYPTION'),
-                        'username_set' => (bool) env('MAIL_USERNAME'),
                     ],
                     'log' => [
                         'configured' => true,
                     ],
                 ],
-                'missing_env' => array_values(array_unique($missingEnv)),
             ];
+
+            if (config('app.debug')) {
+                $response['from'] = [
+                    'address' => $fromAddress,
+                    'name' => $fromName,
+                ];
+                $response['providers']['ses']['region'] = env('AWS_SES_REGION', env('AWS_DEFAULT_REGION'));
+                $response['providers']['smtp'] += [
+                    'host' => env('MAIL_HOST'),
+                    'port' => env('MAIL_PORT'),
+                    'encryption' => env('MAIL_ENCRYPTION'),
+                    'username_set' => (bool) env('MAIL_USERNAME'),
+                ];
+                $response['missing_env'] = array_values(array_unique($missingEnv));
+            }
+
+            return $response;
         } catch (Exception $e) {
             return [
                 'status' => 'error',

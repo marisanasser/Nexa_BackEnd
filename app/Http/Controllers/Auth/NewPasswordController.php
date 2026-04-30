@@ -11,6 +11,7 @@ use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
@@ -98,9 +99,14 @@ class NewPasswordController extends Controller
                 'message' => 'Password updated successfully',
             ]);
         } catch (Exception $e) {
+            Log::error('Failed to update password', [
+                'user_id' => $request->input('user_id'),
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update password: '.$e->getMessage(),
+                'message' => 'Failed to update password.',
             ], 500);
         }
     }

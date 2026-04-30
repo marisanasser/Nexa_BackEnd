@@ -40,7 +40,7 @@ class AdminDashboardController extends Controller
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch dashboard metrics: '.$e->getMessage(),
+                'message' => 'Failed to fetch dashboard metrics.',
             ], 500);
         }
     }
@@ -79,7 +79,7 @@ class AdminDashboardController extends Controller
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch pending campaigns: '.$e->getMessage(),
+                'message' => 'Failed to fetch pending campaigns.',
             ], 500);
         }
     }
@@ -130,7 +130,7 @@ class AdminDashboardController extends Controller
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch recent users: '.$e->getMessage(),
+                'message' => 'Failed to fetch recent users.',
             ], 500);
         }
     }

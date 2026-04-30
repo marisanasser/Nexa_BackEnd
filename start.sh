@@ -136,10 +136,4 @@ php artisan storage:link || true
 # Run database migrations
 php artisan migrate --force
 
-# Forensic Debugging
-ls -R /var/www/html > public/fs_debug.txt
-php artisan route:list > public/routes_debug.txt
-chmod 777 public/*.txt
-
-
 php artisan serve --host=0.0.0.0 --port="${PORT:-8000}"

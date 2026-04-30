@@ -4,24 +4,21 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
-use Exception;
-use Illuminate\Support\Facades\Log;
-
 use App\Domain\Payment\Services\WithdrawalMethodService;
 use App\Http\Controllers\Base\Controller;
 use App\Models\Payment\WithdrawalMethod;
+use Exception;
+use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class WithdrawalMethodController extends Controller
 {
-    protected WithdrawalMethodService $service;
+    private const NOT_FOUND_MESSAGE = 'Withdrawal method not found';
 
-    public function __construct(WithdrawalMethodService $service)
-    {
-        $this->service = $service;
-    }
+    public function __construct(private readonly WithdrawalMethodService $service) {}
 
     public function index(): JsonResponse
     {
@@ -61,11 +58,7 @@ class WithdrawalMethodController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
+            return $this->validationFailedResponse($validator);
         }
 
         try {
@@ -81,22 +74,16 @@ class WithdrawalMethodController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create withdrawal method',
-            ], 500);
+            return $this->serverErrorResponse('Failed to create withdrawal method');
         }
     }
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $method = WithdrawalMethod::find($id);
+        $method = $this->findMethod($id);
 
         if (!$method) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Withdrawal method not found',
-            ], 404);
+            return $this->notFoundResponse();
         }
 
         $validator = Validator::make($request->all(), [
@@ -114,11 +101,7 @@ class WithdrawalMethodController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
+            return $this->validationFailedResponse($validator);
         }
 
         try {
@@ -135,22 +118,16 @@ class WithdrawalMethodController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update withdrawal method',
-            ], 500);
+            return $this->serverErrorResponse('Failed to update withdrawal method');
         }
     }
 
     public function destroy(int $id): JsonResponse
     {
-        $method = WithdrawalMethod::find($id);
+        $method = $this->findMethod($id);
 
         if (!$method) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Withdrawal method not found',
-            ], 404);
+            return $this->notFoundResponse();
         }
 
         try {
@@ -166,22 +143,16 @@ class WithdrawalMethodController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete withdrawal method',
-            ], 500);
+            return $this->serverErrorResponse('Failed to delete withdrawal method');
         }
     }
 
     public function toggleActive(int $id): JsonResponse
     {
-        $method = WithdrawalMethod::find($id);
+        $method = $this->findMethod($id);
 
         if (!$method) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Withdrawal method not found',
-            ], 404);
+            return $this->notFoundResponse();
         }
 
         try {
@@ -198,10 +169,37 @@ class WithdrawalMethodController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update withdrawal method status',
-            ], 500);
+            return $this->serverErrorResponse('Failed to update withdrawal method status');
         }
+    }
+
+    private function findMethod(int $id): ?WithdrawalMethod
+    {
+        return WithdrawalMethod::find($id);
+    }
+
+    private function validationFailedResponse(ValidatorContract $validator): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => 'Validation failed',
+            'errors' => $validator->errors(),
+        ], 422);
+    }
+
+    private function notFoundResponse(): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => self::NOT_FOUND_MESSAGE,
+        ], 404);
+    }
+
+    private function serverErrorResponse(string $message): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => $message,
+        ], 500);
     }
 }

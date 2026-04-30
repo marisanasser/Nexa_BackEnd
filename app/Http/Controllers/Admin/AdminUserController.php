@@ -204,7 +204,7 @@ class AdminUserController extends Controller
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update user status: '.$e->getMessage(),
+                'message' => 'Failed to update user status.',
             ], 500);
         }
     }

@@ -146,7 +146,7 @@ class CampaignTimelineController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Falha ao finalizar contrato: ' . $e->getMessage(),
+                'message' => 'Falha ao finalizar contrato.',
             ], 500);
         }
     }
@@ -254,7 +254,7 @@ class CampaignTimelineController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => 'Falha ao criar milestones da timeline: ' . $e->getMessage(),
+                'error' => 'Falha ao criar milestones da timeline.',
             ], 500);
         }
     }

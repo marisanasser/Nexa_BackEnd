@@ -481,7 +481,7 @@ class CampaignController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'Server Error',
-                'message' => $e->getMessage(),
+                'message' => 'Failed to retrieve campaigns.',
             ], 500);
         }
     }
@@ -1382,7 +1382,7 @@ class CampaignController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            return ['success' => false, 'error' => $e->getMessage()];
+            return ['success' => false, 'error' => 'Failed to process refund.'];
         }
     }
 
@@ -1439,7 +1439,7 @@ class CampaignController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            return ['success' => false, 'error' => $e->getMessage()];
+            return ['success' => false, 'error' => 'Failed to create refund.'];
         }
     }
 

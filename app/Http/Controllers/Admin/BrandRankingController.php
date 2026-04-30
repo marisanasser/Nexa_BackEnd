@@ -45,7 +45,7 @@ class BrandRankingController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch brand rankings: '.$e->getMessage(),
+                'message' => 'Failed to fetch brand rankings.',
             ], 500);
         }
     }
@@ -117,7 +117,7 @@ class BrandRankingController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch comprehensive brand rankings: '.$e->getMessage(),
+                'message' => 'Failed to fetch comprehensive brand rankings.',
             ], 500);
         }
     }

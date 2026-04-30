@@ -478,7 +478,7 @@ class ContractPaymentController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Contract payment failed: ' . $e->getMessage(),
+                'message' => 'Contract payment failed.',
             ], 500);
         }
     }

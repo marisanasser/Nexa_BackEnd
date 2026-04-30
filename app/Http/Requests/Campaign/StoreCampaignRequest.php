@@ -19,14 +19,12 @@ class StoreCampaignRequest extends FormRequest
     protected function prepareForValidation()
     {
         try {
-            // Debug log to understand what's coming
             $debugFiles = [];
             foreach ($this->allFiles() as $key => $file) {
                 if (is_array($file)) {
                     foreach ($file as $subKey => $subFile) {
                         if ($subFile instanceof \Illuminate\Http\UploadedFile) {
                             $debugFiles["{$key}.{$subKey}"] = [
-                                'name' => $subFile->getClientOriginalName(),
                                 'size' => $subFile->getSize(),
                                 'mime' => $subFile->getClientMimeType(),
                                 'error' => $subFile->getError(),
@@ -37,7 +35,6 @@ class StoreCampaignRequest extends FormRequest
                     }
                 } elseif ($file instanceof \Illuminate\Http\UploadedFile) {
                     $debugFiles[$key] = [
-                        'name' => $file->getClientOriginalName(),
                         'size' => $file->getSize(),
                         'mime' => $file->getClientMimeType(),
                         'error' => $file->getError(),
@@ -47,7 +44,7 @@ class StoreCampaignRequest extends FormRequest
                 }
             }
 
-            Log::info('StoreCampaignRequest FILE DEBUG', [
+            Log::debug('StoreCampaignRequest file payload received', [
                 'input_keys' => array_keys($this->input()),
                 'files_info' => $debugFiles,
             ]);

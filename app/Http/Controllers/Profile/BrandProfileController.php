@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -61,9 +62,14 @@ class BrandProfileController extends Controller
                 ],
             ]);
         } catch (Exception $e) {
+            Log::error('Failed to retrieve brand profile', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to retrieve profile: '.$e->getMessage(),
+                'message' => 'Failed to retrieve profile.',
             ], 500);
         }
     }
@@ -90,12 +96,16 @@ class BrandProfileController extends Controller
             $contentType = $request->header('Content-Type');
             $isMultipart = str_contains($contentType, 'multipart/form-data');
 
-            error_log('Brand Profile - Is multipart: '.($isMultipart ? 'true' : 'false'));
+            Log::debug('Brand profile update request received', [
+                'is_multipart' => $isMultipart,
+            ]);
 
             if ($isMultipart && empty($request->all()) && !empty($request->getContent())) {
-                error_log('Brand Profile - Attempting manual multipart parsing');
+                Log::debug('Brand profile update manual multipart parsing started');
                 $parsedData = $this->parseMultipartData($request);
-                error_log('Brand Profile - Manually parsed data: '.json_encode($parsedData));
+                Log::debug('Brand profile update manual multipart parsing finished', [
+                    'fields' => array_keys($parsedData),
+                ]);
 
                 foreach ($parsedData as $key => $value) {
                     if ('avatar' !== $key) {
@@ -151,20 +161,23 @@ class BrandProfileController extends Controller
             if ($request->hasFile('avatar')) {
                 $hasAvatarFile = true;
                 $avatarFile = $request->file('avatar');
-                error_log('Brand Profile - Avatar file found via hasFile()');
+                Log::debug('Brand profile avatar file found via hasFile');
             } else {
                 if ($isMultipart && !empty($request->getContent())) {
                     $parsedData = $this->parseMultipartData($request);
                     if (isset($parsedData['avatar']) && $parsedData['avatar'] instanceof UploadedFile) {
                         $hasAvatarFile = true;
                         $avatarFile = $parsedData['avatar'];
-                        error_log('Brand Profile - Avatar file found via manual parsing');
+                        Log::debug('Brand profile avatar file found via manual parsing');
                     }
                 }
             }
 
             if ($validator->fails()) {
-                error_log('Brand Profile - Validation failed: '.json_encode($validator->errors()));
+                Log::warning('Brand profile validation failed', [
+                    'user_id' => $user->id,
+                    'errors' => $validator->errors()->toArray(),
+                ]);
 
                 return response()->json([
                     'success' => false,
@@ -203,7 +216,9 @@ class BrandProfileController extends Controller
                 $avatarUrl = FileUploadHelper::upload($avatarFile, 'avatars');
                 if ($avatarUrl) {
                     $data['avatar_url'] = $avatarUrl;
-                    error_log('Brand Profile - Avatar stored at: '.$avatarUrl);
+                    Log::info('Brand profile avatar stored', [
+                        'user_id' => $user->id,
+                    ]);
                 }
             }
 
@@ -239,11 +254,14 @@ class BrandProfileController extends Controller
                 ],
             ]);
         } catch (Exception $e) {
-            error_log('Brand Profile - Error: '.$e->getMessage());
+            Log::error('Failed to update brand profile', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+            ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update profile: '.$e->getMessage(),
+                'message' => 'Failed to update profile.',
             ], 500);
         }
     }
@@ -340,9 +358,14 @@ class BrandProfileController extends Controller
                 'message' => 'Password changed successfully',
             ]);
         } catch (Exception $e) {
+            Log::error('Failed to change brand password', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to change password: '.$e->getMessage(),
+                'message' => 'Failed to change password.',
             ], 500);
         }
     }
@@ -471,9 +494,14 @@ class BrandProfileController extends Controller
                 ],
             ]);
         } catch (Exception $e) {
+            Log::error('Failed to upload brand avatar', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to upload avatar: '.$e->getMessage(),
+                'message' => 'Failed to upload avatar.',
             ], 500);
         }
     }
@@ -508,9 +536,14 @@ class BrandProfileController extends Controller
                 'message' => 'Avatar deleted successfully',
             ]);
         } catch (Exception $e) {
+            Log::error('Failed to delete brand avatar', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete avatar: '.$e->getMessage(),
+                'message' => 'Failed to delete avatar.',
             ], 500);
         }
     }
@@ -623,9 +656,14 @@ class BrandProfileController extends Controller
                 'avatar_url' => $avatarUrl,
             ];
         } catch (Exception $e) {
+            Log::error('Failed to process brand avatar image', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+
             return [
                 'success' => false,
-                'message' => 'Failed to process image: '.$e->getMessage(),
+                'message' => 'Failed to process image.',
             ];
         }
     }

@@ -71,7 +71,6 @@ class BrandPaymentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create payment method. Please try again.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -145,9 +144,15 @@ class BrandPaymentController extends Controller
                 'message' => 'Default payment method updated successfully',
             ]);
         } catch (Exception $e) {
+            Log::error('Failed to set default payment method', [
+                'user_id' => $user->id,
+                'payment_method_id' => $request->payment_method_id,
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Failed to update payment method.',
             ], 400);
         }
     }
@@ -184,9 +189,15 @@ class BrandPaymentController extends Controller
                 'message' => 'Payment method deleted successfully',
             ]);
         } catch (Exception $e) {
+            Log::error('Failed to delete payment method', [
+                'user_id' => $user->id,
+                'payment_method_id' => $request->payment_method_id,
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Failed to delete payment method.',
             ], 400);
         }
     }
@@ -244,7 +255,6 @@ class BrandPaymentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create checkout session. Please try again.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -295,7 +305,7 @@ class BrandPaymentController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to save payment method. '.$e->getMessage(),
+                'message' => 'Failed to save payment method.',
             ], 500);
         }
     }
@@ -424,7 +434,6 @@ class BrandPaymentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create checkout session. Please try again.',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }

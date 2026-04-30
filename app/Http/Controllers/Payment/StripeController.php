@@ -208,7 +208,7 @@ class StripeController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid request: '.$errorMessage,
+                'message' => 'Invalid payment account request.',
             ], 400);
         } catch (ApiErrorException $e) {
             $errorMessage = $e->getMessage();
@@ -230,7 +230,7 @@ class StripeController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Payment service error: '.$errorMessage,
+                'message' => 'Payment service error.',
             ], 502);
         } catch (Exception $e) {
             Log::error('Error retrieving Stripe account status', [
@@ -240,7 +240,7 @@ class StripeController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to retrieve account status: '.$e->getMessage(),
+                'message' => 'Failed to retrieve account status.',
             ], 500);
         }
     }
@@ -469,8 +469,8 @@ class StripeController extends Controller
             ],
             'instructions' => [
                 '1' => 'Create a .env file in the Backend directory',
-                '2' => 'Add STRIPE_SECRET=sk_test_your_key_here',
-                '3' => 'Add STRIPE_PUBLISHABLE_KEY=pk_test_your_key_here',
+                '2' => 'Set STRIPE_SECRET in the environment or secret manager',
+                '3' => 'Set STRIPE_PUBLISHABLE_KEY in the environment or secret manager',
                 '4' => 'Restart your Laravel server',
             ],
         ]);
@@ -1003,27 +1003,25 @@ class StripeController extends Controller
 
         if (!$stripeSecret) {
             Log::error('Stripe secret key not configured', [
-                'config_value' => config('services.stripe.secret'),
-                'env_value' => env('STRIPE_SECRET'),
+                'config_set' => (bool) config('services.stripe.secret'),
+                'env_set' => (bool) env('STRIPE_SECRET'),
             ]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Stripe secret key not configured. Please set STRIPE_SECRET in your .env file.',
-                'debug' => 'Check your .env file for STRIPE_SECRET variable',
             ], 500);
         }
 
         if (!$stripePublishableKey) {
             Log::error('Stripe publishable key not configured', [
-                'config_value' => config('services.stripe.publishable_key'),
-                'env_value' => env('STRIPE_PUBLISHABLE_KEY'),
+                'config_set' => (bool) config('services.stripe.publishable_key'),
+                'env_set' => (bool) env('STRIPE_PUBLISHABLE_KEY'),
             ]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Stripe publishable key not configured. Please set STRIPE_PUBLISHABLE_KEY in your .env file.',
-                'debug' => 'Check your .env file for STRIPE_PUBLISHABLE_KEY variable',
             ], 500);
         }
 

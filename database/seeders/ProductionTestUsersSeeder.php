@@ -7,6 +7,7 @@ namespace Database\Seeders;
 use App\Models\User\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use RuntimeException;
 
 /**
  * Seeder para criar usuários de teste em produção
@@ -16,12 +17,21 @@ class ProductionTestUsersSeeder extends Seeder
 {
     public function run(): void
     {
+        $passwords = [
+            'admin' => $this->password('PRODUCTION_TEST_ADMIN_PASSWORD'),
+            'brand' => $this->password('PRODUCTION_TEST_BRAND_PASSWORD'),
+            'creatorPremium' => $this->password('PRODUCTION_TEST_CREATOR_PREMIUM_PASSWORD'),
+            'creatorFree' => $this->password('PRODUCTION_TEST_CREATOR_FREE_PASSWORD'),
+            'studentVerified' => $this->password('PRODUCTION_TEST_STUDENT_VERIFIED_PASSWORD'),
+            'studentFree' => $this->password('PRODUCTION_TEST_STUDENT_FREE_PASSWORD'),
+        ];
+
         // Admin User
         $admin = User::updateOrCreate(
             ['email' => 'admin@nexacreators.com.br'],
             [
                 'name' => 'Admin Nexa',
-                'password' => Hash::make('NexaAdmin@2025'),
+                'password' => Hash::make($passwords['admin']),
                 'role' => 'admin',
                 'email_verified_at' => now(),
                 'has_premium' => true,
@@ -34,7 +44,7 @@ class ProductionTestUsersSeeder extends Seeder
             ['email' => 'brand.teste@nexacreators.com.br'],
             [
                 'name' => 'Brand Teste Produção',
-                'password' => Hash::make('BrandTeste@2025'),
+                'password' => Hash::make($passwords['brand']),
                 'role' => 'brand',
                 'email_verified_at' => now(),
                 'has_premium' => true,
@@ -48,7 +58,7 @@ class ProductionTestUsersSeeder extends Seeder
             ['email' => 'creator.premium@nexacreators.com.br'],
             [
                 'name' => 'Creator Premium Teste',
-                'password' => Hash::make('CreatorPremium@2025'),
+                'password' => Hash::make($passwords['creatorPremium']),
                 'role' => 'creator',
                 'email_verified_at' => now(),
                 'has_premium' => true,
@@ -62,7 +72,7 @@ class ProductionTestUsersSeeder extends Seeder
             ['email' => 'creator.free@nexacreators.com.br'],
             [
                 'name' => 'Creator Free Teste',
-                'password' => Hash::make('CreatorFree@2025'),
+                'password' => Hash::make($passwords['creatorFree']),
                 'role' => 'creator',
                 'email_verified_at' => now(),
                 'has_premium' => false,
@@ -75,7 +85,7 @@ class ProductionTestUsersSeeder extends Seeder
             ['email' => 'student.verified@nexacreators.com.br'],
             [
                 'name' => 'Student Verified Teste',
-                'password' => Hash::make('StudentVerified@2025'),
+                'password' => Hash::make($passwords['studentVerified']),
                 'role' => 'student',
                 'email_verified_at' => now(),
                 'student_verified' => true,
@@ -90,7 +100,7 @@ class ProductionTestUsersSeeder extends Seeder
             ['email' => 'student.free@nexacreators.com.br'],
             [
                 'name' => 'Student Free Teste',
-                'password' => Hash::make('StudentFree@2025'),
+                'password' => Hash::make($passwords['studentFree']),
                 'role' => 'student',
                 'email_verified_at' => now(),
                 'student_verified' => false,
@@ -102,15 +112,30 @@ class ProductionTestUsersSeeder extends Seeder
         $this->command->newLine();
         $this->command->info('=== Production Test Users Created ===');
         $this->command->table(
-            ['Role', 'Email', 'Password', 'Premium', 'Verified'],
+            ['Role', 'Email', 'Password Source', 'Premium', 'Verified'],
             [
-                ['Admin', 'admin@nexacreators.com.br', 'NexaAdmin@2025', 'Yes', '-'],
-                ['Brand', 'brand.teste@nexacreators.com.br', 'BrandTeste@2025', 'Yes', '-'],
-                ['Creator', 'creator.premium@nexacreators.com.br', 'CreatorPremium@2025', 'Yes', '-'],
-                ['Creator', 'creator.free@nexacreators.com.br', 'CreatorFree@2025', 'No', '-'],
-                ['Student', 'student.verified@nexacreators.com.br', 'StudentVerified@2025', 'No', 'Yes'],
-                ['Student', 'student.free@nexacreators.com.br', 'StudentFree@2025', 'No', 'No'],
+                ['Admin', 'admin@nexacreators.com.br', 'PRODUCTION_TEST_ADMIN_PASSWORD', 'Yes', '-'],
+                ['Brand', 'brand.teste@nexacreators.com.br', 'PRODUCTION_TEST_BRAND_PASSWORD', 'Yes', '-'],
+                ['Creator', 'creator.premium@nexacreators.com.br', 'PRODUCTION_TEST_CREATOR_PREMIUM_PASSWORD', 'Yes', '-'],
+                ['Creator', 'creator.free@nexacreators.com.br', 'PRODUCTION_TEST_CREATOR_FREE_PASSWORD', 'No', '-'],
+                ['Student', 'student.verified@nexacreators.com.br', 'PRODUCTION_TEST_STUDENT_VERIFIED_PASSWORD', 'No', 'Yes'],
+                ['Student', 'student.free@nexacreators.com.br', 'PRODUCTION_TEST_STUDENT_FREE_PASSWORD', 'No', 'No'],
             ]
         );
+    }
+
+    private function password(string $envKey): string
+    {
+        $password = env($envKey);
+
+        if (is_string($password) && $password !== '') {
+            return $password;
+        }
+
+        if (app()->environment('production')) {
+            throw new RuntimeException("Environment variable {$envKey} is required in production.");
+        }
+
+        return bin2hex(random_bytes(16)) . 'A1!';
     }
 }

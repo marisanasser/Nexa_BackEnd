@@ -68,9 +68,15 @@ class OtpController extends Controller
             if ('email' === $type) {
                 Mail::to($contact)->send(new OtpMail($code));
 
-                Log::info("OTP email sent to {$contact}: {$code}");
+                Log::info('OTP email sent', [
+                    'contact' => $contact,
+                    'type' => $type,
+                ]);
             } elseif ('whatsapp' === $type) {
-                Log::info("WhatsApp OTP for {$contact}: {$code}");
+                Log::info('WhatsApp OTP generated', [
+                    'contact' => $contact,
+                    'type' => $type,
+                ]);
             }
         } catch (Exception $e) {
             $otpSent = false;
@@ -94,9 +100,16 @@ class OtpController extends Controller
             ], 503);
         }
 
-        Log::info("OTP generated for {$type} {$contact}: {$code}");
+        $debug = ! app()->environment('production')
+            && filter_var(env('OTP_DEBUG', false), FILTER_VALIDATE_BOOL);
 
-        $debug = filter_var(env('OTP_DEBUG', true), FILTER_VALIDATE_BOOL);
+        if ($debug) {
+            Log::debug('OTP debug code generated', [
+                'contact' => $contact,
+                'type' => $type,
+                'code' => $code,
+            ]);
+        }
 
         return response()->json([
             'message' => 'Código de verificação gerado.',

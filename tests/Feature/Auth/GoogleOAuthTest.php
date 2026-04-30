@@ -7,7 +7,9 @@ namespace Tests\Feature\Auth;
 use App\Models\User\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Socialite\Facades\Socialite;
+use Laravel\Socialite\Two\AbstractProvider as SocialiteAbstractProvider;
 use Laravel\Socialite\Two\User as SocialiteUser;
+use Mockery;
 use Tests\TestCase;
 
 /**
@@ -21,13 +23,18 @@ class GoogleOAuthTest extends TestCase
 
     public function testGoogleRedirectReturnsUrl(): void
     {
+        config([
+            'services.google.client_id' => 'google-client-id',
+            'services.google.client_secret' => 'google-client-secret',
+            'services.google.redirect' => 'https://www.nexacreators.com/auth/google/callback',
+        ]);
+
         $response = $this->getJson('/api/google/redirect');
 
         $response->assertStatus(200)
             ->assertJsonStructure([
                 'success',
                 'redirect_url',
-                'debug_redirect_uri',
             ])
             ->assertJson([
                 'success' => true,
@@ -48,7 +55,7 @@ class GoogleOAuthTest extends TestCase
         $this->assertNotEmpty($query['redirect_uri']);
     }
 
-    public function testGoogleCallbackCreatesNewUser(): void
+    public function testGoogleCallbackRequiresRoleSelectionForNewUser(): void
     {
         $socialiteUser = new SocialiteUser();
         $socialiteUser->id = '123456789';
@@ -58,42 +65,26 @@ class GoogleOAuthTest extends TestCase
         $socialiteUser->token = 'mock_token';
         $socialiteUser->refreshToken = 'mock_refresh_token';
 
-        Socialite::shouldReceive('driver->stateless->user')
-            ->once()
-            ->andReturn($socialiteUser)
-        ;
+        $this->mockGoogleUser($socialiteUser);
 
         $response = $this->getJson('/api/google/callback');
 
-        $response->assertStatus(201)
+        $response->assertStatus(200)
             ->assertJsonStructure([
                 'success',
-                'token',
-                'token_type',
-                'user' => [
-                    'id',
+                'action',
+                'registration_id',
+                'google_user' => [
                     'name',
                     'email',
-                    'role',
-                    'avatar_url',
-                    'student_verified',
-                    'has_premium',
+                    'avatar',
                 ],
-                'message',
             ])
             ->assertJson([
                 'success' => true,
-                'token_type' => 'Bearer',
-                'message' => 'Registration successful',
+                'action' => 'role_selection',
             ])
         ;
-
-        $this->assertDatabaseHas('users', [
-            'name' => 'John Doe',
-            'email' => 'john@example.com',
-            'google_id' => '123456789',
-            'role' => 'creator',
-        ]);
     }
 
     public function testGoogleCallbackLogsInExistingUser(): void
@@ -111,10 +102,7 @@ class GoogleOAuthTest extends TestCase
         $socialiteUser->token = 'mock_token';
         $socialiteUser->refreshToken = 'mock_refresh_token';
 
-        Socialite::shouldReceive('driver->stateless->user')
-            ->once()
-            ->andReturn($socialiteUser)
-        ;
+        $this->mockGoogleUser($socialiteUser);
 
         $response = $this->getJson('/api/google/callback');
 
@@ -152,10 +140,7 @@ class GoogleOAuthTest extends TestCase
         $socialiteUser->token = 'mock_token';
         $socialiteUser->refreshToken = 'mock_refresh_token';
 
-        Socialite::shouldReceive('driver->stateless->user')
-            ->once()
-            ->andReturn($socialiteUser)
-        ;
+        $this->mockGoogleUser($socialiteUser);
 
         $response = $this->postJson('/api/google/auth', [
             'role' => 'brand',
@@ -211,10 +196,7 @@ class GoogleOAuthTest extends TestCase
         $socialiteUser->token = 'mock_token';
         $socialiteUser->refreshToken = 'mock_refresh_token';
 
-        Socialite::shouldReceive('driver->stateless->user')
-            ->once()
-            ->andReturn($socialiteUser)
-        ;
+        $this->mockGoogleUser($socialiteUser);
 
         $response = $this->getJson('/api/google/callback?role=brand');
 
@@ -259,10 +241,7 @@ class GoogleOAuthTest extends TestCase
         $socialiteUser->token = 'mock_token';
         $socialiteUser->refreshToken = 'mock_refresh_token';
 
-        Socialite::shouldReceive('driver->stateless->user')
-            ->once()
-            ->andReturn($socialiteUser)
-        ;
+        $this->mockGoogleUser($socialiteUser);
 
         $response = $this->getJson('/api/google/callback?role=invalid_role');
 
@@ -295,5 +274,14 @@ class GoogleOAuthTest extends TestCase
             'google_id' => '123456789',
             'role' => 'creator',
         ]);
+    }
+
+    private function mockGoogleUser(SocialiteUser $socialiteUser): void
+    {
+        $provider = Mockery::mock(SocialiteAbstractProvider::class);
+        $provider->shouldReceive('stateless')->once()->andReturnSelf();
+        $provider->shouldReceive('user')->once()->andReturn($socialiteUser);
+
+        Socialite::shouldReceive('buildProvider')->once()->andReturn($provider);
     }
 }

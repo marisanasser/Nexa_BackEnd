@@ -35,15 +35,15 @@ use App\Http\Controllers\Profile\ProfileController;
 use App\Http\Controllers\User\StudentController;
 use App\Models\Campaign\Campaign;
 use App\Models\Common\Guide;
-use App\Models\User\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', HealthCheckController::class);
-Route::post('/maintenance/seed-prod-users', [MaintenanceController::class, 'seedProdUsers']);
-Route::post('/maintenance/check-password', [MaintenanceController::class, 'checkPassword']);
-Route::post('/maintenance/force-reset-password', [MaintenanceController::class, 'forceResetPassword']);
-Route::post('/maintenance/force-reset-password-public', [MaintenanceController::class, 'forceResetPasswordPublic']);
+Route::prefix('maintenance')->middleware('throttle:5,1')->group(function () {
+    Route::post('/seed-prod-users', [MaintenanceController::class, 'seedProdUsers']);
+    Route::post('/check-password', [MaintenanceController::class, 'checkPassword']);
+    Route::post('/force-reset-password', [MaintenanceController::class, 'forceResetPassword']);
+});
 
 require __DIR__ . '/auth.php';
 
@@ -399,42 +399,3 @@ Route::post('/account/checked', [AccountController::class, 'checkAccount']);
 
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
 Route::post('/webhook/stripe', [StripeWebhookController::class, 'handle']);
-
-// Temporary Debug Route
-Route::get('/debug-visibility', function () {
-    $creator = User::where('email', 'creator.premium@nexacreators.com.br')->first();
-    $campaigns = Campaign::all();
-
-    return response()->json([
-        'creator' => $creator,
-        'campaigns' => $campaigns->map(function ($c) {
-            return [
-                'id' => $c->id,
-                'title' => $c->title,
-                'status' => $c->status,
-                'is_active' => $c->is_active,
-                'approved_at' => $c->approved_at,
-                'deadline' => $c->deadline,
-                'target_genders' => $c->target_genders,
-                'target_creator_types' => $c->target_creator_types,
-                'min_age' => $c->min_age,
-                'max_age' => $c->max_age,
-            ];
-        }),
-    ]);
-});
-
-Route::get('/debug/password-reset-table', function () {
-    try {
-        $has = \Illuminate\Support\Facades\Schema::hasTable('password_reset_tokens');
-        $count = $has ? \Illuminate\Support\Facades\DB::table('password_reset_tokens')->count() : null;
-        return response()->json([
-            'has_table' => $has,
-            'count' => $count,
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'error' => $e->getMessage(),
-        ], 500);
-    }
-});

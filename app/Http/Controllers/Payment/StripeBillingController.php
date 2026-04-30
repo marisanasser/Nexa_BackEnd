@@ -497,7 +497,7 @@ class StripeBillingController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Stripe checkout validation failed: '.$e->getMessage(),
+                'message' => 'Stripe checkout validation failed.',
             ], 400);
         } catch (Exception $e) {
             Log::error('Error creating checkout URL', [
@@ -858,7 +858,7 @@ class StripeBillingController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create subscription: '.$e->getMessage(),
+                'message' => 'Failed to create subscription.',
             ], 500);
         }
     }
@@ -1131,7 +1131,7 @@ class StripeBillingController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create subscription: '.$e->getMessage(),
+                'message' => 'Failed to create subscription.',
             ], 500);
         }
     }

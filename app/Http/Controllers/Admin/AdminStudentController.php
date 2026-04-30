@@ -208,7 +208,7 @@ class AdminStudentController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Approval failed: '.$e->getMessage(),
+                'message' => 'Approval failed.',
             ], 500);
         }
     }
@@ -377,7 +377,7 @@ class AdminStudentController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update student status: '.$e->getMessage(),
+                'message' => 'Failed to update student status.',
             ], 500);
         }
     }

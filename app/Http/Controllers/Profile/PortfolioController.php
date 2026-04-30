@@ -205,7 +205,7 @@ class PortfolioController extends Controller
 
             return $this->successResponse($item, 'Item added successfully', 201);
         } catch (Exception $e) {
-            return $this->errorResponse('Failed to add item: '.$e->getMessage(), 500);
+            return $this->errorResponse('Failed to add item.', 500);
         }
     }
 

@@ -128,7 +128,7 @@ class CreatorBalanceController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return $this->errorResponse('Failed to fetch balance: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Failed to fetch balance.', 500);
         }
     }
 
@@ -230,7 +230,7 @@ class CreatorBalanceController extends Controller
                 ],
             ]);
         } catch (Exception $e) {
-            return $this->errorResponse('Failed to fetch history: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Failed to fetch history.', 500);
         }
     }
 
@@ -320,7 +320,7 @@ class CreatorBalanceController extends Controller
 
             return $this->successResponse($data);
         } catch (Exception $e) {
-            return $this->errorResponse($e->getMessage(), 500);
+            return $this->errorResponse('Failed to create payment method setup.', 500);
         }
     }
 
@@ -341,7 +341,7 @@ class CreatorBalanceController extends Controller
 
             return $this->successResponse($data, 'Payment method connected successfully');
         } catch (Exception $e) {
-            return $this->errorResponse($e->getMessage(), 500);
+            return $this->errorResponse('Failed to connect payment method.', 500);
         }
     }
 }

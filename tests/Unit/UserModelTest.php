@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Models\User\User;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Tests\TestCase;
 
 /**
@@ -23,6 +24,7 @@ class UserModelTest extends TestCase
             'student_expires_at' => now()->addMonth(),
             'free_trial_expires_at' => null,
         ]);
+        $user->setRelation('subscriptions', new EloquentCollection());
 
         $this->assertTrue($user->isOnTrial());
         $this->assertTrue($user->hasPremiumAccess());
@@ -39,6 +41,7 @@ class UserModelTest extends TestCase
             'student_expires_at' => now()->subDay(),
             'free_trial_expires_at' => now()->addMonth(),
         ]);
+        $user->setRelation('subscriptions', new EloquentCollection());
 
         $this->assertFalse($user->isOnTrial());
         $this->assertFalse($user->hasPremiumAccess());
@@ -54,6 +57,7 @@ class UserModelTest extends TestCase
             'student_expires_at' => null,
             'free_trial_expires_at' => now()->addWeek(),
         ]);
+        $user->setRelation('subscriptions', new EloquentCollection());
 
         $this->assertTrue($user->isOnTrial());
         $this->assertTrue($user->hasPremiumAccess());

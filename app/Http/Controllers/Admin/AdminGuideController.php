@@ -43,7 +43,7 @@ class AdminGuideController extends Controller
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch guides: '.$e->getMessage(),
+                'message' => 'Failed to fetch guides.',
             ], 500);
         }
     }
@@ -65,7 +65,7 @@ class AdminGuideController extends Controller
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch guide: '.$e->getMessage(),
+                'message' => 'Failed to fetch guide.',
             ], 500);
         }
     }
@@ -159,7 +159,7 @@ class AdminGuideController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update guide: '.$e->getMessage(),
+                'message' => 'Failed to update guide.',
             ], 500);
         }
     }
@@ -210,7 +210,7 @@ class AdminGuideController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete guide: '.$e->getMessage(),
+                'message' => 'Failed to delete guide.',
             ], 500);
         }
     }

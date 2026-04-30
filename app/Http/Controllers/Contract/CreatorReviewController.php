@@ -49,7 +49,7 @@ class CreatorReviewController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch creator reviews: '.$e->getMessage(),
+                'message' => 'Failed to fetch creator reviews.',
             ], 500);
         }
     }
