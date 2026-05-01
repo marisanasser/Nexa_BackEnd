@@ -62,6 +62,21 @@ class OfferController extends Controller
             ], 403);
         }
 
+        $chatRoom = ChatRoom::with('campaign')
+            ->where('room_id', $request->chat_room_id)
+            ->where('brand_id', $user->id)
+            ->where('creator_id', $request->creator_id)
+            ->first()
+        ;
+
+        if ($chatRoom?->campaign?->remuneration_type === 'permuta') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Campanhas de permuta nao permitem criacao de ofertas pagas.',
+                'reason' => 'barter_offer_blocked',
+            ], 403);
+        }
+
         if ($response = $this->ensureStripeAccount($user, $request)) {
             return $response;
         }
@@ -651,6 +666,14 @@ class OfferController extends Controller
                 'success' => false,
                 'message' => 'Chat room not found or access denied',
             ], 404);
+        }
+
+        if ($chatRoom->campaign?->remuneration_type === 'permuta') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Campanhas de permuta nao permitem criacao de ofertas pagas.',
+                'reason' => 'barter_offer_blocked',
+            ], 403);
         }
 
         $offers = Offer::where('chat_room_id', $chatRoom->id)

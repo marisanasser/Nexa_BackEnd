@@ -946,6 +946,15 @@ class ChatController extends Controller
             }
 
             $isBarter = $campaign->remuneration_type === 'permuta';
+            if ($isBarter) {
+                Log::info('Skipping automatic offer for barter campaign chat', [
+                    'chat_room_id' => $chatRoom->id,
+                    'campaign_id' => $campaign->id,
+                ]);
+
+                return;
+            }
+
             $budget = $isBarter ? 0 : $campaign->budget;
 
             $estimatedDays = now()->diffInDays($campaign->deadline, false);

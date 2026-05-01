@@ -54,7 +54,15 @@ class ContractCheckoutController extends Controller
                 ], 422);
             }
 
-            $contract = Contract::with(['brand', 'creator', 'offer.chatRoom'])->find($request->contract_id);
+            $contract = Contract::with(['brand', 'creator', 'offer.chatRoom.campaign'])->find($request->contract_id);
+
+            if ($contract->offer?->chatRoom?->campaign?->remuneration_type === 'permuta') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contratos de permuta nao exigem financiamento.',
+                    'reason' => 'barter_contract_no_funding',
+                ], 422);
+            }
 
             if ($contract->hasEscrowFundingRecord()) {
                 if ('active' !== $contract->status || 'active' !== $contract->workflow_status) {

@@ -30,6 +30,8 @@ use Illuminate\Support\Facades\DB;
  * @property Carbon|null $accepted_at
  * @property Carbon|null $rejected_at
  * @property string|null $rejection_reason
+ * @property bool $is_barter
+ * @property string|null $barter_description
  * @property Carbon $created_at
  * @property Carbon $updated_at
  * @property-read string $formatted_budget
@@ -65,11 +67,14 @@ class Offer extends Model
         'accepted_at',
         'rejected_at',
         'rejection_reason',
+        'is_barter',
+        'barter_description',
     ];
 
     protected $casts = [
         'budget' => 'decimal:2',
         'requirements' => 'array',
+        'is_barter' => 'boolean',
         'expires_at' => 'datetime',
         'accepted_at' => 'datetime',
         'rejected_at' => 'datetime',
@@ -154,8 +159,14 @@ class Offer extends Model
             $existingContract = $this->contract()->first();
 
             if (!$existingContract) {
-                $platformFee = round($this->budget * 0.05, 2);
-                $creatorAmount = round($this->budget - $platformFee, 2);
+                $this->loadMissing(['campaign', 'chatRoom.campaign']);
+                $isBarter = (bool) $this->is_barter
+                    || $this->campaign?->remuneration_type === 'permuta'
+                    || $this->chatRoom?->campaign?->remuneration_type === 'permuta';
+
+                $contractBudget = $isBarter ? 0.0 : (float) $this->budget;
+                $platformFee = $isBarter ? 0.0 : round($contractBudget * 0.05, 2);
+                $creatorAmount = $isBarter ? 0.0 : round($contractBudget - $platformFee, 2);
                 
                 // Create the contract
                 $contract = Contract::create([
@@ -164,15 +175,14 @@ class Offer extends Model
                     'creator_id' => $this->creator_id,
                     'title' => $this->title,
                     'description' => $this->description,
-                    'budget' => $this->budget,
+                    'budget' => $contractBudget,
                     'estimated_days' => $this->estimated_days,
                     'requirements' => $this->requirements,
-                    // Status should be pending until the brand funds it
-                    'status' => 'pending', 
-                    'workflow_status' => 'payment_pending',
+                    'status' => $isBarter ? 'active' : 'pending',
+                    'workflow_status' => $isBarter ? 'active' : 'payment_pending',
                     'platform_fee' => $platformFee,
                     'creator_amount' => $creatorAmount,
-                    // started_at should be set when payment is made
+                    'started_at' => $isBarter ? now() : null,
                     'expected_completion_at' => now()->addDays($this->estimated_days),
                     'created_at' => now(),
                 ]);
@@ -222,7 +232,7 @@ class Offer extends Model
                     'title' => 'Execução do Projeto',
                     'description' => 'Execução de todas as etapas do projeto (Roteiro e Vídeo).',
                     'status' => 'pending',
-                    'amount' => $this->budget,
+                    'amount' => $contractBudget,
                     'due_date' => $contract->expected_completion_at,
                     'order' => 1,
                 ]);

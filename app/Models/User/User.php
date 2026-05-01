@@ -452,7 +452,9 @@ class User extends Authenticatable
     }
     public function activeSubscription(): HasOne
     {
-        return $this->hasOne(Subscription::class)->where('status', 'active');
+        return $this->hasOne(Subscription::class)
+            ->whereIn('status', [Subscription::STATUS_ACTIVE, Subscription::STATUS_TRIALING])
+            ->where('expires_at', '>', now());
     }
 
     public function subscriptions(): HasMany
@@ -544,6 +546,10 @@ class User extends Authenticatable
     public function isOnTrial(): bool
     {
 
+        if ($this->isOnSubscriptionTrial()) {
+            return true;
+        }
+
         if ($this->isPremium()) {
             return false;
         }
@@ -560,6 +566,36 @@ class User extends Authenticatable
         ;
 
         return $trialExpiresAt !== null && $trialExpiresAt->isFuture();
+    }
+
+    public function isOnSubscriptionTrial(): bool
+    {
+        $isTrialing = function (Subscription $subscription): bool {
+            $status = (string) $subscription->status;
+            $stripeStatus = strtolower((string) ($subscription->stripe_status ?? ''));
+            $expiresAt = $this->getCarbonDate($subscription->expires_at);
+
+            return ($status === Subscription::STATUS_TRIALING || $stripeStatus === 'trialing')
+                && $expiresAt !== null
+                && $expiresAt->isFuture();
+        };
+
+        if ($this->relationLoaded('subscriptions')) {
+            return $this->subscriptions->contains($isTrialing);
+        }
+
+        return $this->subscriptions()
+            ->where(function ($query): void {
+                $query->where('status', Subscription::STATUS_TRIALING)
+                    ->orWhere('stripe_status', 'trialing');
+            })
+            ->where('expires_at', '>', now())
+            ->exists();
+    }
+
+    public function hasLimitedTrialAccess(): bool
+    {
+        return $this->isOnSubscriptionTrial() || (!$this->isPremium() && $this->isOnTrial());
     }
 
     public function hasBoughtPremium(): bool

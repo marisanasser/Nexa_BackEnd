@@ -78,7 +78,7 @@ class SetupStripePrices extends Command
                 ]);
 
                 $this->newLine();
-                $this->info("✅ Created price for '{$plan->name}': {$price->id} (R$ {$plan->price}/mês, {$plan->duration_months} meses)");
+                $this->info("Created price for '{$plan->name}': {$price->id} (R$ {$plan->price} every {$plan->duration_months} month(s))");
 
                 $bar->advance();
             } catch (ApiErrorException $e) {
@@ -129,8 +129,9 @@ class SetupStripePrices extends Command
 
     private function createPrice(SubscriptionPlan $plan, string $productId): Price
     {
-        $monthlyPrice = (float) $plan->monthly_price;
-        $priceInCents = (int) round($monthlyPrice * 100);
+        $durationMonths = max(1, (int) $plan->duration_months);
+        $planPrice = (float) $plan->price;
+        $priceInCents = (int) round($planPrice * 100);
 
         return Price::create([
             'product' => $productId,
@@ -138,12 +139,13 @@ class SetupStripePrices extends Command
             'currency' => 'brl',
             'recurring' => [
                 'interval' => 'month',
-                'interval_count' => 1,
+                'interval_count' => $durationMonths,
             ],
             'metadata' => [
                 'plan_id' => $plan->id,
-                'duration_months' => $plan->duration_months,
-                'monthly_price' => $monthlyPrice,
+                'duration_months' => $durationMonths,
+                'monthly_price' => (float) $plan->monthly_price,
+                'billing_period_amount' => $planPrice,
             ],
         ]);
     }

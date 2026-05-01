@@ -73,6 +73,12 @@ class SubscriptionService
             $params['discounts'] = [['coupon' => $couponCode]];
         }
 
+        $trialDays = max(0, (int) config('services.stripe.subscription_trial_days', 0));
+        if ($trialDays > 0) {
+            $params['payment_method_collection'] = 'always';
+            $params['subscription_data']['trial_period_days'] = $trialDays;
+        }
+
         return $this->stripeWrapper->createCheckoutSession($params);
     }
 
@@ -441,7 +447,8 @@ class SubscriptionService
         $currentPeriodStart = $this->extractStripePeriodStart($stripeSubscription);
         $currentPeriodEnd = $this->extractStripePeriodEnd($stripeSubscription);
         $unitAmount = $stripeSubscription->items->data[0]->price->unit_amount ?? 0;
-        $amountPaid = $plan ? (float) $plan->price : ((float) $unitAmount / 100);
+        $isTrialing = $status === Subscription::STATUS_TRIALING;
+        $amountPaid = $isTrialing ? 0.0 : ($plan ? (float) $plan->price : ((float) $unitAmount / 100));
         $isFixedTerm = $plan && (int) $plan->duration_months > 1;
         $autoRenew = !$isFixedTerm && !$stripeSubscription->cancel_at_period_end && empty($stripeSubscription->cancel_at);
 
@@ -485,7 +492,7 @@ class SubscriptionService
             'canceled' => 'cancelled',
             'incomplete' => 'incomplete',
             'incomplete_expired' => 'expired',
-            'trialing' => 'trialing',
+            'trialing' => Subscription::STATUS_TRIALING,
             default => 'inactive',
         };
     }

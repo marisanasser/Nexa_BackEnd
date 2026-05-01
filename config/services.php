@@ -32,6 +32,7 @@ return [
         // Support both STRIPE_PUBLISHABLE_KEY e STRIPE_KEY (legado)
         'publishable_key' => env('STRIPE_PUBLISHABLE_KEY', env('STRIPE_KEY')),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'subscription_trial_days' => (int) env('STRIPE_SUBSCRIPTION_TRIAL_DAYS', 0),
     ],
 
     'meta' => [

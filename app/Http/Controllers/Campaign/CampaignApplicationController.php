@@ -81,6 +81,13 @@ class CampaignApplicationController extends Controller
             return response()->json(['message' => 'Only premium users can send proposals to start a chat with brands.'], 403);
         }
 
+        if ($user->hasLimitedTrialAccess() && $campaign->remuneration_type !== 'permuta') {
+            return response()->json([
+                'message' => 'Usuarios em teste gratuito podem se candidatar apenas a campanhas de permuta.',
+                'reason' => 'trial_paid_campaign_blocked',
+            ], 403);
+        }
+
         if (!$campaign->isApproved() || !$campaign->is_active) {
             return response()->json(['message' => 'Campaign is not available for applications'], 400);
         }
@@ -624,7 +631,8 @@ class CampaignApplicationController extends Controller
 
         $campaign = $application->campaign;
 
-        $budget = (float) ($application->proposed_budget ?? $campaign->budget ?? 0);
+        $isBarterCampaign = $campaign->remuneration_type === 'permuta';
+        $budget = $isBarterCampaign ? 0.0 : (float) ($application->proposed_budget ?? $campaign->budget ?? 0);
         $campaignDeadline = $campaign->deadline ?? null;
         $defaultEstimatedDays = $campaignDeadline ? now()->diffInDays($campaignDeadline, false) : 30;
         $estimatedDays = (int) ($application->estimated_delivery_days ?? $defaultEstimatedDays);
@@ -652,6 +660,8 @@ class CampaignApplicationController extends Controller
                 'budget' => $budget,
                 'estimated_days' => $estimatedDays,
                 'requirements' => $campaign->requirements ?? [],
+                'is_barter' => $isBarterCampaign,
+                'barter_description' => $isBarterCampaign ? 'Permuta baseada na campanha: '.$campaign->title : null,
                 'expires_at' => now()->addDays(7),
             ]);
         } else {
@@ -661,6 +671,8 @@ class CampaignApplicationController extends Controller
                 'budget' => $budget,
                 'estimated_days' => $estimatedDays,
                 'requirements' => $campaign->requirements ?? $offer->requirements ?? [],
+                'is_barter' => $isBarterCampaign,
+                'barter_description' => $isBarterCampaign ? 'Permuta baseada na campanha: '.$campaign->title : null,
                 'expires_at' => now()->addDays(7),
             ]);
         }

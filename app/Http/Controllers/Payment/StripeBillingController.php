@@ -159,6 +159,11 @@ class StripeBillingController extends Controller
                 'expand' => ['latest_invoice.payment_intent'],
             ];
 
+            $trialDays = $this->getConfiguredTrialDays();
+            if ($trialDays > 0) {
+                $subscriptionParams['trial_period_days'] = $trialDays;
+            }
+
             if ($cancelAt) {
                 $subscriptionParams['cancel_at'] = $cancelAt;
                 Log::info('Setting subscription cancel_at', [
@@ -284,10 +289,13 @@ class StripeBillingController extends Controller
                 'subscription_status' => $stripeSub->status ?? 'unknown',
             ]);
 
+            $isTrialing = isset($stripeSub->status) && 'trialing' === (string) $stripeSub->status;
             $paymentSucceeded = false;
             if ($invoice && is_object($invoice) && isset($invoice->status) && 'paid' === $invoice->status) {
                 $paymentSucceeded = true;
             } elseif ($pi && is_object($pi) && isset($pi->status) && 'succeeded' === $pi->status) {
+                $paymentSucceeded = true;
+            } elseif ($isTrialing) {
                 $paymentSucceeded = true;
             } elseif (isset($stripeSub->status) && 'active' === $stripeSub->status) {
                 $paymentSucceeded = true;
@@ -324,17 +332,18 @@ class StripeBillingController extends Controller
                     }
 
                     $localSub->update([
-                        'status' => Subscription::STATUS_ACTIVE,
+                        'status' => $isTrialing ? Subscription::STATUS_TRIALING : Subscription::STATUS_ACTIVE,
+                        'amount_paid' => $isTrialing ? 0 : $plan->price,
                         'starts_at' => $currentPeriodStart,
                         'expires_at' => $currentPeriodEnd,
-                        'stripe_status' => $stripeSub->status ?? 'active',
+                        'stripe_status' => $stripeSub->status ?? ($isTrialing ? 'trialing' : 'active'),
                         'stripe_latest_invoice_id' => $invoiceId,
                     ]);
 
                     $localTx->update([
-                        'status' => 'paid',
+                        'status' => $isTrialing ? 'pending' : 'paid',
                         'stripe_payment_intent_id' => $paymentIntentId ?? $localTx->stripe_payment_intent_id,
-                        'paid_at' => now(),
+                        'paid_at' => $isTrialing ? null : now(),
                     ]);
 
                     $user->update([
@@ -355,7 +364,7 @@ class StripeBillingController extends Controller
                         'success' => true,
                         'requires_action' => false,
                         'subscription_id' => $localSub->id,
-                        'subscription_status' => 'active',
+                        'subscription_status' => $isTrialing ? 'trialing' : 'active',
                         'activated' => true,
                     ]);
                 } catch (Throwable $e) {
@@ -461,6 +470,7 @@ class StripeBillingController extends Controller
             $checkoutPayload = [
                 'customer' => $customer->id,
                 'payment_method_types' => ['card'],
+                'payment_method_collection' => 'always',
                 'line_items' => [$lineItem],
                 'mode' => 'subscription',
                 'locale' => 'pt-BR',
@@ -472,7 +482,20 @@ class StripeBillingController extends Controller
                     'plan_name' => $plan->name,
                     'duration_months' => $plan->duration_months,
                 ],
+                'subscription_data' => [
+                    'metadata' => [
+                        'user_id' => (string) $user->id,
+                        'plan_id' => (string) $plan->id,
+                        'plan_name' => (string) $plan->name,
+                        'duration_months' => (string) $plan->duration_months,
+                    ],
+                ],
             ];
+
+            $trialDays = $this->getConfiguredTrialDays();
+            if ($trialDays > 0) {
+                $checkoutPayload['subscription_data']['trial_period_days'] = $trialDays;
+            }
 
             $checkoutDisclosure = $this->buildCheckoutDisclosureText($plan);
             if (null !== $checkoutDisclosure) {
@@ -518,7 +541,7 @@ class StripeBillingController extends Controller
      *
      * Priority:
      * 1) Reuse configured Stripe price ID when present.
-     * 2) Fallback to inline recurring price_data using monthly amount derived from plan totals.
+     * 2) Fallback to inline recurring price_data using the plan period amount.
      */
     private function buildCheckoutLineItem(SubscriptionPlan $plan): array
     {
@@ -530,8 +553,9 @@ class StripeBillingController extends Controller
         }
 
         $duration = max(1, (int) $plan->duration_months);
-        $monthlyAmount = (float) $plan->price / $duration;
-        $unitAmount = max(1, (int) round($monthlyAmount * 100));
+        $planAmount = (float) $plan->price;
+        $monthlyAmount = $planAmount / $duration;
+        $unitAmount = max(1, (int) round($planAmount * 100));
         $productData = [
             'name' => $plan->name,
             'metadata' => [
@@ -559,7 +583,7 @@ class StripeBillingController extends Controller
                 'product_data' => $productData,
                 'recurring' => [
                     'interval' => 'month',
-                    'interval_count' => 1,
+                    'interval_count' => $duration,
                 ],
                 'unit_amount' => $unitAmount,
             ],
@@ -603,11 +627,21 @@ class StripeBillingController extends Controller
         $monthlyFormatted = number_format($monthlyAmount, 2, ',', '.');
         $totalFormatted = number_format((float) $plan->price, 2, ',', '.');
 
-        if ($duration <= 1) {
-            return "Assinatura mensal recorrente de R$ {$monthlyFormatted}.";
+        $message = $duration <= 1
+            ? "Assinatura mensal recorrente de R$ {$monthlyFormatted}."
+            : "Compromisso de {$duration} meses: {$duration}x de R$ {$monthlyFormatted} (total estimado de R$ {$totalFormatted}).";
+
+        $trialDays = $this->getConfiguredTrialDays();
+        if ($trialDays > 0) {
+            $message .= " Inclui {$trialDays} dias gratuitos; a cobranca sera feita automaticamente ao fim do periodo se a assinatura permanecer ativa.";
         }
 
-        return "Compromisso de {$duration} meses: {$duration}x de R$ {$monthlyFormatted} (total estimado de R$ {$totalFormatted}).";
+        return $message;
+    }
+
+    private function getConfiguredTrialDays(): int
+    {
+        return max(0, (int) config('services.stripe.subscription_trial_days', 0));
     }
 
     public function createSubscriptionFromCheckout(Request $request): JsonResponse
@@ -651,7 +685,7 @@ class StripeBillingController extends Controller
             if ($existingSub) {
                 $existingSub->loadMissing('plan');
                 $purchasePayload = null;
-                if ($existingSub->plan) {
+                if ($existingSub->plan && 'trialing' !== (string) $existingSub->stripe_status && Subscription::STATUS_ACTIVE === (string) $existingSub->status) {
                     $purchasePayload = [
                         'value' => (float) $existingSub->amount_paid,
                         'currency' => 'BRL',
@@ -727,8 +761,10 @@ class StripeBillingController extends Controller
                 }
             }
 
+            $isTrialing = 'trialing' === $stripeSub->status;
             $paymentSuccessful = (
-                'active' === $stripeSub->status
+                $isTrialing
+                || 'active' === $stripeSub->status
                 || 'paid' === $invoiceStatus
                 || 'succeeded' === $paymentIntentStatus
             );
@@ -771,25 +807,29 @@ class StripeBillingController extends Controller
 
             $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_'.$stripeSubscriptionId;
 
+            $transactionStatus = $isTrialing ? 'pending' : 'paid';
+            $localSubscriptionStatus = $isTrialing ? 'trialing' : Subscription::STATUS_ACTIVE;
+
             $transaction = Transaction::create([
                 'user_id' => $user->id,
                 'stripe_payment_intent_id' => $transactionId,
-                'status' => 'paid',
+                'status' => $transactionStatus,
                 'amount' => $plan->price,
                 'payment_method' => 'stripe',
                 'payment_data' => [
                     'invoice' => $invoiceId,
                     'subscription' => $stripeSubscriptionId,
                     'checkout_session' => $sessionId,
+                    'stripe_subscription_status' => $stripeSub->status ?? null,
                 ],
-                'paid_at' => now(),
+                'paid_at' => $isTrialing ? null : now(),
             ]);
 
             $subscription = Subscription::create([
                 'user_id' => $user->id,
                 'subscription_plan_id' => $plan->id,
-                'status' => Subscription::STATUS_ACTIVE,
-                'amount_paid' => $plan->price,
+                'status' => $localSubscriptionStatus,
+                'amount_paid' => $isTrialing ? 0 : $plan->price,
                 'payment_method' => 'stripe',
                 'transaction_id' => $transaction->id,
                 'auto_renew' => $plan->duration_months <= 1,
@@ -842,7 +882,7 @@ class StripeBillingController extends Controller
                     'status' => $subscription->status,
                     'expires_at' => $subscription->expires_at?->format('Y-m-d H:i:s'),
                 ],
-                'purchase' => [
+                'purchase' => $isTrialing ? null : [
                     'value' => (float) $plan->price,
                     'currency' => 'BRL',
                     'content_name' => (string) $plan->name,
@@ -1005,8 +1045,10 @@ class StripeBillingController extends Controller
                 }
             }
 
+            $isTrialing = 'trialing' === $stripeSub->status;
             $paymentSuccessful = (
-                'active' === $stripeSub->status
+                $isTrialing
+                || 'active' === $stripeSub->status
                 || 'paid' === $invoiceStatus
                 || 'succeeded' === $paymentIntentStatus
             );
@@ -1049,25 +1091,29 @@ class StripeBillingController extends Controller
 
             $transactionId = $paymentIntentId ?? $invoiceId ?? 'stripe_'.$stripeSubscriptionId;
 
+            $transactionStatus = $isTrialing ? 'pending' : 'paid';
+            $localSubscriptionStatus = $isTrialing ? 'trialing' : Subscription::STATUS_ACTIVE;
+
             $transaction = Transaction::create([
                 'user_id' => $user->id,
                 'stripe_payment_intent_id' => $transactionId,
-                'status' => 'paid',
+                'status' => $transactionStatus,
                 'amount' => $plan->price,
                 'payment_method' => 'stripe',
                 'payment_data' => [
                     'invoice' => $invoiceId,
                     'subscription' => $stripeSubscriptionId,
                     'checkout_session' => $sessionId,
+                    'stripe_subscription_status' => $stripeSub->status ?? null,
                 ],
-                'paid_at' => now(),
+                'paid_at' => $isTrialing ? null : now(),
             ]);
 
             $subscription = Subscription::create([
                 'user_id' => $user->id,
                 'subscription_plan_id' => $plan->id,
-                'status' => Subscription::STATUS_ACTIVE,
-                'amount_paid' => $plan->price,
+                'status' => $localSubscriptionStatus,
+                'amount_paid' => $isTrialing ? 0 : $plan->price,
                 'payment_method' => 'stripe',
                 'transaction_id' => $transaction->id,
                 'auto_renew' => $plan->duration_months <= 1,
@@ -1318,7 +1364,7 @@ class StripeBillingController extends Controller
                 'stripe_status' => $stripeSub->status ?? 'unknown',
             ]);
 
-            if ('active' === $stripeSub->status) {
+            if (in_array((string) $stripeSub->status, ['active', 'trialing'], true)) {
                 DB::beginTransaction();
 
                 try {
@@ -1338,8 +1384,12 @@ class StripeBillingController extends Controller
                         }
                     }
 
+                    $localSubscriptionStatus = 'trialing' === (string) $stripeSub->status
+                        ? Subscription::STATUS_TRIALING
+                        : Subscription::STATUS_ACTIVE;
+
                     $localSub->update([
-                        'status' => Subscription::STATUS_ACTIVE,
+                        'status' => $localSubscriptionStatus,
                         'starts_at' => $currentPeriodStart,
                         'expires_at' => $currentPeriodEnd,
                         'auto_renew' => $plan ? ($plan->duration_months <= 1) : $localSub->auto_renew,
@@ -1351,8 +1401,8 @@ class StripeBillingController extends Controller
                         $transaction = Transaction::find($localSub->transaction_id);
                         if ($transaction) {
                             $transaction->update([
-                                'status' => 'paid',
-                                'paid_at' => now(),
+                                'status' => 'trialing' === (string) $stripeSub->status ? 'pending' : 'paid',
+                                'paid_at' => 'trialing' === (string) $stripeSub->status ? null : now(),
                             ]);
                         }
                     }

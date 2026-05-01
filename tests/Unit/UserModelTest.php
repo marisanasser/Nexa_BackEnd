@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
+use App\Models\Payment\Subscription;
 use App\Models\User\User;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Tests\TestCase;
@@ -62,5 +63,26 @@ class UserModelTest extends TestCase
         $this->assertTrue($user->isOnTrial());
         $this->assertTrue($user->hasPremiumAccess());
         $this->assertNotNull($user->getStudentAccessExpiresAt());
+    }
+
+    public function testStripeTrialingSubscriptionIsLimitedTrialAccess(): void
+    {
+        $user = new User([
+            'role' => 'creator',
+            'has_premium' => true,
+            'premium_expires_at' => now()->addWeek(),
+        ]);
+        $user->setRelation('subscriptions', new EloquentCollection([
+            new Subscription([
+                'status' => Subscription::STATUS_TRIALING,
+                'stripe_status' => 'trialing',
+                'expires_at' => now()->addWeek(),
+            ]),
+        ]));
+
+        $this->assertTrue($user->isOnSubscriptionTrial());
+        $this->assertTrue($user->isOnTrial());
+        $this->assertTrue($user->hasLimitedTrialAccess());
+        $this->assertTrue($user->hasPremiumAccess());
     }
 }

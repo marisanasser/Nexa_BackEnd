@@ -44,6 +44,8 @@ class Subscription extends Model
 
     public const string STATUS_ACTIVE = 'active';
 
+    public const string STATUS_TRIALING = 'trialing';
+
     public const string STATUS_EXPIRED = 'expired';
 
     public const string STATUS_CANCELLED = 'cancelled';
@@ -86,7 +88,7 @@ class Subscription extends Model
                 }
             }
 
-            if (self::STATUS_ACTIVE !== (string) $subscription->status) {
+            if (!in_array((string) $subscription->status, [self::STATUS_ACTIVE, self::STATUS_TRIALING], true)) {
                 return;
             }
 
@@ -120,7 +122,13 @@ class Subscription extends Model
 
     public function isActive(): bool
     {
-        return self::STATUS_ACTIVE === $this->status
+        return in_array((string) $this->status, [self::STATUS_ACTIVE, self::STATUS_TRIALING], true)
+            && $this->expires_at?->isFuture();
+    }
+
+    public function isTrialing(): bool
+    {
+        return self::STATUS_TRIALING === $this->status
             && $this->expires_at?->isFuture();
     }
 
@@ -146,7 +154,7 @@ class Subscription extends Model
 
     public function scopeActive($query)
     {
-        return $query->where('status', self::STATUS_ACTIVE)
+        return $query->whereIn('status', [self::STATUS_ACTIVE, self::STATUS_TRIALING])
             ->where('expires_at', '>', now())
         ;
     }
