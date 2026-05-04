@@ -81,12 +81,8 @@ class CampaignApplicationController extends Controller
             return response()->json(['message' => 'Only premium users can send proposals to start a chat with brands.'], 403);
         }
 
-        if ($user->hasLimitedTrialAccess() && $campaign->remuneration_type !== 'permuta') {
-            return response()->json([
-                'message' => 'Usuarios em teste gratuito podem se candidatar apenas a campanhas de permuta.',
-                'reason' => 'trial_paid_campaign_blocked',
-            ], 403);
-        }
+        // Removida restrição de trial para campanhas pagas
+        // Estudantes em trial agora podem se candidatar a qualquer campanha
 
         if (!$campaign->isApproved() || !$campaign->is_active) {
             return response()->json(['message' => 'Campaign is not available for applications'], 400);
