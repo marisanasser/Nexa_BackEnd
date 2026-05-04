@@ -7,6 +7,7 @@ use App\Events\Chat\NewMessage;
 use App\Events\Chat\UserTyping;
 use App\Helpers\FileUploadHelper;
 use App\Http\Controllers\Base\Controller;
+use App\Http\Requests\Chat\SendMessageRequest;
 use App\Models\Campaign\CampaignApplication;
 use App\Models\Chat\ChatRoom;
 use App\Models\Chat\Message;
@@ -326,13 +327,8 @@ class ChatController extends Controller
         }
     }
 
-    public function sendMessage(Request $request): JsonResponse
+    public function sendMessage(SendMessageRequest $request): JsonResponse
     {
-        $request->validate([
-            'room_id' => 'required|string',
-            'message' => 'required_without:file|string|max:1000',
-            'file' => 'nullable|file|max:256000',
-        ]);
 
         $user = $this->getAuthenticatedUser();
         $room = $this->findChatRoom($request->room_id, $user);
