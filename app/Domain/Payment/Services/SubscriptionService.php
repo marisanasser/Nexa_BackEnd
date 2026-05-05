@@ -6,6 +6,7 @@ namespace App\Domain\Payment\Services;
 
 use App\Models\Payment\Subscription;
 use App\Models\Payment\SubscriptionPlan;
+use App\Models\Payment\DataCrazyIntegrationEvent;
 use App\Models\Payment\Transaction;
 use App\Models\User\User;
 use App\Wrappers\StripeWrapper;
@@ -108,7 +109,8 @@ class SubscriptionService
             return;
         }
 
-        $this->syncSubscription($stripeSubscriptionId, $user, $plan);
+        $subscription = $this->syncSubscription($stripeSubscriptionId, $user, $plan);
+        $this->markDataCrazyCheckoutCompleted($session, $subscription);
     }
 
     /**
@@ -411,6 +413,9 @@ class SubscriptionService
                 'stripe_latest_invoice_id' => $latestInvoiceId,
             ]);
 
+            $this->deactivateUserIfNoActiveSubscription($localSub->user);
+            $this->markDataCrazySubscriptionStatus($localSub, 'payment_failed');
+
             Log::info('Subscription payment marked as failed', [
                 'local_subscription_id' => $localSub->id,
                 'user_id' => $localSub->user_id,
@@ -420,6 +425,40 @@ class SubscriptionService
             Log::error('Failed to mark subscription payment failed', [
                 'stripe_subscription_id' => $stripeSubscriptionId,
                 'latest_invoice_id' => $latestInvoiceId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function markSubscriptionDeleted(string $stripeSubscriptionId): void
+    {
+        try {
+            $localSub = Subscription::where('stripe_subscription_id', $stripeSubscriptionId)->first();
+            if (!$localSub) {
+                Log::warning('Local subscription not found when marking deleted subscription', [
+                    'stripe_subscription_id' => $stripeSubscriptionId,
+                ]);
+
+                return;
+            }
+
+            $localSub->update([
+                'status' => Subscription::STATUS_CANCELLED,
+                'stripe_status' => 'canceled',
+                'cancelled_at' => $localSub->cancelled_at ?? now(),
+            ]);
+
+            $this->deactivateUserIfNoActiveSubscription($localSub->user);
+            $this->markDataCrazySubscriptionStatus($localSub, 'cancelled');
+
+            Log::info('Subscription marked as deleted from Stripe', [
+                'subscription_id' => $localSub->id,
+                'user_id' => $localSub->user_id,
+                'stripe_subscription_id' => $stripeSubscriptionId,
+            ]);
+        } catch (Throwable $e) {
+            Log::error('Failed to mark Stripe subscription as deleted', [
+                'stripe_subscription_id' => $stripeSubscriptionId,
                 'error' => $e->getMessage(),
             ]);
         }
@@ -476,6 +515,8 @@ class SubscriptionService
             'user_id' => $user->id,
             'status' => $status,
         ]);
+
+        $this->markDataCrazySubscriptionSynced($stripeSubscription, $subscription);
 
         return $subscription;
     }
@@ -571,6 +612,111 @@ class SubscriptionService
             'premium_expires_at' => $isPremium
                 ? $premiumExpiresAt
                 : null,
+        ]);
+    }
+
+    private function markDataCrazyCheckoutCompleted(Session $session, ?Subscription $subscription): void
+    {
+        $eventId = $session->metadata->datacrazy_event_id ?? null;
+        if (!$eventId) {
+            return;
+        }
+
+        $event = DataCrazyIntegrationEvent::find($eventId);
+        if (!$event) {
+            return;
+        }
+
+        $payload = is_array($event->response_payload) ? $event->response_payload : [];
+
+        $event->forceFill([
+            'stripe_checkout_session_id' => $session->id ?? $event->stripe_checkout_session_id,
+            'stripe_subscription_id' => $session->subscription ?? $event->stripe_subscription_id,
+            'response_payload' => [
+                ...$payload,
+                'checkout_completed' => true,
+                'stripe_subscription_id' => $session->subscription ?? null,
+                'nexa_subscription_id' => $subscription?->id,
+            ],
+        ])->save();
+    }
+
+    private function markDataCrazySubscriptionSynced(\Stripe\Subscription $stripeSubscription, Subscription $subscription): void
+    {
+        $eventId = $stripeSubscription->metadata->datacrazy_event_id ?? null;
+        $externalEventId = $stripeSubscription->metadata->datacrazy_external_event_id ?? null;
+
+        $query = DataCrazyIntegrationEvent::query();
+        if ($eventId) {
+            $query->whereKey($eventId);
+        } elseif ($externalEventId) {
+            $query->where('external_event_id', $externalEventId);
+        } else {
+            return;
+        }
+
+        $event = $query->first();
+        if (!$event) {
+            return;
+        }
+
+        $payload = is_array($event->response_payload) ? $event->response_payload : [];
+
+        $event->forceFill([
+            'user_id' => $subscription->user_id,
+            'subscription_plan_id' => $subscription->subscription_plan_id,
+            'stripe_subscription_id' => $stripeSubscription->id,
+            'response_payload' => [
+                ...$payload,
+                'stripe_subscription_id' => $stripeSubscription->id,
+                'nexa_subscription_id' => $subscription->id,
+                'subscription_status' => $subscription->status,
+                'stripe_status' => $stripeSubscription->status,
+            ],
+        ])->save();
+    }
+
+    private function markDataCrazySubscriptionStatus(Subscription $subscription, string $status): void
+    {
+        if (!$subscription->stripe_subscription_id) {
+            return;
+        }
+
+        $event = DataCrazyIntegrationEvent::where('stripe_subscription_id', $subscription->stripe_subscription_id)->first();
+        if (!$event) {
+            return;
+        }
+
+        $payload = is_array($event->response_payload) ? $event->response_payload : [];
+
+        $event->forceFill([
+            'response_payload' => [
+                ...$payload,
+                'nexa_subscription_id' => $subscription->id,
+                'subscription_status' => $subscription->status,
+                'datacrazy_status' => $status,
+            ],
+        ])->save();
+    }
+
+    private function deactivateUserIfNoActiveSubscription(?User $user): void
+    {
+        if (!$user) {
+            return;
+        }
+
+        $hasActiveSubscription = $user->subscriptions()
+            ->whereIn('status', [Subscription::STATUS_ACTIVE, Subscription::STATUS_TRIALING])
+            ->where('expires_at', '>', now())
+            ->exists();
+
+        if ($hasActiveSubscription) {
+            return;
+        }
+
+        $user->update([
+            'has_premium' => false,
+            'premium_expires_at' => null,
         ]);
     }
 

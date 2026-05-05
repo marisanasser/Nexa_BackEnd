@@ -11,6 +11,7 @@ use Illuminate\Support\Carbon;
 /**
  * @property int         $id
  * @property string      $name
+ * @property null|string $code
  * @property null|string $description
  * @property float       $price
  * @property null|string $stripe_price_id
@@ -36,6 +37,7 @@ class SubscriptionPlan extends Model
 
     protected $fillable = [
         'name',
+        'code',
         'description',
         'price',
         'stripe_price_id',
@@ -101,5 +103,10 @@ class SubscriptionPlan extends Model
     public static function findByStripePriceId(string $priceId): ?self
     {
         return static::where('stripe_price_id', $priceId)->first();
+    }
+
+    public static function findByCode(string $code): ?self
+    {
+        return static::where('code', $code)->first();
     }
 }

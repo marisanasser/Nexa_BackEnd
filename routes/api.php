@@ -23,6 +23,7 @@ use App\Http\Controllers\Contract\PostContractWorkflowController;
 use App\Http\Controllers\Contract\ReviewController;
 use App\Http\Controllers\Payment\BrandPaymentController;
 use App\Http\Controllers\Payment\CreatorBalanceController;
+use App\Http\Controllers\Payment\DataCrazyIntegrationController;
 use App\Http\Controllers\Payment\PaymentController;
 use App\Http\Controllers\Payment\StripeBillingController;
 use App\Http\Controllers\Payment\StripeController;
@@ -229,6 +230,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
 });
 
 Route::get('/subscription/plans', [SubscriptionController::class, 'getPlans']);
+
+Route::post('/integrations/datacrazy/checkout', [DataCrazyIntegrationController::class, 'checkout'])->middleware(['throttle:payment']);
 
 Route::post('/payment/create-subscription-from-checkout-public', [StripeBillingController::class, 'createSubscriptionFromCheckoutPublic'])->middleware(['throttle:payment']);
 

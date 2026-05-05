@@ -35,6 +35,19 @@ return [
         'subscription_trial_days' => (int) env('STRIPE_SUBSCRIPTION_TRIAL_DAYS', 0),
     ],
 
+    'datacrazy' => [
+        'integration_token' => env('DATACRAZY_INTEGRATION_TOKEN'),
+        'hmac_secret' => env('DATACRAZY_HMAC_SECRET'),
+        'max_skew_seconds' => (int) env('DATACRAZY_MAX_SKEW_SECONDS', 300),
+        'default_role' => env('DATACRAZY_DEFAULT_ROLE', 'creator'),
+        'success_url' => env('DATACRAZY_CHECKOUT_SUCCESS_URL'),
+        'cancel_url' => env('DATACRAZY_CHECKOUT_CANCEL_URL'),
+        'allowed_redirect_hosts' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('DATACRAZY_ALLOWED_REDIRECT_HOSTS', parse_url((string) env('FRONTEND_URL', ''), PHP_URL_HOST) ?: ''))
+        ))),
+    ],
+
     'meta' => [
         'pixel_id' => env('META_PIXEL_ID'),
         'access_token' => env('META_CONVERSIONS_API_ACCESS_TOKEN'),

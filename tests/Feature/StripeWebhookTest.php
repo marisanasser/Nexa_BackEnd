@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Domain\Payment\Repositories\WebhookEventRepository;
 use App\Domain\Payment\Services\PaymentMethodService;
+use App\Domain\Payment\Services\SubscriptionService;
 use App\Models\Payment\WebhookEvent;
 use App\Models\User\User;
 
@@ -69,9 +70,8 @@ class StripeWebhookTest extends TestCase
         $payloadJson = json_encode($payload);
         $signature = $this->generateSignature($payloadJson, 'whsec_test_secret', $timestamp);
 
-        // Mock PaymentService
         $this->mock(PaymentMethodService::class, function ($mock): void {
-            $mock->shouldReceive('handleGeneralSetupCheckout')
+            $mock->shouldReceive('processSetupSession')
                 ->once()
                 ->with(Mockery::on(fn($arg) => 'cs_test_123' === $arg->id))
             ;
@@ -124,9 +124,8 @@ class StripeWebhookTest extends TestCase
         $payloadJson = json_encode($payload);
         $signature = $this->generateSignature($payloadJson, 'whsec_test_secret', $timestamp);
 
-        // Mock PaymentService
         $this->mock(PaymentMethodService::class, function ($mock): void {
-            $mock->shouldReceive('handleGeneralSetupCheckout')
+            $mock->shouldReceive('processSetupSession')
                 ->once()
                 ->with(Mockery::on(fn($arg) => 'cs_test_unknown' === $arg->id))
             ;
@@ -138,6 +137,38 @@ class StripeWebhookTest extends TestCase
         ]);
 
         // 3. Assert
+        $response->assertStatus(200);
+    }
+
+    public function testWebhookHandlesDeletedSubscription(): void
+    {
+        $payload = [
+            'id' => 'evt_sub_deleted',
+            'type' => 'customer.subscription.deleted',
+            'data' => [
+                'object' => [
+                    'id' => 'sub_deleted_123',
+                    'object' => 'subscription',
+                    'status' => 'canceled',
+                ],
+            ],
+        ];
+
+        $timestamp = time();
+        $payloadJson = json_encode($payload);
+        $signature = $this->generateSignature($payloadJson, 'whsec_test_secret', $timestamp);
+
+        $this->mock(SubscriptionService::class, function ($mock): void {
+            $mock->shouldReceive('markSubscriptionDeleted')
+                ->once()
+                ->with('sub_deleted_123')
+            ;
+        });
+
+        $response = $this->postJson('/api/stripe/webhook', $payload, [
+            'Stripe-Signature' => $signature,
+        ]);
+
         $response->assertStatus(200);
     }
 

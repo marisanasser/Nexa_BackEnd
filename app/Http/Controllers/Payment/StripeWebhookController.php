@@ -167,6 +167,11 @@ class StripeWebhookController extends Controller
 
                 break;
 
+            case 'customer.subscription.deleted':
+                $this->handleSubscriptionDeleted($event);
+
+                break;
+
             case 'charge.dispute.created':
             case 'transfer.failed':
             case 'payout.paid':
@@ -265,6 +270,20 @@ class StripeWebhookController extends Controller
         ]);
 
         $this->subscriptionService->syncSubscription($stripeSub->id, null, null);
+    }
+
+    private function handleSubscriptionDeleted(Event $event): void
+    {
+        $stripeSub = $event->data->object;
+
+        Log::info('Stripe subscription deleted event received', [
+            'event_id' => $event->id,
+            'subscription_id' => $stripeSub->id ?? 'no_id',
+        ]);
+
+        if (!empty($stripeSub->id)) {
+            $this->subscriptionService->markSubscriptionDeleted($stripeSub->id);
+        }
     }
 
     private function handlePaymentEvent(Event $event): void
