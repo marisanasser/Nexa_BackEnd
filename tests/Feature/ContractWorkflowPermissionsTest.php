@@ -30,10 +30,12 @@ class ContractWorkflowPermissionsTest extends TestCase
             'status' => 'active',
         ]);
 
-        $milestone = CampaignTimeline::factory()->create([
+        $milestone = CampaignTimeline::query()->create([
             'contract_id' => $contract->id,
             'milestone_type' => 'script_submission',
+            'title' => 'Envio de roteiro',
             'status' => 'pending',
+            'deadline' => now()->addDay(),
             'file_path' => null,
         ]);
 
@@ -49,6 +51,130 @@ class ContractWorkflowPermissionsTest extends TestCase
 
         $milestone->refresh();
         $this->assertNotNull($milestone->file_path);
+    }
+
+    public function test_brand_can_upload_script_submission_link_and_it_is_approved(): void
+    {
+        $brand = User::factory()->state(['role' => 'brand'])->create();
+        $creator = User::factory()->state(['role' => 'creator'])->create();
+
+        $contract = Contract::factory()->create([
+            'brand_id' => $brand->id,
+            'creator_id' => $creator->id,
+            'status' => 'active',
+        ]);
+
+        $milestone = CampaignTimeline::query()->create([
+            'contract_id' => $contract->id,
+            'milestone_type' => 'script_submission',
+            'title' => 'Envio de roteiro',
+            'status' => 'pending',
+            'deadline' => now()->addDay(),
+            'file_path' => null,
+        ]);
+
+        Sanctum::actingAs($brand);
+
+        $response = $this->postJson('/api/campaign-timeline/upload-file', [
+            'milestone_id' => $milestone->id,
+            'external_link' => 'https://drive.google.com/file/d/roteiro/view',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.file_type', 'external_link');
+
+        $milestone->refresh();
+        $this->assertSame('approved', $milestone->status);
+        $this->assertSame('https://drive.google.com/file/d/roteiro/view', $milestone->file_path);
+    }
+
+    public function test_brand_can_skip_script_submission_to_unlock_video_submission(): void
+    {
+        $brand = User::factory()->state(['role' => 'brand'])->create();
+        $creator = User::factory()->state(['role' => 'creator'])->create();
+
+        $contract = Contract::factory()->create([
+            'brand_id' => $brand->id,
+            'creator_id' => $creator->id,
+            'status' => 'active',
+        ]);
+
+        $scriptMilestone = CampaignTimeline::query()->create([
+            'contract_id' => $contract->id,
+            'milestone_type' => 'script_submission',
+            'title' => 'Envio de roteiro',
+            'status' => 'pending',
+            'deadline' => now()->addDay(),
+            'file_path' => null,
+        ]);
+
+        $videoMilestone = CampaignTimeline::query()->create([
+            'contract_id' => $contract->id,
+            'milestone_type' => 'video_submission',
+            'title' => 'Envio de video',
+            'status' => 'pending',
+            'deadline' => now()->addDays(3),
+            'file_path' => null,
+        ]);
+
+        Sanctum::actingAs($brand);
+
+        $response = $this->postJson('/api/campaign-timeline/skip-script', [
+            'milestone_id' => $scriptMilestone->id,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.status', 'approved');
+
+        $scriptMilestone->refresh();
+        $videoMilestone->refresh();
+
+        $this->assertSame('approved', $scriptMilestone->status);
+        $this->assertTrue($videoMilestone->canUploadFile());
+    }
+
+    public function test_brand_cannot_upload_video_submission(): void
+    {
+        $brand = User::factory()->state(['role' => 'brand'])->create();
+        $creator = User::factory()->state(['role' => 'creator'])->create();
+
+        $contract = Contract::factory()->create([
+            'brand_id' => $brand->id,
+            'creator_id' => $creator->id,
+            'status' => 'active',
+        ]);
+
+        CampaignTimeline::query()->create([
+            'contract_id' => $contract->id,
+            'milestone_type' => 'script_submission',
+            'title' => 'Envio de roteiro',
+            'status' => 'approved',
+            'deadline' => now()->addDay(),
+        ]);
+
+        $videoMilestone = CampaignTimeline::query()->create([
+            'contract_id' => $contract->id,
+            'milestone_type' => 'video_submission',
+            'title' => 'Envio de video',
+            'status' => 'pending',
+            'deadline' => now()->addDays(3),
+            'file_path' => null,
+        ]);
+
+        Sanctum::actingAs($brand);
+
+        $response = $this->postJson('/api/campaign-timeline/upload-file', [
+            'milestone_id' => $videoMilestone->id,
+            'external_link' => 'https://drive.google.com/file/d/video/view',
+        ]);
+
+        $response->assertStatus(403);
+
+        $videoMilestone->refresh();
+        $this->assertNull($videoMilestone->file_path);
     }
 
     public function test_creator_cannot_override_tracking_code_with_non_shipping_status(): void
@@ -288,7 +414,7 @@ class ContractWorkflowPermissionsTest extends TestCase
         $downloadResponse = $this->get($brandDownloadUrl);
         $downloadResponse->assertStatus(200);
         $this->assertStringContainsString(
-            'attachment;',
+            'inline;',
             (string) $downloadResponse->headers->get('content-disposition')
         );
     }

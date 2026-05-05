@@ -65,30 +65,21 @@ class ChatControllerTest extends TestCase
         ]);
     }
 
-    public function test_google_drive_links_are_allowed_but_other_external_links_are_blocked(): void
+    public function test_links_and_emails_are_preserved_in_chat_messages(): void
     {
         ['brand' => $brand, 'room' => $room] = $this->createChatContext();
 
-        $driveLink = 'https://drive.google.com/file/d/abc123/view?usp=sharing';
-        $allowedResponse = $this->actingAs($brand)->postJson('/api/chat/messages', [
+        $message = 'Roteiro: https://drive.google.com/file/d/abc123/view e referencia: https://example.com/private-contact. Fale em marca@example.com.';
+
+        $response = $this->actingAs($brand)->postJson('/api/chat/messages', [
             'room_id' => $room->room_id,
-            'message' => $driveLink,
+            'message' => $message,
         ]);
 
-        $allowedResponse
+        $response
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.message', $driveLink);
-
-        $blockedResponse = $this->actingAs($brand)->postJson('/api/chat/messages', [
-            'room_id' => $room->room_id,
-            'message' => 'https://example.com/private-contact',
-        ]);
-
-        $blockedResponse
-            ->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('data.message', '[LINK REMOVIDO - MANTENHA A NEGOCIACAO AQUI]');
+            ->assertJsonPath('data.message', $message);
     }
 
     /**

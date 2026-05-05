@@ -286,7 +286,7 @@ class ChatController extends Controller
                     "- Comunicacao oficial: exclusivamente no chat da NEXA.\n".
                     "- Pagamento por fora: proibido e em desacordo com os Termos de Uso.\n".
                     "- Garantia: apenas pagamentos feitos pela NEXA possuem garantia e suporte.\n".
-                    "- Dados pessoais: compartilhamento de telefone, e-mail ou contato externo e bloqueado pelo sistema.\n\n".
+                    "- Dados pessoais: telefone e contato externo por fora da plataforma continuam proibidos.\n\n".
                     "A NEXA garante rastreabilidade e seguranca para as duas partes."
                 : "PARABENS! VOCE FOI APROVADA!\n\n".
                     "Agora siga os prazos e regras da campanha para garantir aprovacao e pagamento sem atrasos.\n\n".
@@ -301,7 +301,7 @@ class ChatController extends Controller
                     "- Chat oficial: toda comunicacao deve acontecer pela NEXA.\n".
                     "- Pagamento externo: nunca aceite pagamento por fora.\n".
                     "- Protecao: a NEXA so garante campanhas e pagamentos feitos dentro da plataforma.\n".
-                    "- Contato pessoal: telefone, e-mail e links externos sao bloqueados e monitorados, com excecao de links do Google Drive para entrega de materiais.\n\n".
+                    "- Contato pessoal: nao compartilhe telefone nem combine contato por fora da plataforma.\n\n".
                     "Boa campanha! Conte com a NEXA para um processo seguro e profissional.";
 
             Message::create([
@@ -403,7 +403,7 @@ class ChatController extends Controller
             $messageData['file_type'] = $file->getMimeType();
         }
 
-        // Sanitize message content to prevent platform bypass
+        // Keep links and e-mails readable, but still block phone/contact bypass attempts.
         if (!empty($messageData['message']) && $messageData['message_type'] === 'text') {
             $messageData['message'] = $this->sanitizeMessageContent($messageData['message']);
         }
@@ -412,53 +412,11 @@ class ChatController extends Controller
     }
 
     /**
-     * Sanitize message content to remove sensitive contacts and prevent platform bypass.
+     * Sanitize message content to remove direct contact bypass attempts.
      */
     private function sanitizeMessageContent(string $content): string
     {
-        // 1. Mask Emails
-        $content = preg_replace('/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/', '[EMAIL REMOVIDO - USE O CHAT]', $content);
-
-        $preservedLinks = [];
-
-        $content = preg_replace_callback(
-            '/\b((https?|ftp):\/\/|www\.)[-A-Z0-9+&@#\/%?=~_|$!:,.;]*[A-Z0-9+&@#\/%=~_|$]/i',
-            function (array $matches) use (&$preservedLinks): string {
-                $url = $matches[0];
-
-                if (! $this->isAllowedExternalLink($url)) {
-                    return $url;
-                }
-
-                $token = '[ALLOWED_EXTERNAL_LINK_'.count($preservedLinks).']';
-                $preservedLinks[$token] = $url;
-
-                return $token;
-            },
-            $content
-        );
-
-        // 2. Mask URLs (Basic detection)
-        // Note: We allow internal links if needed, but for now blocking all external is safer for anti-leakage.
-        $content = preg_replace('/\b((https?|ftp):\/\/|www\.)[-A-Z0-9+&@#\/%?=~_|$!:,.;]*[A-Z0-9+&@#\/%=~_|$]/i', '[LINK REMOVIDO - MANTENHA A NEGOCIAÇÃO AQUI]', $content);
-
-        $content = str_replace(
-            '[LINK REMOVIDO - MANTENHA A NEGOCIAÃ‡ÃƒO AQUI]',
-            '[LINK REMOVIDO - MANTENHA A NEGOCIACAO AQUI]',
-            $content
-        );
-
-        $content = preg_replace(
-            '/\[LINK REMOVIDO - MANTENHA A NEGOCI.*? AQUI\]/',
-            '[LINK REMOVIDO - MANTENHA A NEGOCIACAO AQUI]',
-            $content
-        );
-
-        foreach ($preservedLinks as $token => $url) {
-            $content = str_replace($token, $url, $content);
-        }
-
-        // 3. Mask Phones/Keywords
+        // Mask phones/keywords.
         // It's hard to regex phones perfectly without false positives (like budgets/dates).
         // Instead, we target intent keywords combined with simplistic number patterns or just the keywords.
         $keywords = ['whatsapp', 'telegram', 'zap', 'signal', 'meu numero', 'meu telefone', 'contato por fora', 'pix direto'];
@@ -472,24 +430,6 @@ class ChatController extends Controller
         $content = preg_replace('/(?:\(?\d{2}\)?\s*)?(?:9\d{4}[-\s]?\d{4}|\d{4}[-\s]?\d{4})\b/', '[TELEFONE REMOVIDO]', $content);
 
         return $content;
-    }
-
-    private function isAllowedExternalLink(string $url): bool
-    {
-        $normalizedUrl = preg_match('/^[a-z][a-z0-9+\-.]*:\/\//i', $url) ? $url : "https://{$url}";
-        $host = strtolower((string) parse_url($normalizedUrl, PHP_URL_HOST));
-
-        if ($host === '') {
-            return false;
-        }
-
-        foreach (['drive.google.com', 'docs.google.com'] as $allowedHost) {
-            if ($host === $allowedHost || str_ends_with($host, ".{$allowedHost}")) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     public function markMessagesAsRead(Request $request): JsonResponse
@@ -724,7 +664,7 @@ class ChatController extends Controller
                     "✅ **Chat oficial:** Toda comunicação deve acontecer pela NEXA\n".
                     "❌ **Pagamento externo:** Nunca aceite pagamento por fora\n".
                     "⚠️ **Proteção:** A NEXA só garante campanhas e pagamentos feitos dentro da plataforma\n".
-                    "🚫 **Contato pessoal:** Telefone, e-mail e links externos são bloqueados e monitorados\n\n".
+                    "🚫 **Contato pessoal:** Nao compartilhe telefone nem combine contato por fora da plataforma\n\n".
                     "Boa campanha! Conte com a NEXA para um processo seguro e profissional. 💼";
 
                 Message::create([

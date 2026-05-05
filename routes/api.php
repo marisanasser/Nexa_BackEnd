@@ -325,6 +325,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/', [CampaignTimelineController::class, 'index'])->middleware(['throttle:dashboard']);
         Route::post('/create-milestones', [CampaignTimelineController::class, 'createMilestones']);
         Route::post('/upload-file', [CampaignTimelineController::class, 'uploadFile']);
+        Route::post('/skip-script', [CampaignTimelineController::class, 'skipScriptMilestone']);
         Route::post('/approve-milestone', [CampaignTimelineController::class, 'approveMilestone']);
         Route::post('/complete-contract', [CampaignTimelineController::class, 'completeContract']);
         Route::post('/reject-milestone', [CampaignTimelineController::class, 'rejectMilestone']);
@@ -379,11 +380,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
 Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
     require __DIR__ . '/api/admin.php';
-});
-
-Route::middleware(['auth:sanctum'])->group(function () {
-    Route::get('/guides', [GuideController::class, 'index']);
-    Route::get('/guides/{guide}', [GuideController::class, 'show'])->where('guide', '[0-9]+');
 });
 
 Route::get('/google/redirect', [GoogleController::class, 'redirectToGoogle'])

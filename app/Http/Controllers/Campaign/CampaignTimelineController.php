@@ -277,6 +277,7 @@ class CampaignTimelineController extends Controller
         if (
             in_array($milestone->milestone_type, ['script_submission', 'video_submission'], true)
             && ! $this->isCurrentUserCreatorParticipant($contract)
+            && ! ('script_submission' === $milestone->milestone_type && $this->isCurrentUserBrandParticipant($contract))
         ) {
             return response()->json(['error' => 'Apenas o criador pode enviar arquivos para milestones de submissão'], 403);
         }
@@ -339,8 +340,23 @@ class CampaignTimelineController extends Controller
 
         $milestone->uploadFile($filePath, $fileName, $fileSize, $fileType);
         $milestone->refresh();
-        $this->handleCreatorMilestoneSubmission($contract, $milestone);
-        $this->broadcastContractUpdate($contract, 'milestone_file_uploaded', $milestone);
+        if (
+            'script_submission' === $milestone->milestone_type
+            && $this->isCurrentUserBrandParticipant($contract)
+        ) {
+            $milestone->update([
+                'status' => 'approved',
+                'comment' => 'Roteiro enviado pela marca.',
+                'completed_at' => now(),
+                'is_delayed' => false,
+            ]);
+            $milestone->refresh();
+            $this->sendMilestoneSubmissionSystemMessage($contract, $milestone, 'brand');
+            $this->broadcastContractUpdate($contract, 'script_milestone_uploaded_by_brand', $milestone);
+        } else {
+            $this->handleCreatorMilestoneSubmission($contract, $milestone);
+            $this->broadcastContractUpdate($contract, 'milestone_file_uploaded', $milestone);
+        }
 
         return response()->json([
             'success' => true,
@@ -400,6 +416,45 @@ class CampaignTimelineController extends Controller
                 'message' => 'Falha ao aprovar milestone',
             ], 500);
         }
+    }
+
+    public function skipScriptMilestone(Request $request): JsonResponse
+    {
+        $request->validate([
+            'milestone_id' => 'required|exists:campaign_timelines,id',
+        ]);
+
+        $milestone = CampaignTimeline::findOrFail($request->milestone_id);
+        $contract = $milestone->contract;
+
+        if (! $this->isCurrentUserBrandParticipant($contract)) {
+            return response()->json(['error' => 'Nao autorizado'], 403);
+        }
+
+        if ('script_submission' !== $milestone->milestone_type) {
+            return response()->json(['error' => 'Apenas a etapa de roteiro pode ser dispensada'], 400);
+        }
+
+        if (in_array($milestone->status, ['approved', 'completed'], true)) {
+            return response()->json(['error' => 'Este roteiro ja foi concluido'], 400);
+        }
+
+        $milestone->update([
+            'status' => 'approved',
+            'comment' => 'Etapa de roteiro dispensada pela marca.',
+            'completed_at' => now(),
+            'is_delayed' => false,
+        ]);
+
+        $milestone->refresh();
+        $this->sendScriptMilestoneSkippedSystemMessage($contract, $milestone);
+        $this->broadcastContractUpdate($contract, 'script_milestone_skipped', $milestone);
+
+        return response()->json([
+            'success' => true,
+            'data' => $milestone->fresh(),
+            'message' => 'Etapa de roteiro dispensada com sucesso',
+        ]);
     }
 
     public function completeMilestone(Request $request): JsonResponse
@@ -561,8 +616,9 @@ class CampaignTimelineController extends Controller
         $downloadName = $milestone->file_name
             ? basename($milestone->file_name)
             : basename((string) $milestone->file_path);
+        $downloadName = str_replace(['"', "\r", "\n"], '', $downloadName);
 
-        return response()->streamDownload(function () use ($disk, $resolvedPath): void {
+        return response()->stream(function () use ($disk, $resolvedPath): void {
             $stream = $disk->readStream($resolvedPath);
             if (false === $stream) {
                 throw new \RuntimeException('Falha ao abrir stream do arquivo');
@@ -575,8 +631,9 @@ class CampaignTimelineController extends Controller
                     fclose($stream);
                 }
             }
-        }, $downloadName, [
+        }, 200, [
             'Content-Type' => $milestone->file_type ?: 'application/octet-stream',
+            'Content-Disposition' => 'inline; filename="'.$downloadName.'"',
         ]);
     }
 
@@ -835,7 +892,11 @@ class CampaignTimelineController extends Controller
         $this->sendMilestoneSubmissionSystemMessage($contract, $milestone);
     }
 
-    private function sendMilestoneSubmissionSystemMessage(Contract $contract, CampaignTimeline $milestone): void
+    private function sendMilestoneSubmissionSystemMessage(
+        Contract $contract,
+        CampaignTimeline $milestone,
+        string $submittedBy = 'creator'
+    ): void
     {
         try {
             $contract->loadMissing('offer.chatRoom');
@@ -850,9 +911,10 @@ class CampaignTimelineController extends Controller
                 return;
             }
 
-            $messageText = match ($milestone->milestone_type) {
-                'script_submission' => 'Voce recebeu o roteiro da campanha para avaliar.',
-                'video_submission' => 'Voce recebeu uma gravacao/conteudo da campanha para avaliar.',
+            $messageText = match (true) {
+                'brand' === $submittedBy && 'script_submission' === $milestone->milestone_type => 'A marca enviou o roteiro da campanha.',
+                'script_submission' === $milestone->milestone_type => 'Voce recebeu o roteiro da campanha para avaliar.',
+                'video_submission' === $milestone->milestone_type => 'Voce recebeu uma gravacao/conteudo da campanha para avaliar.',
                 default => "Voce recebeu um novo envio para avaliar: {$milestone->title}.",
             };
 
@@ -863,7 +925,7 @@ class CampaignTimelineController extends Controller
                 'milestone_type' => $milestone->milestone_type,
                 'milestone_title' => $milestone->title,
                 'file_name' => $milestone->file_name,
-                'submitted_by' => 'creator',
+                'submitted_by' => $submittedBy,
                 'submitted_at' => now()->toISOString(),
             ];
 
@@ -881,6 +943,54 @@ class CampaignTimelineController extends Controller
             event(new NewMessage($systemMessage, $chatRoom, $payload));
         } catch (\Throwable $e) {
             Log::error('Failed to send milestone submission system message', [
+                'contract_id' => $contract->id,
+                'milestone_id' => $milestone->id,
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
+        }
+    }
+
+    private function sendScriptMilestoneSkippedSystemMessage(Contract $contract, CampaignTimeline $milestone): void
+    {
+        try {
+            $contract->loadMissing('offer.chatRoom');
+            $chatRoom = $contract->offer?->chatRoom;
+
+            if (!$chatRoom instanceof ChatRoom) {
+                Log::warning('No chat room found when sending script skip system message', [
+                    'contract_id' => $contract->id,
+                    'milestone_id' => $milestone->id,
+                ]);
+
+                return;
+            }
+
+            $payload = [
+                'message_type' => 'milestone_submission',
+                'contract_id' => $contract->id,
+                'milestone_id' => $milestone->id,
+                'milestone_type' => $milestone->milestone_type,
+                'milestone_title' => $milestone->title,
+                'submitted_by' => 'brand',
+                'skipped' => true,
+                'submitted_at' => now()->toISOString(),
+            ];
+
+            $systemMessage = Message::create([
+                'chat_room_id' => $chatRoom->id,
+                'sender_id' => null,
+                'message' => 'A marca dispensou a etapa de roteiro. A gravacao ja pode seguir.',
+                'message_type' => 'system',
+                'offer_data' => $payload,
+                'is_system_message' => true,
+            ]);
+
+            $chatRoom->update(['last_message_at' => now()]);
+
+            event(new NewMessage($systemMessage, $chatRoom, $payload));
+        } catch (\Throwable $e) {
+            Log::error('Failed to send script skip system message', [
                 'contract_id' => $contract->id,
                 'milestone_id' => $milestone->id,
                 'error' => $e->getMessage(),
