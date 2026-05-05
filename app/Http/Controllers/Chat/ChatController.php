@@ -41,12 +41,12 @@ class ChatController extends Controller
 
         if ($user->isBrand()) {
             $query = ChatRoom::where('brand_id', $user->id);
-            
+
             // Filtrar chats arquivados se necessário
             if (!$includeArchived) {
                 $query->notArchived();
             }
-            
+
             $chatRooms = $query->with([
                     'creator.onlineStatus',
                     'campaign',
@@ -66,12 +66,12 @@ class ChatController extends Controller
             // Log::info('Found chat rooms for brand', [ ... ]);
         } elseif ($user->isCreator() || $user->isStudent()) {
             $query = ChatRoom::where('creator_id', $user->id);
-            
+
             // Filtrar chats arquivados se necessário
             if (!$includeArchived) {
                 $query->notArchived();
             }
-            
+
             $chatRooms = $query->with([
                     'brand.onlineStatus',
                     'campaign',
@@ -91,7 +91,7 @@ class ChatController extends Controller
             // Log::info('Found chat rooms for creator/student', [ ... ]);
         } elseif ($user->isAdmin()) {
             $query = ChatRoom::query();
-            
+
             // Filtrar chats arquivados se necessário
             if (!$includeArchived) {
                 $query->notArchived();
@@ -340,7 +340,7 @@ class ChatController extends Controller
         // Verifica se o chat pode receber mensagens (não arquivado)
         if (! $room->canSendMessages()) {
             return response()->json([
-                'success' => false, 
+                'success' => false,
                 'message' => 'Este chat foi arquivado e não aceita novas mensagens.',
                 'chat_status' => $room->chat_status,
             ], 403);
@@ -403,33 +403,7 @@ class ChatController extends Controller
             $messageData['file_type'] = $file->getMimeType();
         }
 
-        // Keep links and e-mails readable, but still block phone/contact bypass attempts.
-        if (!empty($messageData['message']) && $messageData['message_type'] === 'text') {
-            $messageData['message'] = $this->sanitizeMessageContent($messageData['message']);
-        }
-
         return $messageData;
-    }
-
-    /**
-     * Sanitize message content to remove direct contact bypass attempts.
-     */
-    private function sanitizeMessageContent(string $content): string
-    {
-        // Mask phones/keywords.
-        // It's hard to regex phones perfectly without false positives (like budgets/dates).
-        // Instead, we target intent keywords combined with simplistic number patterns or just the keywords.
-        $keywords = ['whatsapp', 'telegram', 'zap', 'signal', 'meu numero', 'meu telefone', 'contato por fora', 'pix direto'];
-        
-        foreach ($keywords as $keyword) {
-             $content = preg_replace('/\b' . preg_quote($keyword, '/') . '\b/i', '***', $content);
-        }
-        
-        // Attempt to catch phone numbers: (XX) 9XXXX-XXXX or similar
-        // This regex looks for 10-11 digits with optional separators
-        $content = preg_replace('/(?:\(?\d{2}\)?\s*)?(?:9\d{4}[-\s]?\d{4}|\d{4}[-\s]?\d{4})\b/', '[TELEFONE REMOVIDO]', $content);
-
-        return $content;
     }
 
     public function markMessagesAsRead(Request $request): JsonResponse

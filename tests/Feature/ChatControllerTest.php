@@ -65,11 +65,11 @@ class ChatControllerTest extends TestCase
         ]);
     }
 
-    public function test_links_and_emails_are_preserved_in_chat_messages(): void
+    public function test_chat_message_text_is_preserved_without_contact_sanitization(): void
     {
         ['brand' => $brand, 'room' => $room] = $this->createChatContext();
 
-        $message = 'Roteiro: https://drive.google.com/file/d/abc123/view e referencia: https://example.com/private-contact. Fale em marca@example.com.';
+        $message = 'Roteiro: https://drive.google.com/file/d/abc123/view e referencia: https://example.com/private-contact. Fale em marca@example.com ou whatsapp (11) 99999-8888.';
 
         $response = $this->actingAs($brand)->postJson('/api/chat/messages', [
             'room_id' => $room->room_id,
