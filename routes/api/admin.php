@@ -20,7 +20,6 @@ use App\Http\Controllers\Admin\AdminStudentController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\BrandRankingController;
 use App\Http\Controllers\Admin\WithdrawalMethodController;
-use App\Http\Controllers\Common\GuideController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -111,7 +110,6 @@ Route::put('/withdrawal-methods/{id}/toggle-active', [WithdrawalMethodController
 Route::prefix('guides')->group(function (): void {
     Route::get('/', [AdminGuideController::class, 'index']);
     Route::get('/{id}', [AdminGuideController::class, 'show'])->where('id', '[0-9]+');
-    Route::post('/', [GuideController::class, 'store']);
     Route::put('/{id}', [AdminGuideController::class, 'update'])->where('id', '[0-9]+');
     Route::delete('/{id}', [AdminGuideController::class, 'destroy'])->where('id', '[0-9]+');
 });

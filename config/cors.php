@@ -9,6 +9,7 @@ return [
 
     'allowed_origins' => [
         'http://localhost:3000',
+        'http://127.0.0.1:3000',
         'http://www.nexacreators.com',
         'https://nexa-frontend-bwld7w5onq-rj.a.run.app',
         'https://nexa-frontend-1044548850970.southamerica-east1.run.app',
