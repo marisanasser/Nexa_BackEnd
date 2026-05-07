@@ -286,7 +286,7 @@ class ChatController extends Controller
                     "- Comunicacao oficial: exclusivamente no chat da NEXA.\n".
                     "- Pagamento por fora: proibido e em desacordo com os Termos de Uso.\n".
                     "- Garantia: apenas pagamentos feitos pela NEXA possuem garantia e suporte.\n".
-                    "- Dados pessoais: telefone e contato externo por fora da plataforma continuam proibidos.\n\n".
+                    "- Contato: se precisarem trocar dados de contato, mantenham os combinados registrados no chat.\n\n".
                     "A NEXA garante rastreabilidade e seguranca para as duas partes."
                 : "PARABENS! VOCE FOI APROVADA!\n\n".
                     "Agora siga os prazos e regras da campanha para garantir aprovacao e pagamento sem atrasos.\n\n".
@@ -301,7 +301,7 @@ class ChatController extends Controller
                     "- Chat oficial: toda comunicacao deve acontecer pela NEXA.\n".
                     "- Pagamento externo: nunca aceite pagamento por fora.\n".
                     "- Protecao: a NEXA so garante campanhas e pagamentos feitos dentro da plataforma.\n".
-                    "- Contato pessoal: nao compartilhe telefone nem combine contato por fora da plataforma.\n\n".
+                    "- Contato: mantenha os combinados registrados no chat para garantir historico e suporte.\n\n".
                     "Boa campanha! Conte com a NEXA para um processo seguro e profissional.";
 
             Message::create([
@@ -613,7 +613,7 @@ class ChatController extends Controller
                     "✅ **Comunicação oficial:** Exclusivamente no chat da NEXA\n".
                     "❌ **Pagamento por fora:** É proibido e viola os Termos de Uso\n".
                     "⚠️ **Garantia:** Apenas pagamentos feitos pela NEXA possuem garantia e suporte\n".
-                    "🚫 **Dados pessoais:** Compartilhamento de telefone, e-mail ou contato externo é bloqueado pelo sistema\n\n".
+                    "📌 **Contato:** Caso troquem dados de contato, mantenham os combinados registrados no chat\n\n".
                     "A NEXA garante rastreabilidade e segurança para as duas partes. 💼";
 
                 Message::create([
@@ -638,7 +638,7 @@ class ChatController extends Controller
                     "✅ **Chat oficial:** Toda comunicação deve acontecer pela NEXA\n".
                     "❌ **Pagamento externo:** Nunca aceite pagamento por fora\n".
                     "⚠️ **Proteção:** A NEXA só garante campanhas e pagamentos feitos dentro da plataforma\n".
-                    "🚫 **Contato pessoal:** Nao compartilhe telefone nem combine contato por fora da plataforma\n\n".
+                    "📌 **Contato:** Mantenha os combinados registrados no chat para garantir histórico e suporte\n\n".
                     "Boa campanha! Conte com a NEXA para um processo seguro e profissional. 💼";
 
                 Message::create([
