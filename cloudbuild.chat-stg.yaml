@@ -1,0 +1,41 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'build',
+    '--no-cache',
+    '-t', 'gcr.io/nexa-teste-1/nexa-chat-stg:latest',
+    '-f', 'Dockerfile.reverb',
+    '.'
+  ]
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/nexa-teste-1/nexa-chat-stg:latest']
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: 'bash'
+  secretEnv:
+  - 'REVERB_APP_KEY'
+  - 'REVERB_APP_SECRET'
+  - 'REVERB_APP_ID'
+  args:
+  - '-c'
+  - >
+    gcloud run deploy chat-stg
+    --image gcr.io/nexa-teste-1/nexa-chat-stg:latest
+    --region southamerica-east1
+    --platform managed
+    --allow-unauthenticated
+    --concurrency 250
+    --max-instances 2
+    --session-affinity
+    --timeout 3600
+    --update-env-vars
+    "APP_ENV=staging,APP_DEBUG=true,REVERB_APP_KEY=$$REVERB_APP_KEY,REVERB_APP_SECRET=$$REVERB_APP_SECRET,REVERB_APP_ID=$$REVERB_APP_ID,REVERB_HOST=chat-stg-1044548850970.southamerica-east1.run.app,REVERB_PORT=443,REVERB_SCHEME=https,FILESYSTEM_DISK=gcs,GOOGLE_CLOUD_PROJECT_ID=nexa-teste-1,GOOGLE_CLOUD_STORAGE_BUCKET=nexa-uploads-stg"
+images:
+- 'gcr.io/nexa-teste-1/nexa-chat-stg:latest'
+availableSecrets:
+  secretManager:
+  - versionName: projects/nexa-teste-1/secrets/reverb-app-key/versions/latest
+    env: 'REVERB_APP_KEY'
+  - versionName: projects/nexa-teste-1/secrets/reverb-app-secret/versions/latest
+    env: 'REVERB_APP_SECRET'
+  - versionName: projects/nexa-teste-1/secrets/reverb-app-id/versions/latest
+    env: 'REVERB_APP_ID'

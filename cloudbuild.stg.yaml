@@ -1,0 +1,60 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'build',
+    '--no-cache',
+    '-t', 'gcr.io/nexa-teste-1/nexa-backend-stg:latest',
+    '.'
+  ]
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/nexa-teste-1/nexa-backend-stg:latest']
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: 'bash'
+  secretEnv:
+  - 'APP_KEY'
+  - 'DB_PASSWORD'
+  - 'AWS_ACCESS_KEY_ID'
+  - 'AWS_SECRET_ACCESS_KEY'
+  - 'STRIPE_SECRET_KEY'
+  - 'STRIPE_PUBLISHABLE_KEY'
+  - 'REVERB_APP_KEY'
+  - 'REVERB_APP_SECRET'
+  - 'REVERB_APP_ID'
+  - 'GOOGLE_CLIENT_ID'
+  - 'GOOGLE_CLIENT_SECRET'
+  args:
+  - '-c'
+  - >
+    gcloud run deploy nexa-backend-stg
+    --image gcr.io/nexa-teste-1/nexa-backend-stg:latest
+    --region southamerica-east1
+    --platform managed
+    --allow-unauthenticated
+    --update-env-vars
+    "APP_KEY=$$APP_KEY,APP_ENV=staging,APP_DEBUG=true,APP_URL=https://nexa-backend-stg-1044548850970.southamerica-east1.run.app,FRONTEND_URL=https://nexa-frontend-stg-1044548850970.southamerica-east1.run.app,APP_FRONTEND_URL=https://nexa-frontend-stg-1044548850970.southamerica-east1.run.app,DB_CONNECTION=pgsql,DB_HOST=db.iuyapitbtdeoktaeqjai.supabase.co,DB_PORT=5432,DB_DATABASE=postgres,DB_USERNAME=postgres,DB_PASSWORD=$$DB_PASSWORD,SESSION_DOMAIN=.run.app,SESSION_SECURE_COOKIE=true,CACHE_DRIVER=file,SESSION_DRIVER=file,MAIL_MAILER=ses,MAIL_FROM_ADDRESS=no-reply@nexacreators.com.br,MAIL_FROM_NAME=NexaStg,AWS_ACCESS_KEY_ID=$$AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY=$$AWS_SECRET_ACCESS_KEY,AWS_DEFAULT_REGION=sa-east-1,AWS_SES_REGION=sa-east-1,STRIPE_SECRET_KEY=$$STRIPE_SECRET_KEY,STRIPE_SECRET=$$STRIPE_SECRET_KEY,STRIPE_PUBLISHABLE_KEY=$$STRIPE_PUBLISHABLE_KEY,STRIPE_KEY=$$STRIPE_PUBLISHABLE_KEY,QUEUE_CONNECTION=sync,BROADCAST_DRIVER=reverb,REVERB_APP_KEY=$$REVERB_APP_KEY,REVERB_APP_SECRET=$$REVERB_APP_SECRET,REVERB_APP_ID=$$REVERB_APP_ID,REVERB_HOST=chat-stg-1044548850970.southamerica-east1.run.app,REVERB_PORT=443,REVERB_SCHEME=https,FILESYSTEM_DISK=gcs,GOOGLE_CLOUD_PROJECT_ID=nexa-teste-1,GOOGLE_CLOUD_STORAGE_BUCKET=nexa-uploads-stg,GOOGLE_REDIRECT_URI=https://nexa-frontend-stg-1044548850970.southamerica-east1.run.app/auth/google/callback,GOOGLE_CLIENT_ID=$$GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET=$$GOOGLE_CLIENT_SECRET,SANCTUM_STATEFUL_DOMAINS=nexa-frontend-stg-1044548850970.southamerica-east1.run.app"
+availableSecrets:
+  secretManager:
+  - versionName: projects/nexa-teste-1/secrets/stg-app-key/versions/latest
+    env: 'APP_KEY'
+  - versionName: projects/nexa-teste-1/secrets/stg-db-password/versions/latest
+    env: 'DB_PASSWORD'
+  - versionName: projects/nexa-teste-1/secrets/backend-aws-access-key-id/versions/latest
+    env: 'AWS_ACCESS_KEY_ID'
+  - versionName: projects/nexa-teste-1/secrets/backend-aws-secret-access-key/versions/latest
+    env: 'AWS_SECRET_ACCESS_KEY'
+  - versionName: projects/nexa-teste-1/secrets/stripe-test-secret-key/versions/latest
+    env: 'STRIPE_SECRET_KEY'
+  - versionName: projects/nexa-teste-1/secrets/stripe-test-publishable-key/versions/latest
+    env: 'STRIPE_PUBLISHABLE_KEY'
+  - versionName: projects/nexa-teste-1/secrets/reverb-app-key/versions/latest
+    env: 'REVERB_APP_KEY'
+  - versionName: projects/nexa-teste-1/secrets/reverb-app-secret/versions/latest
+    env: 'REVERB_APP_SECRET'
+  - versionName: projects/nexa-teste-1/secrets/reverb-app-id/versions/latest
+    env: 'REVERB_APP_ID'
+  - versionName: projects/nexa-teste-1/secrets/backend-google-client-id/versions/latest
+    env: 'GOOGLE_CLIENT_ID'
+  - versionName: projects/nexa-teste-1/secrets/backend-google-client-secret/versions/latest
+    env: 'GOOGLE_CLIENT_SECRET'
+images:
+- 'gcr.io/nexa-teste-1/nexa-backend-stg:latest'

@@ -16,6 +16,7 @@ set_env() {
   fi
 }
 
+set_env "APP_KEY" "${APP_KEY}"
 set_env "APP_ENV" "${APP_ENV:-production}"
 set_env "APP_DEBUG" "${APP_DEBUG:-false}"
 set_env "APP_URL" "${APP_URL:-https://www.nexacreators.com}"
@@ -120,8 +121,12 @@ if [ -n "${URL_SRC}" ]; then
   esac
 fi
 
-# Ensure APP_KEY exists
-if ! grep -q "^APP_KEY=" .env || [ -z "${APP_KEY}" ]; then
+# Ensure APP_KEY exists and is non-empty.
+# `key:generate` only works if the APP_KEY line exists in .env.
+if ! grep -q "^APP_KEY=" .env; then
+  printf "APP_KEY=\n" >> .env
+fi
+if grep -q "^APP_KEY=$" .env; then
   php artisan key:generate --force || true
 fi
 
