@@ -16,6 +16,9 @@ return [
         'https://nexa-frontend-prod-1044548850970.southamerica-east1.run.app',
         'https://nexa-frontend-prod-bwld7w5onq-rj.a.run.app',
         'https://www.nexacreators.com',
+        // Staging origins
+        'https://nexa-frontend-stg-1044548850970.southamerica-east1.run.app',
+        'https://nexa-frontend-stg-bwld7w5onq-rj.a.run.app',
     ],
 
     'allowed_origins_patterns' => [

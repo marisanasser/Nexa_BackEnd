@@ -51,4 +51,4 @@ RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cac
 
 EXPOSE 8000
 
-CMD php -S 0.0.0.0:${PORT:-8000} -t public
+CMD ["sh", "start.sh"]
