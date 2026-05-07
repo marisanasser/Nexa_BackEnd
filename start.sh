@@ -98,13 +98,13 @@ if [ -n "${URL_SRC}" ]; then
   HOSTPORT="${REST%%/*}"
   PATHQ="${REST#*/}"
   HOST="${HOSTPORT%%:*}"
-  PORT="${HOSTPORT#*:}"
+  DBURL_PORT="${HOSTPORT#*:}"
   DBNAME="${PATHQ%%\?*}"
   QUERY="${PATHQ#*\?}"
 
   # Apply parsed values if corresponding envs are empty
   [ -z "${DB_HOST}" ] && [ -n "${HOST}" ] && set_env "DB_HOST" "${HOST}"
-  [ -z "${DB_PORT}" ] && [ -n "${PORT}" ] && set_env "DB_PORT" "${PORT}"
+  [ -z "${DB_PORT}" ] && [ -n "${DBURL_PORT}" ] && set_env "DB_PORT" "${DBURL_PORT}"
   [ -z "${DB_DATABASE}" ] && [ -n "${DBNAME}" ] && set_env "DB_DATABASE" "${DBNAME}"
   [ -z "${DB_USERNAME}" ] && [ -n "${USERNAME}" ] && set_env "DB_USERNAME" "${USERNAME}"
   [ -z "${DB_PASSWORD}" ] && [ -n "${PASSWORD}" ] && set_env "DB_PASSWORD" "${PASSWORD}"
