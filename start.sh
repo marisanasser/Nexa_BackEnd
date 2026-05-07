@@ -10,6 +10,9 @@ set_env() {
   key="$1"
   val="$2"
   if [ -n "$val" ]; then
+    # Cloud Secret Manager values piped from Windows shells may include CRLF.
+    # Strip them to avoid malformed .env entries and OAuth parameter issues.
+    val=$(printf "%s" "$val" | tr -d '\r\n')
     grep -v "^${key}=" .env > .env.tmp || true
     mv .env.tmp .env
     printf "%s=%s\n" "$key" "$val" >> .env
@@ -60,6 +63,9 @@ set_env "AWS_SES_REGION" "${AWS_SES_REGION}"
 set_env "FILESYSTEM_DISK" "${FILESYSTEM_DISK:-gcs}"
 set_env "GOOGLE_CLOUD_PROJECT_ID" "${GOOGLE_CLOUD_PROJECT_ID}"
 set_env "GOOGLE_CLOUD_STORAGE_BUCKET" "${GOOGLE_CLOUD_STORAGE_BUCKET}"
+set_env "GOOGLE_CLIENT_ID" "${GOOGLE_CLIENT_ID}"
+set_env "GOOGLE_CLIENT_SECRET" "${GOOGLE_CLIENT_SECRET}"
+set_env "GOOGLE_REDIRECT_URI" "${GOOGLE_REDIRECT_URI}"
 
 if [ -z "${DB_HOST}" ] && [ -n "${CLOUD_SQL_CONNECTION_NAME}" ]; then
   set_env "DB_HOST" "/cloudsql/${CLOUD_SQL_CONNECTION_NAME}"
