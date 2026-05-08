@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types=1);
+declare (strict_types = 1);
 
 namespace App\Models\Common;
 
@@ -40,7 +40,7 @@ class Notification extends Model
     ];
 
     protected $casts = [
-        'data' => 'array',
+        'data'    => 'array',
         'is_read' => 'boolean',
         'read_at' => 'datetime',
     ];
@@ -90,10 +90,10 @@ class Notification extends Model
     {
         return self::create([
             'user_id' => $userId,
-            'type' => 'login_detected',
-            'title' => 'Novo Login Detectado',
+            'type'    => 'login_detected',
+            'title'   => 'Novo Login Detectado',
             'message' => 'Um novo login foi detectado na sua conta. Se não foi você, por favor, proteja sua conta imediatamente.',
-            'data' => $loginData,
+            'data'    => $loginData,
         ]);
     }
 
@@ -104,8 +104,8 @@ class Notification extends Model
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'new_user_registration',
-            'title' => 'Novo Registro de Usuário',
+            'type'    => 'new_user_registration',
+            'title'   => 'Novo Registro de Usuário',
             'message' => "Novo {$userRole} registrado: {$userName}",
             'data' => $registrationData,
         ]);
@@ -113,13 +113,13 @@ class Notification extends Model
 
     public static function createNewCampaign($userId, $campaignData = []): self
     {
-        $brandName = $campaignData['brand_name'] ?? 'Marca Desconhecida';
+        $brandName     = $campaignData['brand_name'] ?? 'Marca Desconhecida';
         $campaignTitle = $campaignData['campaign_title'] ?? 'Campanha Desconhecida';
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'new_campaign',
-            'title' => 'Nova Campanha Criada',
+            'type'    => 'new_campaign',
+            'title'   => 'Nova Campanha Criada',
             'message' => "{$brandName} postou nova campanha: {$campaignTitle}",
             'data' => $campaignData,
         ]);
@@ -127,14 +127,14 @@ class Notification extends Model
 
     public static function createNewApplication($userId, $applicationData = []): self
     {
-        $creatorName = $applicationData['creator_name'] ?? 'Criador Desconhecido';
+        $creatorName   = $applicationData['creator_name'] ?? 'Criador Desconhecido';
         $campaignTitle = $applicationData['campaign_title'] ?? 'Campanha Desconhecida';
-        $brandName = $applicationData['brand_name'] ?? 'Marca Desconhecida';
+        $brandName     = $applicationData['brand_name'] ?? 'Marca Desconhecida';
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'new_application',
-            'title' => 'Nova Campanha Aplicada',
+            'type'    => 'new_application',
+            'title'   => 'Nova Campanha Aplicada',
             'message' => "{$creatorName} aplicou para a campanha de {$brandName}: {$campaignTitle}",
             'data' => $applicationData,
         ]);
@@ -143,13 +143,13 @@ class Notification extends Model
     public static function createNewBid($userId, $bidData = []): self
     {
         $campaignTitle = $bidData['campaign_title'] ?? 'Campanha Desconhecida';
-        $creatorName = $bidData['creator_name'] ?? 'Criador Desconhecido';
-        $bidAmount = $bidData['bid_amount'] ?? 'Valor Desconhecido';
+        $creatorName   = $bidData['creator_name'] ?? 'Criador Desconhecido';
+        $bidAmount     = $bidData['bid_amount'] ?? 'Valor Desconhecido';
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'new_bid',
-            'title' => 'Nova Proposta Recebida',
+            'type'    => 'new_bid',
+            'title'   => 'Nova Proposta Recebida',
             'message' => "Nova proposta de {$creatorName} para '{$campaignTitle}' - R$ {$bidAmount}",
             'data' => $bidData,
         ]);
@@ -158,13 +158,13 @@ class Notification extends Model
     public static function createPaymentActivity($userId, $paymentData = []): self
     {
         $paymentType = $paymentData['payment_type'] ?? 'Tipo de Pagamento Desconhecido';
-        $userName = $paymentData['user_name'] ?? 'Usuário Desconhecido';
-        $amount = $paymentData['amount'] ?? 'Valor Desconhecido';
+        $userName    = $paymentData['user_name'] ?? 'Usuário Desconhecido';
+        $amount      = $paymentData['amount'] ?? 'Valor Desconhecido';
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'payment_activity',
-            'title' => 'Atividade de Pagamento',
+            'type'    => 'payment_activity',
+            'title'   => 'Atividade de Pagamento',
             'message' => "{$paymentType} de {$userName} - {$amount}",
             'data' => $paymentData,
         ]);
@@ -172,13 +172,13 @@ class Notification extends Model
 
     public static function createPortfolioUpdate($userId, $portfolioData = []): self
     {
-        $userName = $portfolioData['user_name'] ?? 'Usuário Desconhecido';
+        $userName   = $portfolioData['user_name'] ?? 'Usuário Desconhecido';
         $updateType = $portfolioData['update_type'] ?? 'Tipo de Atualização Desconhecido';
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'portfolio_update',
-            'title' => 'Atualização de Portfólio',
+            'type'    => 'portfolio_update',
+            'title'   => 'Atualização de Portfólio',
             'message' => "{$userName} atualizou seu portfólio: {$updateType}",
             'data' => $portfolioData,
         ]);
@@ -190,8 +190,8 @@ class Notification extends Model
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'system_activity',
-            'title' => 'Atividade do Sistema',
+            'type'    => 'system_activity',
+            'title'   => 'Atividade do Sistema',
             'message' => "Atividade do sistema detectada: {$activityType}",
             'data' => $activityData,
         ]);
@@ -201,11 +201,11 @@ class Notification extends Model
     {
         return self::create([
             'user_id' => $userId,
-            'type' => 'new_project',
-            'title' => 'Novo Projeto Disponível',
+            'type'    => 'new_project',
+            'title'   => 'Novo Projeto Disponível',
             'message' => "Um novo projeto '{$campaignTitle}' está agora disponível para aplicações.",
             'data' => [
-                'campaign_id' => $campaignId,
+                'campaign_id'    => $campaignId,
                 'campaign_title' => $campaignTitle,
             ],
         ]);
@@ -215,11 +215,11 @@ class Notification extends Model
     {
         return self::create([
             'user_id' => $userId,
-            'type' => 'project_approved',
-            'title' => 'Projeto Aprovado',
+            'type'    => 'project_approved',
+            'title'   => 'Projeto Aprovado',
             'message' => "Seu projeto '{$campaignTitle}' foi aprovado e está agora ativo.",
             'data' => [
-                'campaign_id' => $campaignId,
+                'campaign_id'    => $campaignId,
                 'campaign_title' => $campaignTitle,
             ],
         ]);
@@ -229,12 +229,12 @@ class Notification extends Model
     {
         return self::create([
             'user_id' => $userId,
-            'type' => 'project_rejected',
-            'title' => 'Projeto Rejeitado',
-            'message' => "Seu projeto '{$campaignTitle}' não foi aprovado.".($reason ? " Motivo: {$reason}" : ''),
+            'type'    => 'project_rejected',
+            'title'   => 'Projeto Rejeitado',
+            'message' => "Seu projeto '{$campaignTitle}' não foi aprovado." . ($reason ? " Motivo: {$reason}" : ''),
             'data' => [
-                'campaign_id' => $campaignId,
-                'campaign_title' => $campaignTitle,
+                'campaign_id'      => $campaignId,
+                'campaign_title'   => $campaignTitle,
                 'rejection_reason' => $reason,
             ],
         ]);
@@ -243,12 +243,12 @@ class Notification extends Model
     public static function createCampaignTextSuggestionRequested(int $userId, array $suggestionData = []): self
     {
         $campaignTitle = $suggestionData['campaign_title'] ?? 'Campanha';
-        $adminName = $suggestionData['admin_name'] ?? 'Equipe Nexa';
+        $adminName     = $suggestionData['admin_name'] ?? 'Equipe Nexa';
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'campaign_text_suggestion_requested',
-            'title' => 'Ajustes sugeridos na sua campanha',
+            'type'    => 'campaign_text_suggestion_requested',
+            'title'   => 'Ajustes sugeridos na sua campanha',
             'message' => "{$adminName} sugeriu alterações no texto da campanha '{$campaignTitle}'.",
             'data' => $suggestionData,
         ]);
@@ -256,19 +256,19 @@ class Notification extends Model
 
     public static function createStudentVerificationApproved(int $userId, array $verificationData = []): self
     {
-        $message = 'Sua verificacao estudantil foi aprovada.';
+        $message   = 'Sua verificacao estudantil foi aprovada.';
         $expiresAt = $verificationData['expires_at'] ?? null;
 
         if (is_string($expiresAt) && '' !== trim($expiresAt)) {
-            $message .= ' Seu acesso estudantil esta ativo ate '.Carbon::parse($expiresAt)->format('d/m/Y').'.';
+            $message .= ' Seu acesso estudantil esta ativo ate ' . Carbon::parse($expiresAt)->format('d/m/Y') . '.';
         }
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'student_verification_approved',
-            'title' => 'Verificacao estudantil aprovada',
+            'type'    => 'student_verification_approved',
+            'title'   => 'Verificacao estudantil aprovada',
             'message' => $message,
-            'data' => $verificationData,
+            'data'    => $verificationData,
         ]);
     }
 
@@ -278,27 +278,27 @@ class Notification extends Model
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'student_verification_rejected',
-            'title' => 'Verificacao estudantil nao aprovada',
-            'message' => 'Nao foi possivel aprovar sua verificacao estudantil.'.($reason ? " Motivo: {$reason}" : ''),
+            'type'    => 'student_verification_rejected',
+            'title'   => 'Verificacao estudantil não aprovada',
+            'message' => 'Não foi possivel aprovar sua verificacao estudantil.' . ($reason ? " Motivo: {$reason}" : ''),
             'data' => $verificationData,
         ]);
     }
 
     public static function createProfileApproved(int $userId, array $profileData = []): self
     {
-        $role = $profileData['role'] ?? null;
+        $role         = $profileData['role'] ?? null;
         $resourceName = match ($role) {
-            'brand' => 'da marca',
+            'brand'   => 'da marca',
             'student' => 'de estudante',
-            default => '',
+            default   => '',
         };
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'profile_approved',
-            'title' => 'Perfil aprovado',
-            'message' => 'Seu perfil '.($resourceName ? "{$resourceName} " : '').'foi aprovado e sua conta esta liberada para uso na plataforma.',
+            'type'    => 'profile_approved',
+            'title'   => 'Perfil aprovado',
+            'message' => 'Seu perfil ' . ($resourceName ? "{$resourceName} " : '') . 'foi aprovado e sua conta esta liberada para uso na plataforma.',
             'data' => $profileData,
         ]);
     }
@@ -307,13 +307,13 @@ class Notification extends Model
     {
         return self::create([
             'user_id' => $userId,
-            'type' => 'proposal_approved',
-            'title' => 'Proposta Aprovada',
+            'type'    => 'proposal_approved',
+            'title'   => 'Proposta Aprovada',
             'message' => "Sua proposta para '{$campaignTitle}' foi aprovada por {$brandName}.",
             'data' => [
-                'campaign_id' => $campaignId,
+                'campaign_id'    => $campaignId,
                 'campaign_title' => $campaignTitle,
-                'brand_name' => $brandName,
+                'brand_name'     => $brandName,
             ],
         ]);
     }
@@ -322,13 +322,13 @@ class Notification extends Model
     {
         return self::create([
             'user_id' => $userId,
-            'type' => 'proposal_rejected',
-            'title' => 'Proposta Rejeitada',
-            'message' => "Sua proposta para '{$campaignTitle}' não foi selecionada por {$brandName}.".($reason ? " Motivo: {$reason}" : ''),
+            'type'    => 'proposal_rejected',
+            'title'   => 'Proposta Rejeitada',
+            'message' => "Sua proposta para '{$campaignTitle}' não foi selecionada por {$brandName}." . ($reason ? " Motivo: {$reason}" : ''),
             'data' => [
-                'campaign_id' => $campaignId,
-                'campaign_title' => $campaignTitle,
-                'brand_name' => $brandName,
+                'campaign_id'      => $campaignId,
+                'campaign_title'   => $campaignTitle,
+                'brand_name'       => $brandName,
                 'rejection_reason' => $reason,
             ],
         ]);
@@ -338,15 +338,15 @@ class Notification extends Model
     {
         return self::create([
             'user_id' => $userId,
-            'type' => 'new_message',
-            'title' => 'Nova Mensagem',
+            'type'    => 'new_message',
+            'title'   => 'Nova Mensagem',
             'message' => "Você tem uma nova mensagem de {$senderName}: {$messagePreview}",
             'data' => [
-                'sender_id' => $senderId,
-                'sender_name' => $senderName,
+                'sender_id'       => $senderId,
+                'sender_name'     => $senderName,
                 'message_preview' => $messagePreview,
-                'chat_type' => $chatType,
-                'chat_room_id' => $chatRoomId,
+                'chat_type'       => $chatType,
+                'chat_room_id'    => $chatRoomId,
             ],
         ]);
     }
@@ -357,8 +357,8 @@ class Notification extends Model
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'contract_started',
-            'title' => 'Contrato Iniciado',
+            'type'    => 'contract_started',
+            'title'   => 'Contrato Iniciado',
             'message' => "O contrato '{$contractTitle}' foi iniciado.",
             'data' => $contractData,
         ]);
@@ -370,8 +370,8 @@ class Notification extends Model
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'contract_terminated',
-            'title' => 'Contrato Encerrado',
+            'type'    => 'contract_terminated',
+            'title'   => 'Contrato Encerrado',
             'message' => "Contrato foi encerrado: {$reason}",
             'data' => $contractData,
         ]);
@@ -380,14 +380,14 @@ class Notification extends Model
     public static function createContractCompleted($userId, $contractData = []): self
     {
         $contractTitle = $contractData['contract_title'] ?? 'Contrato Desconhecido';
-        $brandName = $contractData['brand_name'] ?? 'Marca Desconhecida';
+        $brandName     = $contractData['brand_name'] ?? 'Marca Desconhecida';
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'contract_completed',
-            'title' => 'Contrato Finalizado',
-            'message' => 'O contrato "'.$contractTitle.'" foi finalizado por '.$brandName.' e está aguardando sua avaliação.',
-            'data' => $contractData,
+            'type'    => 'contract_completed',
+            'title'   => 'Contrato Finalizado',
+            'message' => 'O contrato "' . $contractTitle . '" foi finalizado por ' . $brandName . ' e está aguardando sua avaliação.',
+            'data'    => $contractData,
         ]);
     }
 
@@ -397,8 +397,8 @@ class Notification extends Model
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'payment_available',
-            'title' => 'Pagamento Disponível',
+            'type'    => 'payment_available',
+            'title'   => 'Pagamento Disponível',
             'message' => "Pagamento de R$ {$creatorAmount} está agora disponível para saque",
             'data' => $paymentData,
         ]);
@@ -406,14 +406,14 @@ class Notification extends Model
 
     public static function createNewReview($userId, $reviewData = []): self
     {
-        $reviewerName = $reviewData['reviewer_name'] ?? 'Usuário Desconhecido';
+        $reviewerName  = $reviewData['reviewer_name'] ?? 'Usuário Desconhecido';
         $contractTitle = $reviewData['contract_title'] ?? 'Contrato Desconhecido';
-        $rating = $reviewData['rating'] ?? 0;
+        $rating        = $reviewData['rating'] ?? 0;
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'new_review',
-            'title' => 'Nova Avaliação Recebida',
+            'type'    => 'new_review',
+            'title'   => 'Nova Avaliação Recebida',
             'message' => "{$reviewerName} avaliou seu trabalho no contrato '{$contractTitle}' com {$rating} estrelas.",
             'data' => $reviewData,
         ]);
@@ -421,15 +421,15 @@ class Notification extends Model
 
     public static function createPlatformFundingSuccess($userId, $amount, $fundingData = []): self
     {
-        $formattedAmount = 'R$ '.number_format($amount, 2, ',', '.');
+        $formattedAmount = 'R$ ' . number_format($amount, 2, ',', '.');
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'platform_funding_success',
-            'title' => 'Fundos Adicionados com Sucesso',
+            'type'    => 'platform_funding_success',
+            'title'   => 'Fundos Adicionados com Sucesso',
             'message' => "Seu pagamento de {$formattedAmount} foi processado com sucesso. Os fundos foram adicionados à sua conta.",
             'data' => array_merge([
-                'amount' => $amount,
+                'amount'           => $amount,
                 'formatted_amount' => $formattedAmount,
             ], $fundingData),
         ]);
@@ -437,23 +437,23 @@ class Notification extends Model
 
     public static function createWithdrawalSuccess($userId, $amount, $netAmount, $totalFees, $withdrawalData = []): self
     {
-        $formattedAmount = 'R$ '.number_format($amount, 2, ',', '.');
-        $formattedNetAmount = 'R$ '.number_format($netAmount, 2, ',', '.');
-        $formattedFees = 'R$ '.number_format($totalFees, 2, ',', '.');
+        $formattedAmount    = 'R$ ' . number_format($amount, 2, ',', '.');
+        $formattedNetAmount = 'R$ ' . number_format($netAmount, 2, ',', '.');
+        $formattedFees      = 'R$ ' . number_format($totalFees, 2, ',', '.');
 
         $methodName = $withdrawalData['method_name'] ?? 'método selecionado';
 
         return self::create([
             'user_id' => $userId,
-            'type' => 'withdrawal_completed',
-            'title' => 'Saque Processado com Sucesso',
+            'type'    => 'withdrawal_completed',
+            'title'   => 'Saque Processado com Sucesso',
             'message' => "Seu saque de {$formattedAmount} via {$methodName} foi processado com sucesso. Valor líquido: {$formattedNetAmount} (taxas: {$formattedFees}).",
             'data' => array_merge([
-                'amount' => $amount,
-                'formatted_amount' => $formattedAmount,
-                'net_amount' => $netAmount,
+                'amount'               => $amount,
+                'formatted_amount'     => $formattedAmount,
+                'net_amount'           => $netAmount,
                 'formatted_net_amount' => $formattedNetAmount,
-                'total_fees' => $totalFees,
+                'total_fees'           => $totalFees,
                 'formatted_total_fees' => $formattedFees,
             ], $withdrawalData),
         ]);

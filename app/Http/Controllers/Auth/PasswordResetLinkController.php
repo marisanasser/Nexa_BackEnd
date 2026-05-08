@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types=1);
+declare (strict_types = 1);
 
 namespace App\Http\Controllers\Auth;
 
@@ -17,7 +17,7 @@ use Illuminate\Support\Str;
 
 class PasswordResetLinkController extends Controller
 {
-    private const RESET_GENERIC_MESSAGE = 'Se o email existe em nosso sistema, voce recebera um link para redefinir sua senha.';
+    private const RESET_GENERIC_MESSAGE = 'Se o email existe em nosso sistema, você recebera um link para redefinir sua senha.';
 
     public function store(Request $request): JsonResponse
     {
@@ -25,9 +25,9 @@ class PasswordResetLinkController extends Controller
             'email' => ['required', 'email', 'max:255'],
         ]);
 
-        $rawEmail = trim((string) $request->input('email'));
+        $rawEmail        = trim((string) $request->input('email'));
         $normalizedEmail = Str::lower($rawEmail);
-        $requestId = (string) Str::uuid();
+        $requestId       = (string) Str::uuid();
 
         Log::info('Password reset request received', [
             'request_id' => $requestId,
@@ -38,7 +38,7 @@ class PasswordResetLinkController extends Controller
 
         $user = User::whereRaw('LOWER(email) = ?', [$normalizedEmail])->first();
 
-        if (!$user) {
+        if (! $user) {
             Log::info('Password reset request ignored: user not found', [
                 'request_id' => $requestId,
                 'email_hash' => hash('sha256', $normalizedEmail),
@@ -48,22 +48,22 @@ class PasswordResetLinkController extends Controller
         }
 
         try {
-            $token = Password::createToken($user);
+            $token         = Password::createToken($user);
             $defaultMailer = config('mail.default');
-            $fromAddress = config('mail.from.address');
-            $fromName = config('mail.from.name');
-            $sesRegion = env('AWS_SES_REGION', env('AWS_DEFAULT_REGION'));
-            $smtpHost = env('MAIL_HOST');
-            $smtpUser = env('MAIL_USERNAME') ? '***' : null;
+            $fromAddress   = config('mail.from.address');
+            $fromName      = config('mail.from.name');
+            $sesRegion     = env('AWS_SES_REGION', env('AWS_DEFAULT_REGION'));
+            $smtpHost      = env('MAIL_HOST');
+            $smtpUser      = env('MAIL_USERNAME') ? '***' : null;
 
             Log::info('Password reset mail dispatch attempt', [
-                'request_id' => $requestId,
-                'email' => $user->email,
-                'mailer' => $defaultMailer,
-                'from_address' => $fromAddress,
-                'from_name' => $fromName,
-                'ses_region' => $sesRegion,
-                'smtp_host' => $smtpHost,
+                'request_id'    => $requestId,
+                'email'         => $user->email,
+                'mailer'        => $defaultMailer,
+                'from_address'  => $fromAddress,
+                'from_name'     => $fromName,
+                'ses_region'    => $sesRegion,
+                'smtp_host'     => $smtpHost,
                 'smtp_user_set' => (bool) $smtpUser,
             ]);
 
@@ -71,18 +71,18 @@ class PasswordResetLinkController extends Controller
 
             Log::info('Password reset mail dispatched', [
                 'request_id' => $requestId,
-                'email' => $user->email,
+                'email'      => $user->email,
             ]);
         } catch (Exception $e) {
             Log::error('Failed to send password reset email', [
-                'request_id' => $requestId,
-                'email' => $user->email,
-                'error' => $e->getMessage(),
+                'request_id'      => $requestId,
+                'email'           => $user->email,
+                'error'           => $e->getMessage(),
                 'exception_class' => get_class($e),
-                'mailer' => config('mail.default'),
-                'from_address' => config('mail.from.address'),
-                'smtp_host' => env('MAIL_HOST'),
-                'ses_region' => env('AWS_SES_REGION', env('AWS_DEFAULT_REGION')),
+                'mailer'          => config('mail.default'),
+                'from_address'    => config('mail.from.address'),
+                'smtp_host'       => env('MAIL_HOST'),
+                'ses_region'      => env('AWS_SES_REGION', env('AWS_DEFAULT_REGION')),
             ]);
         }
 

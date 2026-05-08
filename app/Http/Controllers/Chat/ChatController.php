@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers\Chat;
 
 use App\Events\Chat\MessagesRead;
@@ -35,7 +34,7 @@ class ChatController extends Controller
         ]);
 
         $chatRooms = collect();
-        $perPage = (int) $request->query('per_page', '100');
+        $perPage   = (int) $request->query('per_page', '100');
         // Por padrão, não incluir chats arquivados
         $includeArchived = filter_var($request->query('include_archived', 'false'), FILTER_VALIDATE_BOOLEAN);
 
@@ -43,15 +42,15 @@ class ChatController extends Controller
             $query = ChatRoom::where('brand_id', $user->id);
 
             // Filtrar chats arquivados se necessário
-            if (!$includeArchived) {
+            if (! $includeArchived) {
                 $query->notArchived();
             }
 
             $chatRooms = $query->with([
-                    'creator.onlineStatus',
-                    'campaign',
-                    'lastMessage.sender',
-                ])
+                'creator.onlineStatus',
+                'campaign',
+                'lastMessage.sender',
+            ])
                 ->withCount([
                     'messages as unread_messages_count' => function ($query) use ($user) {
                         $query->where('sender_id', '!=', $user->id)
@@ -68,15 +67,15 @@ class ChatController extends Controller
             $query = ChatRoom::where('creator_id', $user->id);
 
             // Filtrar chats arquivados se necessário
-            if (!$includeArchived) {
+            if (! $includeArchived) {
                 $query->notArchived();
             }
 
             $chatRooms = $query->with([
-                    'brand.onlineStatus',
-                    'campaign',
-                    'lastMessage.sender',
-                ])
+                'brand.onlineStatus',
+                'campaign',
+                'lastMessage.sender',
+            ])
                 ->withCount([
                     'messages as unread_messages_count' => function ($query) use ($user) {
                         $query->where('sender_id', '!=', $user->id)
@@ -93,7 +92,7 @@ class ChatController extends Controller
             $query = ChatRoom::query();
 
             // Filtrar chats arquivados se necessário
-            if (!$includeArchived) {
+            if (! $includeArchived) {
                 $query->notArchived();
             }
 
@@ -135,46 +134,46 @@ class ChatController extends Controller
 
             if (! $otherUser) {
                 Log::warning('Skipping chat room with null other user', [
-                    'room_id' => $room->room_id,
-                    'brand_id' => $room->brand_id,
+                    'room_id'    => $room->room_id,
+                    'brand_id'   => $room->brand_id,
                     'creator_id' => $room->creator_id,
-                    'user_id' => $user->id,
+                    'user_id'    => $user->id,
                 ]);
 
                 return null;
             }
 
             return [
-                'id' => $room->id,
-                'room_id' => $room->room_id,
-                'campaign_id' => $room->campaign_id,
-                'campaign_title' => $room->campaign?->title ?? 'Campaign Not Found',
-                'campaign_status' => $room->campaign?->status ?? 'unknown',
-                'chat_status' => $room->chat_status ?? 'active',
+                'id'                => $room->id,
+                'room_id'           => $room->room_id,
+                'campaign_id'       => $room->campaign_id,
+                'campaign_title'    => $room->campaign?->title ?? 'Campaign Not Found',
+                'campaign_status'   => $room->campaign?->status ?? 'unknown',
+                'chat_status'       => $room->chat_status ?? 'active',
                 'can_send_messages' => $room->canSendMessages(),
-                'archived_at' => $room->archived_at?->toISOString(),
-                'other_user' => [
-                    'id' => $otherUser->id,
-                    'name' => $otherUser->name,
+                'archived_at'       => $room->archived_at?->toISOString(),
+                'other_user'        => [
+                    'id'     => $otherUser->id,
+                    'name'   => $otherUser->name,
                     'avatar' => $otherUser->avatar,
                     'online' => $otherUser->onlineStatus?->is_online ?? false,
                 ],
-                'last_message' => $lastMessage ? [
-                    'id' => $lastMessage->id,
-                    'message' => $lastMessage->message,
+                'last_message'      => $lastMessage ? [
+                    'id'           => $lastMessage->id,
+                    'message'      => $lastMessage->message,
                     'message_type' => $lastMessage->message_type,
-                    'sender_id' => $lastMessage->sender_id,
-                    'is_sender' => $lastMessage->sender_id === $user->id,
-                    'created_at' => $lastMessage->created_at->toISOString(),
+                    'sender_id'    => $lastMessage->sender_id,
+                    'is_sender'    => $lastMessage->sender_id === $user->id,
+                    'created_at'   => $lastMessage->created_at->toISOString(),
                 ] : null,
-                'unread_count' => $room->unread_messages_count ?? 0,
-                'last_message_at' => $room->last_message_at?->toISOString(),
+                'unread_count'      => $room->unread_messages_count ?? 0,
+                'last_message_at'   => $room->last_message_at?->toISOString(),
             ];
         })->filter();
 
         return response()->json([
             'success' => true,
-            'data' => $formattedRooms->values(),
+            'data'    => $formattedRooms->values(),
         ]);
     }
 
@@ -191,7 +190,7 @@ class ChatController extends Controller
         $this->ensureGuideMessagesForUser($room, $user);
 
         $perPage = (int) $request->query('per_page', 50);
-        $page = (int) $request->query('page', 1);
+        $page    = (int) $request->query('page', 1);
 
         $messagesQuery = $room->messages()
             ->with('sender')
@@ -213,20 +212,20 @@ class ChatController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => [
-                'room' => [
-                    'id' => $room->id,
-                    'room_id' => $room->room_id,
-                    'campaign_id' => $room->campaign_id,
+            'data'    => [
+                'room'     => [
+                    'id'             => $room->id,
+                    'room_id'        => $room->room_id,
+                    'campaign_id'    => $room->campaign_id,
                     'campaign_title' => $room->campaign?->title,
                 ],
                 'messages' => $formattedMessages,
-                'meta' => [
+                'meta'     => [
                     'current_page' => $messagesPaginator->currentPage(),
-                    'last_page' => $messagesPaginator->lastPage(),
-                    'per_page' => $messagesPaginator->perPage(),
-                    'total' => $messagesPaginator->total(),
-                    'has_more' => $messagesPaginator->currentPage() < $messagesPaginator->lastPage(),
+                    'last_page'    => $messagesPaginator->lastPage(),
+                    'per_page'     => $messagesPaginator->perPage(),
+                    'total'        => $messagesPaginator->total(),
+                    'has_more'     => $messagesPaginator->currentPage() < $messagesPaginator->lastPage(),
                 ],
             ],
         ]);
@@ -273,61 +272,68 @@ class ChatController extends Controller
 
         if (! $hasRoleSpecificMessage) {
             $guideMessage = $user->isBrand()
-                ? "PARABENS PELA PARCERIA INICIADA!\n\n".
-                    "Voce acabou de conectar com uma creator da NEXA. Para garantir o melhor resultado possivel, siga o fluxo oficial da campanha.\n\n".
-                    "PROXIMOS PASSOS OBRIGATORIOS:\n\n".
-                    "- Financiamento: o saldo da campanha e liberado dentro do chat, no botao 'Financiar contrato'.\n".
-                    "- Briefing: envie briefing claro e completo para iniciar roteiro e gravacao.\n".
-                    "- Roteiro: aprove em ate 7 dias uteis.\n".
-                    "- Conteudo final: faca a validacao final em ate 7 dias uteis.\n".
-                    "- Ajustes: sao permitidas ate 3 correcoes por conteudo.\n".
-                    "- Pagamento: libere o pagamento somente apos a aprovacao final.\n\n".
-                    "REGRAS DE SEGURANCA:\n\n".
-                    "- Comunicacao oficial: exclusivamente no chat da NEXA.\n".
-                    "- Pagamento por fora: proibido e em desacordo com os Termos de Uso.\n".
-                    "- Garantia: apenas pagamentos feitos pela NEXA possuem garantia e suporte.\n".
-                    "- Contato: se precisarem trocar dados de contato, mantenham os combinados registrados no chat.\n\n".
-                    "A NEXA garante rastreabilidade e seguranca para as duas partes."
-                : "PARABENS! VOCE FOI APROVADA!\n\n".
-                    "Agora siga os prazos e regras da campanha para garantir aprovacao e pagamento sem atrasos.\n\n".
-                    "CHECKLIST DA CAMPANHA:\n\n".
-                    "- Endereco: confirme seus dados de envio antes da marca despachar produto.\n".
-                    "- Roteiro: envie em ate 3 dias uteis apos receber briefing.\n".
-                    "- Ajuste de roteiro: quando solicitado, corrija em ate 48 horas uteis.\n".
-                    "- Conteudo final: entregue em ate 7 dias uteis apos aprovacao do roteiro.\n".
-                    "- Correcoes: a marca pode solicitar ate 3 correcoes.\n".
-                    "- Comunicacao: responda mensagens da marca/NEXA em ate 8 horas.\n\n".
-                    "REGRAS IMPORTANTES:\n\n".
-                    "- Chat oficial: toda comunicacao deve acontecer pela NEXA.\n".
-                    "- Pagamento externo: nunca aceite pagamento por fora.\n".
-                    "- Protecao: a NEXA so garante campanhas e pagamentos feitos dentro da plataforma.\n".
-                    "- Contato: mantenha os combinados registrados no chat para garantir historico e suporte.\n\n".
-                    "Boa campanha! Conte com a NEXA para um processo seguro e profissional.";
+                ? "PARABÉNS PELA PARCERIA INICIADA!\n\n" .
+            "Você acabou de conectar com uma creator da NEXA. Para garantir o melhor resultado possível, siga o fluxo oficial da campanha.\n\n" .
+
+            "PRÓXIMOS PASSOS OBRIGATÓRIOS:\n\n" .
+            "- Financiamento: o saldo da campanha é liberado dentro do chat, no botão 'Financiar contrato'.\n" .
+            "- Briefing: envie um briefing claro e completo para iniciar o roteiro e a gravação.\n" .
+            "- Roteiro: aprove em até 7 dias úteis.\n" .
+            "- Conteúdo final: faça a validação final em até 7 dias úteis.\n" .
+            "- Ajustes: são permitidas até 3 correções por conteúdo.\n" .
+            "- Pagamento: libere o pagamento somente após a aprovação final.\n\n" .
+
+            "REGRAS DE SEGURANÇA:\n\n" .
+            "- Comunicação oficial: exclusivamente pelo chat da NEXA.\n" .
+            "- Pagamento por fora: proibido e em desacordo com os Termos de Uso.\n" .
+            "- Garantia: apenas pagamentos feitos pela NEXA possuem garantia e suporte.\n" .
+            "- Contato: se precisarem trocar dados de contato, mantenham os combinados registrados no chat.\n\n" .
+
+            "A NEXA garante rastreabilidade e segurança para ambas as partes."
+                :
+            "PARABÉNS! VOCÊ FOI APROVADA!\n\n" .
+                "Agora siga os prazos e regras da campanha para garantir aprovação e pagamento sem atrasos.\n\n" .
+
+                "CHECKLIST DA CAMPANHA:\n\n" .
+                "- Endereço: confirme seus dados de envio antes de a marca despachar o produto.\n" .
+                "- Roteiro: envie em até 3 dias úteis após receber o briefing.\n" .
+                "- Ajustes de roteiro: quando solicitado, faça as correções em até 48 horas úteis.\n" .
+                "- Conteúdo final: entregue em até 7 dias úteis após a aprovação do roteiro.\n" .
+                "- Correções: a marca pode solicitar até 3 ajustes.\n" .
+                "- Comunicação: responda às mensagens da marca/NEXA em até 8 horas.\n\n" .
+
+                "REGRAS IMPORTANTES:\n\n" .
+                "- Chat oficial: toda comunicação deve acontecer pela NEXA.\n" .
+                "- Pagamento externo: nunca aceite pagamentos por fora.\n" .
+                "- Proteção: a NEXA só garante campanhas e pagamentos realizados dentro da plataforma.\n" .
+                "- Contato: mantenha os combinados registrados no chat para garantir histórico e suporte.\n\n" .
+
+                "Boa campanha! Conte com a NEXA para um processo seguro e profissional.";
 
             Message::create([
-                'chat_room_id' => $room->id,
-                'sender_id' => $user->id,
-                'message' => $guideMessage,
-                'message_type' => $roleSpecificType,
+                'chat_room_id'      => $room->id,
+                'sender_id'         => $user->id,
+                'message'           => $guideMessage,
+                'message_type'      => $roleSpecificType,
                 'is_system_message' => true,
             ]);
         }
 
         if (! $hasStatusMessage) {
             Message::create([
-                'chat_room_id' => $room->id,
-                'sender_id' => $user->id,
-                'message' => "DETALHES DA CAMPANHA\n\n".
-                    "Status: conectado.\n\n".
-                    "Voce esta agora conectado e pode comecar a conversar.\n".
-                    'Use o chat para todas as comunicacoes e siga as diretrizes da plataforma.',
-                'message_type' => 'system',
+                'chat_room_id'      => $room->id,
+                'sender_id'         => $user->id,
+                'message'           => "DETALHES DA CAMPANHA\n\n" .
+                "Status: conectado.\n\n" .
+                "Você está agora conectado e pode começar a conversar.\n" .
+                'Use o chat para todas as comunicaçoes e siga as diretrizes da plataforma.',
+                'message_type'      => 'system',
                 'is_system_message' => true,
             ]);
         }
     }
 
-    public function sendMessage(SendMessageRequest $request): JsonResponse
+    public function sendMessage(SendMessageRequest $request) : JsonResponse
     {
 
         $user = $this->getAuthenticatedUser();
@@ -340,8 +346,8 @@ class ChatController extends Controller
         // Verifica se o chat pode receber mensagens (não arquivado)
         if (! $room->canSendMessages()) {
             return response()->json([
-                'success' => false,
-                'message' => 'Este chat foi arquivado e não aceita novas mensagens.',
+                'success'     => false,
+                'message'     => 'Este chat foi arquivado e não aceita novas mensagens.',
                 'chat_status' => $room->chat_status,
             ], 403);
         }
@@ -354,7 +360,7 @@ class ChatController extends Controller
             $message->load('sender');
 
             $responseData = $this->formatMessageData($message, $user, true);
-            $offerData = $message->offer_data;
+            $offerData    = $message->offer_data;
 
             try {
                 event(new NewMessage($message, $room, $offerData));
@@ -374,17 +380,17 @@ class ChatController extends Controller
     {
         $messageData = [
             'chat_room_id' => $room->id,
-            'sender_id' => $user->id,
-            'message' => $request->message ?? '',
+            'sender_id'    => $user->id,
+            'message'      => $request->message ?? '',
             'message_type' => 'text',
         ];
 
         if ($request->hasFile('file')) {
             $file = $request->file('file');
-            $path = 'chat-files/'.$user->id;
-            $url = FileUploadHelper::upload($file, $path);
+            $path = 'chat-files/' . $user->id;
+            $url  = FileUploadHelper::upload($file, $path);
 
-            if (!$url) {
+            if (! $url) {
                 throw new Exception('Failed to upload chat file');
             }
 
@@ -397,10 +403,10 @@ class ChatController extends Controller
             }
 
             $messageData['message_type'] = $this->getFileType($file->getMimeType());
-            $messageData['file_path'] = $filePath;
-            $messageData['file_name'] = $file->getClientOriginalName();
-            $messageData['file_size'] = $file->getSize();
-            $messageData['file_type'] = $file->getMimeType();
+            $messageData['file_path']    = $filePath;
+            $messageData['file_name']    = $file->getClientOriginalName();
+            $messageData['file_size']    = $file->getSize();
+            $messageData['file_type']    = $file->getMimeType();
         }
 
         return $messageData;
@@ -409,8 +415,8 @@ class ChatController extends Controller
     public function markMessagesAsRead(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'room_id' => 'required|string',
-            'message_ids' => 'required|array',
+            'room_id'       => 'required|string',
+            'message_ids'   => 'required|array',
             'message_ids.*' => 'integer|exists:messages,id',
         ]);
 
@@ -418,7 +424,7 @@ class ChatController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors' => $validator->errors(),
+                'errors'  => $validator->errors(),
             ], 422);
         }
 
@@ -465,14 +471,14 @@ class ChatController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'campaign_id' => 'required|integer|exists:campaigns,id',
-            'creator_id' => 'required|integer|exists:users,id',
+            'creator_id'  => 'required|integer|exists:users,id',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors' => $validator->errors(),
+                'errors'  => $validator->errors(),
             ], 422);
         }
 
@@ -507,9 +513,9 @@ class ChatController extends Controller
             $application->initiateFirstContact();
 
             Log::info('Application workflow status updated to agreement_in_progress', [
-                'application_id' => $application->id,
-                'campaign_id' => $request->campaign_id,
-                'creator_id' => $request->creator_id,
+                'application_id'  => $application->id,
+                'campaign_id'     => $request->campaign_id,
+                'creator_id'      => $request->creator_id,
                 'workflow_status' => $application->workflow_status,
             ]);
 
@@ -518,9 +524,9 @@ class ChatController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => [
-                'room_id' => $room->room_id,
-                'message' => 'Chat room created successfully',
+            'data'    => [
+                'room_id'                 => $room->room_id,
+                'message'                 => 'Chat room created successfully',
                 'workflow_status_updated' => $room->wasRecentlyCreated,
             ],
         ]);
@@ -532,9 +538,9 @@ class ChatController extends Controller
         $user = $this->getAuthenticatedUser();
 
         Log::info('sendGuideMessages called', [
-            'user_id' => $user->id,
+            'user_id'   => $user->id,
             'user_role' => $user->role,
-            'room_id' => $roomId,
+            'room_id'   => $roomId,
         ]);
 
         $room = ChatRoom::where('room_id', $roomId)
@@ -570,9 +576,9 @@ class ChatController extends Controller
                 ->count();
 
             Log::info('Guide messages sent successfully', [
-                'chat_room_id' => $room->id,
-                'user_id' => $user->id,
-                'user_role' => $user->role,
+                'chat_room_id'     => $room->id,
+                'user_id'          => $user->id,
+                'user_role'        => $user->role,
                 'messages_created' => max(0, $afterCount - $beforeCount),
             ]);
 
@@ -600,73 +606,73 @@ class ChatController extends Controller
 
             if ($user->isBrand()) {
 
-                $brandMessage = "🎉 **Parabéns pela parceria iniciada!**\n\n".
-                    "Você acabou de conectar com uma creator da NEXA. Para garantir o melhor resultado possível, siga o fluxo oficial da campanha.\n\n".
-                    "**📋 Próximos passos obrigatórios:**\n\n".
-                    "• **Financiamento:** O saldo da campanha e liberado no botao \"Financiar contrato\" dentro do chat\n".
-                    "• **Briefing:** Envie briefing claro e completo para iniciar roteiro e gravação\n".
-                    "• **Roteiro:** Aprove em até **7 dias úteis** (o roteiro é enviado em até 3 dias úteis após o briefing)\n".
-                    "• **Conteúdo final:** Faça a validação final em até **7 dias úteis**\n".
-                    "• **Ajustes:** São permitidas até **3 correções** por conteúdo, dentro do roteiro aprovado\n".
-                    "• **Pagamento:** Libere o pagamento somente após a aprovação final\n\n".
-                    "**🔒 Regras de segurança (ANTI-FRAUDE):**\n\n".
-                    "✅ **Comunicação oficial:** Exclusivamente no chat da NEXA\n".
-                    "❌ **Pagamento por fora:** É proibido e viola os Termos de Uso\n".
-                    "⚠️ **Garantia:** Apenas pagamentos feitos pela NEXA possuem garantia e suporte\n".
-                    "📌 **Contato:** Caso troquem dados de contato, mantenham os combinados registrados no chat\n\n".
+                $brandMessage = "🎉 **Parabéns pela parceria iniciada!**\n\n" .
+                    "Você acabou de conectar com uma creator da NEXA. Para garantir o melhor resultado possível, siga o fluxo oficial da campanha.\n\n" .
+                    "**📋 Próximos passos obrigatórios:**\n\n" .
+                    "• **Financiamento:** O saldo da campanha e liberado no botao \"Financiar contrato\" dentro do chat\n" .
+                    "• **Briefing:** Envie briefing claro e completo para iniciar roteiro e gravação\n" .
+                    "• **Roteiro:** Aprove em até **7 dias úteis** (o roteiro é enviado em até 3 dias úteis após o briefing)\n" .
+                    "• **Conteúdo final:** Faça a validação final em até **7 dias úteis**\n" .
+                    "• **Ajustes:** São permitidas até **3 correções** por conteúdo, dentro do roteiro aprovado\n" .
+                    "• **Pagamento:** Libere o pagamento somente após a aprovação final\n\n" .
+                    "**🔒 Regras de segurança (ANTI-FRAUDE):**\n\n" .
+                    "✅ **Comunicação oficial:** Exclusivamente no chat da NEXA\n" .
+                    "❌ **Pagamento por fora:** É proibido e viola os Termos de Uso\n" .
+                    "⚠️ **Garantia:** Apenas pagamentos feitos pela NEXA possuem garantia e suporte\n" .
+                    "📌 **Contato:** Caso troquem dados de contato, mantenham os combinados registrados no chat\n\n" .
                     "A NEXA garante rastreabilidade e segurança para as duas partes. 💼";
 
                 Message::create([
-                    'chat_room_id' => $room->id,
-                    'sender_id' => $user->id,
-                    'message' => $brandMessage,
-                    'message_type' => 'system_brand',
+                    'chat_room_id'      => $room->id,
+                    'sender_id'         => $user->id,
+                    'message'           => $brandMessage,
+                    'message_type'      => 'system_brand',
                     'is_system_message' => true,
                 ]);
             } else {
 
-                $creatorMessage = "🎉 **Parabéns! Você foi aprovada!**\n\n".
-                    "Agora siga os prazos e regras da campanha para garantir aprovação e pagamento sem atrasos.\n\n".
-                    "**📋 Checklist da campanha:**\n\n".
-                    "• **Endereço:** Confirme seus dados de envio antes da marca despachar produto\n".
-                    "• **Roteiro:** Envie em até **3 dias úteis** após receber briefing\n".
-                    "• **Ajuste de roteiro:** Quando solicitado, corrija em até **48 horas úteis**\n".
-                    "• **Conteúdo final:** Entregue em até **7 dias úteis** após aprovação do roteiro (com produto em mãos)\n".
-                    "• **Correções:** A marca pode solicitar até **3 correções**; cada uma com prazo de até **3 dias úteis**\n".
-                    "• **Comunicação:** Responda mensagens da marca/NEXA em até **8 horas**\n\n".
-                    "**🔒 Regras importantes (ANTI-FRAUDE):**\n\n".
-                    "✅ **Chat oficial:** Toda comunicação deve acontecer pela NEXA\n".
-                    "❌ **Pagamento externo:** Nunca aceite pagamento por fora\n".
-                    "⚠️ **Proteção:** A NEXA só garante campanhas e pagamentos feitos dentro da plataforma\n".
-                    "📌 **Contato:** Mantenha os combinados registrados no chat para garantir histórico e suporte\n\n".
+                $creatorMessage = "🎉 **Parabéns! Você foi aprovada!**\n\n" .
+                    "Agora siga os prazos e regras da campanha para garantir aprovação e pagamento sem atrasos.\n\n" .
+                    "**📋 Checklist da campanha:**\n\n" .
+                    "• **Endereço:** Confirme seus dados de envio antes da marca despachar produto\n" .
+                    "• **Roteiro:** Envie em até **3 dias úteis** após receber briefing\n" .
+                    "• **Ajuste de roteiro:** Quando solicitado, corrija em até **48 horas úteis**\n" .
+                    "• **Conteúdo final:** Entregue em até **7 dias úteis** após aprovação do roteiro (com produto em mãos)\n" .
+                    "• **Correções:** A marca pode solicitar até **3 correções**; cada uma com prazo de até **3 dias úteis**\n" .
+                    "• **Comunicação:** Responda mensagens da marca/NEXA em até **8 horas**\n\n" .
+                    "**🔒 Regras importantes (ANTI-FRAUDE):**\n\n" .
+                    "✅ **Chat oficial:** Toda comunicação deve acontecer pela NEXA\n" .
+                    "❌ **Pagamento externo:** Nunca aceite pagamento por fora\n" .
+                    "⚠️ **Proteção:** A NEXA só garante campanhas e pagamentos feitos dentro da plataforma\n" .
+                    "📌 **Contato:** Mantenha os combinados registrados no chat para garantir histórico e suporte\n\n" .
                     "Boa campanha! Conte com a NEXA para um processo seguro e profissional. 💼";
 
                 Message::create([
-                    'chat_room_id' => $room->id,
-                    'sender_id' => $user->id,
-                    'message' => $creatorMessage,
-                    'message_type' => 'system_creator',
+                    'chat_room_id'      => $room->id,
+                    'sender_id'         => $user->id,
+                    'message'           => $creatorMessage,
+                    'message_type'      => 'system_creator',
                     'is_system_message' => true,
                 ]);
             }
 
-            $statusMessage = "💼 **Detalhes da Campanha**\n\n".
-                "**Status:** 🟢 Conectado\n\n".
-                "Você está agora conectado e pode começar a conversar!\n".
+            $statusMessage = "💼 **Detalhes da Campanha**\n\n" .
+                "**Status:** 🟢 Conectado\n\n" .
+                "Você está agora conectado e pode começar a conversar!\n" .
                 'Use o chat para todas as comunicações e siga as diretrizes da plataforma.';
 
             Message::create([
-                'chat_room_id' => $room->id,
-                'sender_id' => $user->id,
-                'message' => $statusMessage,
-                'message_type' => 'system',
+                'chat_room_id'      => $room->id,
+                'sender_id'         => $user->id,
+                'message'           => $statusMessage,
+                'message_type'      => 'system',
                 'is_system_message' => true,
             ]);
 
             Log::info('Guide messages sent successfully', [
-                'chat_room_id' => $room->id,
-                'user_id' => $user->id,
-                'user_role' => $user->role,
+                'chat_room_id'     => $room->id,
+                'user_id'          => $user->id,
+                'user_role'        => $user->role,
                 'messages_created' => 3,
             ]);
 
@@ -678,8 +684,8 @@ class ChatController extends Controller
         } catch (Exception $e) {
             Log::error('Failed to send guide messages', [
                 'chat_room_id' => $room->id,
-                'user_id' => $user->id,
-                'error' => $e->getMessage(),
+                'user_id'      => $user->id,
+                'error'        => $e->getMessage(),
             ]);
 
             return response()->json([
@@ -692,7 +698,7 @@ class ChatController extends Controller
     public function updateTypingStatus(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'room_id' => 'required|string',
+            'room_id'   => 'required|string',
             'is_typing' => 'required|boolean',
         ]);
 
@@ -700,7 +706,7 @@ class ChatController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors' => $validator->errors(),
+                'errors'  => $validator->errors(),
             ], 422);
         }
 
@@ -721,7 +727,7 @@ class ChatController extends Controller
             broadcast(new UserTyping($request->room_id, $user, $request->is_typing));
         } catch (\Throwable $e) {
             Log::error('Failed to broadcast typing status', [
-                'error' => $e->getMessage(),
+                'error'   => $e->getMessage(),
                 'user_id' => $user->id,
                 'room_id' => $request->room_id,
             ]);
@@ -756,22 +762,22 @@ class ChatController extends Controller
     private function formatMessageData($message, $user, bool $forceIsSender = false): array
     {
         $messageData = [
-            'id' => $message->id,
-            'message' => $message->message,
-            'message_type' => $message->message_type,
-            'file_path' => $message->file_path,
-            'file_name' => $message->file_name,
-            'file_size' => $message->file_size,
-            'file_type' => $message->file_type,
-            'file_url' => $message->file_url,
+            'id'                  => $message->id,
+            'message'             => $message->message,
+            'message_type'        => $message->message_type,
+            'file_path'           => $message->file_path,
+            'file_name'           => $message->file_name,
+            'file_size'           => $message->file_size,
+            'file_type'           => $message->file_type,
+            'file_url'            => $message->file_url,
             'formatted_file_size' => $message->formatted_file_size,
-            'sender_id' => $message->sender_id,
-            'sender_name' => $message->sender ? $message->sender->name : 'Unknown User',
-            'sender_avatar' => $message->sender ? $message->sender->avatar : null,
-            'is_sender' => $forceIsSender ?: ($message->sender_id === $user->id),
-            'is_read' => $message->is_read,
-            'read_at' => $message->read_at?->toISOString(),
-            'created_at' => $message->created_at->toISOString(),
+            'sender_id'           => $message->sender_id,
+            'sender_name'         => $message->sender ? $message->sender->name : 'Unknown User',
+            'sender_avatar'       => $message->sender ? $message->sender->avatar : null,
+            'is_sender'           => $forceIsSender ?: ($message->sender_id === $user->id),
+            'is_read'             => $message->is_read,
+            'read_at'             => $message->read_at?->toISOString(),
+            'created_at'          => $message->created_at->toISOString(),
         ];
 
         if ($message->offer_data) {
@@ -805,16 +811,16 @@ class ChatController extends Controller
         if (isset($offerData['offer_id'])) {
             $currentOffer = Offer::find($offerData['offer_id']);
             if ($currentOffer) {
-                $offerData['status'] = $currentOffer->status;
-                $offerData['accepted_at'] = $currentOffer->accepted_at?->format('Y-m-d H:i:s');
-                $offerData['rejected_at'] = $currentOffer->rejected_at?->format('Y-m-d H:i:s');
+                $offerData['status']           = $currentOffer->status;
+                $offerData['accepted_at']      = $currentOffer->accepted_at?->format('Y-m-d H:i:s');
+                $offerData['rejected_at']      = $currentOffer->rejected_at?->format('Y-m-d H:i:s');
                 $offerData['rejection_reason'] = $currentOffer->rejection_reason;
 
                 if ($currentOffer->status === 'accepted') {
                     $contract = Contract::where('offer_id', $currentOffer->id)->first();
                     if ($contract) {
-                        $offerData['contract_id'] = $contract->id;
-                        $offerData['contract_status'] = $contract->status;
+                        $offerData['contract_id']      = $contract->id;
+                        $offerData['contract_status']  = $contract->status;
                         $offerData['can_be_completed'] = $contract->canBeCompleted();
                     }
                 }
@@ -822,7 +828,7 @@ class ChatController extends Controller
         } elseif (isset($offerData['contract_id'])) {
             $contract = Contract::find($offerData['contract_id']);
             if ($contract) {
-                $offerData['contract_status'] = $contract->status;
+                $offerData['contract_status']  = $contract->status;
                 $offerData['can_be_completed'] = $contract->canBeCompleted();
             }
         }
@@ -859,7 +865,7 @@ class ChatController extends Controller
             if ($isBarter) {
                 Log::info('Skipping automatic offer for barter campaign chat', [
                     'chat_room_id' => $chatRoom->id,
-                    'campaign_id' => $campaign->id,
+                    'campaign_id'  => $campaign->id,
                 ]);
 
                 return;
@@ -878,45 +884,45 @@ class ChatController extends Controller
             }
 
             $offer = Offer::create([
-                'brand_id' => $chatRoom->brand_id,
-                'creator_id' => $chatRoom->creator_id,
-                'campaign_id' => $campaign->id,
-                'chat_room_id' => $chatRoom->id,
-                'title' => $isBarter ? 'Oferta de Permuta' : 'Oferta de Projeto',
-                'description' => $isBarter ? 'Oferta de permuta baseada na campanha criada' : 'Oferta baseada na campanha criada',
-                'budget' => $budget,
-                'estimated_days' => $estimatedDays,
-                'requirements' => $campaign->requirements ?? [],
-                'is_barter' => $isBarter,
-                'barter_description' => $isBarter ? 'Permuta baseada na campanha: '.$campaign->title : null,
-                'expires_at' => $expiresAt,
+                'brand_id'           => $chatRoom->brand_id,
+                'creator_id'         => $chatRoom->creator_id,
+                'campaign_id'        => $campaign->id,
+                'chat_room_id'       => $chatRoom->id,
+                'title'              => $isBarter ? 'Oferta de Permuta' : 'Oferta de Projeto',
+                'description'        => $isBarter ? 'Oferta de permuta baseada na campanha criada' : 'Oferta baseada na campanha criada',
+                'budget'             => $budget,
+                'estimated_days'     => $estimatedDays,
+                'requirements'       => $campaign->requirements ?? [],
+                'is_barter'          => $isBarter,
+                'barter_description' => $isBarter ? 'Permuta baseada na campanha: ' . $campaign->title : null,
+                'expires_at'         => $expiresAt,
             ]);
 
             $this->createOfferChatMessage($chatRoom, 'offer_created', [
                 'sender_id' => $chatRoom->brand_id,
-                'message' => $isBarter
+                'message'   => $isBarter
                     ? "Oferta de permuta enviada automaticamente (Prazo: {$offer->estimated_days} dias)"
                     : "Oferta enviada automaticamente: {$offer->formatted_budget} (Prazo: {$offer->estimated_days} dias)",
                 'offer_data' => [
-                    'offer_id' => $offer->id,
-                    'title' => $offer->title,
-                    'description' => $offer->description,
-                    'budget' => $offer->formatted_budget,
-                    'formatted_budget' => $offer->formatted_budget,
-                    'estimated_days' => $offer->estimated_days,
-                    'status' => 'pending',
-                    'expires_at' => $offer->expires_at->toISOString(),
-                    'days_until_expiry' => $offer->days_until_expiry,
-                    'is_expiring_soon' => $offer->is_expiring_soon,
-                    'created_at' => $offer->created_at->toISOString(),
-                    'is_barter' => $isBarter,
+                    'offer_id'           => $offer->id,
+                    'title'              => $offer->title,
+                    'description'        => $offer->description,
+                    'budget'             => $offer->formatted_budget,
+                    'formatted_budget'   => $offer->formatted_budget,
+                    'estimated_days'     => $offer->estimated_days,
+                    'status'             => 'pending',
+                    'expires_at'         => $offer->expires_at->toISOString(),
+                    'days_until_expiry'  => $offer->days_until_expiry,
+                    'is_expiring_soon'   => $offer->is_expiring_soon,
+                    'created_at'         => $offer->created_at->toISOString(),
+                    'is_barter'          => $isBarter,
                     'barter_description' => $offer->barter_description,
-                    'can_be_accepted' => true,
-                    'can_be_rejected' => true,
-                    'can_be_cancelled' => true,
-                    'sender' => [
-                        'id' => $chatRoom->brand->id,
-                        'name' => $chatRoom->brand->name,
+                    'can_be_accepted'    => true,
+                    'can_be_rejected'    => true,
+                    'can_be_cancelled'   => true,
+                    'sender'             => [
+                        'id'         => $chatRoom->brand->id,
+                        'name'       => $chatRoom->brand->name,
                         'avatar_url' => $chatRoom->brand->avatar,
                     ],
                 ],
@@ -924,16 +930,16 @@ class ChatController extends Controller
 
             Log::info('Initial offer sent automatically', [
                 'chat_room_id' => $chatRoom->id,
-                'offer_id' => $offer->id,
-                'is_barter' => $isBarter,
-                'campaign_id' => $campaign->id,
+                'offer_id'     => $offer->id,
+                'is_barter'    => $isBarter,
+                'campaign_id'  => $campaign->id,
             ]);
 
         } catch (Exception $e) {
             Log::error('Error sending initial offer automatically', [
-                'error' => $e->getMessage(),
+                'error'        => $e->getMessage(),
                 'chat_room_id' => $chatRoom->id,
-                'campaign_id' => $chatRoom->campaign_id,
+                'campaign_id'  => $chatRoom->campaign_id,
             ]);
         }
     }

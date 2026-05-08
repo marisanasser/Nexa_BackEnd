@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types=1);
+declare (strict_types = 1);
 
 namespace App\Http\Controllers\Contract;
 
@@ -35,7 +35,7 @@ class ContractCheckoutController extends Controller
         try {
             $user = $this->getAuthenticatedUser();
 
-            if (!$user->isBrand()) {
+            if (! $user->isBrand()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Only brands can create contract checkout sessions',
@@ -50,7 +50,7 @@ class ContractCheckoutController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
-                    'errors' => $validator->errors(),
+                    'errors'  => $validator->errors(),
                 ], 422);
             }
 
@@ -59,25 +59,25 @@ class ContractCheckoutController extends Controller
             if ($contract->offer?->chatRoom?->campaign?->remuneration_type === 'permuta') {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Contratos de permuta nao exigem financiamento.',
-                    'reason' => 'barter_contract_no_funding',
+                    'message' => 'Contratos de permuta não exigem financiamento.',
+                    'reason'  => 'barter_contract_no_funding',
                 ], 422);
             }
 
             if ($contract->hasEscrowFundingRecord()) {
                 if ('active' !== $contract->status || 'active' !== $contract->workflow_status) {
                     $contract->update([
-                        'status' => 'active',
+                        'status'          => 'active',
                         'workflow_status' => 'active',
-                        'started_at' => $contract->started_at ?? now(),
+                        'started_at'      => $contract->started_at ?? now(),
                     ]);
                     $contract->refresh();
                 }
 
                 return response()->json([
-                    'success' => false,
-                    'message' => 'Contract funding was already confirmed. Refresh the contract and continue the workflow.',
-                    'already_funded' => true,
+                    'success'         => false,
+                    'message'         => 'Contract funding was already confirmed. Refresh the contract and continue the workflow.',
+                    'already_funded'  => true,
                     'contract_status' => $contract->status,
                     'workflow_status' => $contract->workflow_status,
                 ], 409);
@@ -97,7 +97,7 @@ class ContractCheckoutController extends Controller
                 ], 400);
             }
 
-            if (!$this->stripeKey) {
+            if (! $this->stripeKey) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Stripe is not configured',
@@ -106,46 +106,46 @@ class ContractCheckoutController extends Controller
 
             Stripe::setApiKey($this->stripeKey);
 
-            $customerId = $this->customerService->ensureStripeCustomer($user);
+            $customerId  = $this->customerService->ensureStripeCustomer($user);
             $frontendUrl = (string) config('app.frontend_url', 'http://localhost:5000');
-            $roomId = $contract->offer?->chatRoom?->room_id;
+            $roomId      = $contract->offer?->chatRoom?->room_id;
             $messagesUrl = "{$frontendUrl}/dashboard/messages";
 
             if ($roomId) {
                 $messagesUrl .= '?roomId=' . rawurlencode($roomId);
             }
 
-            $separator = str_contains($messagesUrl, '?') ? '&' : '?';
+            $separator  = str_contains($messagesUrl, '?') ? '&' : '?';
             $successUrl = "{$messagesUrl}{$separator}funding_success=true&session_id={CHECKOUT_SESSION_ID}&contract_id={$contract->id}";
-            $cancelUrl = "{$messagesUrl}{$separator}funding_canceled=true&contract_id={$contract->id}";
+            $cancelUrl  = "{$messagesUrl}{$separator}funding_canceled=true&contract_id={$contract->id}";
 
             $checkoutSession = $this->paymentService->createContractFundingCheckout($contract, $user, $successUrl, $cancelUrl);
 
             Log::info('Contract funding checkout session created', [
-                'session_id' => $checkoutSession->id,
-                'user_id' => $user->id,
+                'session_id'  => $checkoutSession->id,
+                'user_id'     => $user->id,
                 'customer_id' => $customerId,
                 'contract_id' => $contract->id,
-                'amount' => $contract->budget,
+                'amount'      => $contract->budget,
             ]);
 
             return response()->json([
-                'success' => true,
-                'url' => $checkoutSession->url,
+                'success'    => true,
+                'url'        => $checkoutSession->url,
                 'session_id' => $checkoutSession->id,
             ]);
         } catch (Exception $e) {
             Log::error('Failed to create contract funding checkout session', [
-                'user_id' => auth()->id(),
+                'user_id'     => auth()->id(),
                 'contract_id' => $request->integer('contract_id'),
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                'error'       => $e->getMessage(),
+                'trace'       => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create checkout session. Please try again.',
-                'error' => $e->getMessage(),
+                'error'   => $e->getMessage(),
             ], 500);
         }
     }
@@ -156,7 +156,7 @@ class ContractCheckoutController extends Controller
             $user = $this->getAuthenticatedUser();
 
             $validator = Validator::make($request->all(), [
-                'session_id' => 'required|string',
+                'session_id'  => 'required|string',
                 'contract_id' => "required|integer|exists:contracts,id,brand_id,{$user->id}",
             ]);
 
@@ -164,11 +164,11 @@ class ContractCheckoutController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
-                    'errors' => $validator->errors(),
+                    'errors'  => $validator->errors(),
                 ], 422);
             }
 
-            if (!$this->stripeKey) {
+            if (! $this->stripeKey) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Stripe is not configured',
@@ -185,24 +185,24 @@ class ContractCheckoutController extends Controller
 
             Log::info('Contract funding handled successfully from frontend redirect', [
                 'contract_id' => $contract->id,
-                'user_id' => $user->id,
-                'payment_id' => $payment->id,
-                'amount' => $payment->total_amount,
+                'user_id'     => $user->id,
+                'payment_id'  => $payment->id,
+                'amount'      => $payment->total_amount,
             ]);
 
             $contract->refresh();
 
             return response()->json([
-                'success' => true,
-                'message' => 'Contract funding confirmed',
-                'payment_status' => $payment->status,
+                'success'         => true,
+                'message'         => 'Contract funding confirmed',
+                'payment_status'  => $payment->status,
                 'contract_status' => $contract->status,
             ]);
         } catch (Exception $e) {
             Log::error('Error handling funding success', [
-                'user_id' => auth()->id(),
+                'user_id'     => auth()->id(),
                 'contract_id' => $request->integer('contract_id'),
-                'error' => $e->getMessage(),
+                'error'       => $e->getMessage(),
             ]);
 
             return response()->json([

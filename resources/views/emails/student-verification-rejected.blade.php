@@ -77,7 +77,7 @@
         <div class="content">
             <h2>Ola, {{ $user->name }}!</h2>
 
-            <p>Neste momento nao foi possivel aprovar sua verificacao estudantil.</p>
+            <p>Neste momento não foi possivel aprovar sua verificacao estudantil.</p>
 
             @if(!empty($rejectionData['rejection_reason']))
                 <div class="info-box">
@@ -86,7 +86,7 @@
                 </div>
             @endif
 
-            <p>Voce pode revisar os dados enviados e reenviar a solicitacao quando quiser.</p>
+            <p>Você pode revisar os dados enviados e reenviar a solicitacao quando quiser.</p>
 
             <a href="{{ config('app.frontend_url', 'http://localhost:5000') }}/dashboard/student-verify" class="button" style="color: white;">
                 Revisar solicitacao
@@ -95,7 +95,7 @@
 
         <div class="footer">
             <p>Este e um email automatico da plataforma Nexa.</p>
-            <p>Se voce tiver alguma duvida, entre em contato conosco.</p>
+            <p>Se você tiver alguma duvida, entre em contato conosco.</p>
         </div>
     </div>
 </body>

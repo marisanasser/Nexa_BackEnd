@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types=1);
+declare (strict_types = 1);
 
 namespace App\Console\Commands\Subscription;
 
@@ -21,22 +21,22 @@ class EnforcePremiumConformity extends Command
     public function handle(): int
     {
         $dryRun = (bool) $this->option('dry-run');
-        $now = now();
+        $now    = now();
 
         $report = [
             'generated_at' => $now->toDateTimeString(),
-            'dry_run' => $dryRun,
-            'summary' => [
-                'expired_invalid_active_subscriptions' => 0,
-                'promoted_users_from_active_subscription' => 0,
+            'dry_run'      => $dryRun,
+            'summary'      => [
+                'expired_invalid_active_subscriptions'         => 0,
+                'promoted_users_from_active_subscription'      => 0,
                 'synced_user_premium_expiry_from_subscription' => 0,
-                'demoted_users_without_active_subscription' => 0,
+                'demoted_users_without_active_subscription'    => 0,
             ],
-            'changes' => [
+            'changes'      => [
                 'subscriptions_expired' => [],
-                'users_promoted' => [],
-                'users_synced' => [],
-                'users_demoted' => [],
+                'users_promoted'        => [],
+                'users_synced'          => [],
+                'users_demoted'         => [],
             ],
         ];
 
@@ -58,20 +58,20 @@ class EnforcePremiumConformity extends Command
                     $newStripeStatus = Subscription::STATUS_EXPIRED;
                 }
 
-                if (!$dryRun) {
+                if (! $dryRun) {
                     $subscription->forceFill([
-                        'status' => Subscription::STATUS_EXPIRED,
+                        'status'        => Subscription::STATUS_EXPIRED,
                         'stripe_status' => $newStripeStatus,
                     ])->save();
                 }
 
                 $report['summary']['expired_invalid_active_subscriptions']++;
                 $report['changes']['subscriptions_expired'][] = [
-                    'id' => (int) $subscription->id,
-                    'user_id' => (int) $subscription->user_id,
-                    'old_status' => Subscription::STATUS_ACTIVE,
-                    'new_status' => Subscription::STATUS_EXPIRED,
-                    'expires_at' => $this->formatDate($subscription->expires_at),
+                    'id'                => (int) $subscription->id,
+                    'user_id'           => (int) $subscription->user_id,
+                    'old_status'        => Subscription::STATUS_ACTIVE,
+                    'new_status'        => Subscription::STATUS_EXPIRED,
+                    'expires_at'        => $this->formatDate($subscription->expires_at),
                     'old_stripe_status' => $oldStripeStatus,
                     'new_stripe_status' => $newStripeStatus,
                 ];
@@ -103,21 +103,21 @@ class EnforcePremiumConformity extends Command
 
             foreach ($usersToPromote as $user) {
                 $latestExpiry = $this->getLatestExpiry($user->subscriptions);
-                if (!$latestExpiry) {
+                if (! $latestExpiry) {
                     continue;
                 }
 
-                if (!$dryRun) {
+                if (! $dryRun) {
                     $user->forceFill([
-                        'has_premium' => true,
+                        'has_premium'        => true,
                         'premium_expires_at' => $latestExpiry,
                     ])->save();
                 }
 
                 $report['summary']['promoted_users_from_active_subscription']++;
                 $report['changes']['users_promoted'][] = [
-                    'id' => (int) $user->id,
-                    'email' => (string) $user->email,
+                    'id'                 => (int) $user->id,
+                    'email'              => (string) $user->email,
                     'premium_expires_at' => $latestExpiry->toDateTimeString(),
                 ];
             }
@@ -144,7 +144,7 @@ class EnforcePremiumConformity extends Command
 
             foreach ($usersToSyncExpiry as $user) {
                 $latestExpiry = $this->getLatestExpiry($user->subscriptions);
-                if (!$latestExpiry) {
+                if (! $latestExpiry) {
                     continue;
                 }
 
@@ -153,17 +153,17 @@ class EnforcePremiumConformity extends Command
                     continue;
                 }
 
-                if (!$dryRun) {
+                if (! $dryRun) {
                     $user->forceFill([
-                        'has_premium' => true,
+                        'has_premium'        => true,
                         'premium_expires_at' => $latestExpiry,
                     ])->save();
                 }
 
                 $report['summary']['synced_user_premium_expiry_from_subscription']++;
                 $report['changes']['users_synced'][] = [
-                    'id' => (int) $user->id,
-                    'email' => (string) $user->email,
+                    'id'                     => (int) $user->id,
+                    'email'                  => (string) $user->email,
                     'old_premium_expires_at' => $this->formatDate($storedExpiry),
                     'new_premium_expires_at' => $latestExpiry->toDateTimeString(),
                 ];
@@ -187,14 +187,14 @@ class EnforcePremiumConformity extends Command
             ;
 
             foreach ($usersToDemote as $user) {
-                if (!$dryRun) {
+                if (! $dryRun) {
                     $user->forceFill(['has_premium' => false])->save();
                 }
 
                 $report['summary']['demoted_users_without_active_subscription']++;
                 $report['changes']['users_demoted'][] = [
-                    'id' => (int) $user->id,
-                    'email' => (string) $user->email,
+                    'id'                 => (int) $user->id,
+                    'email'              => (string) $user->email,
                     'premium_expires_at' => $this->formatDate($user->premium_expires_at),
                 ];
             }
@@ -211,17 +211,17 @@ class EnforcePremiumConformity extends Command
                 'error' => $exception->getMessage(),
             ]);
 
-            $this->error('Erro ao aplicar conformidade: '.$exception->getMessage());
+            $this->error('Erro ao aplicar conformidade: ' . $exception->getMessage());
 
             return 1;
         }
 
         $reportDir = storage_path('app/premium_conformity_reports');
         File::ensureDirectoryExists($reportDir);
-        $timestamp = now()->format('Ymd_His');
-        $versionedPath = $reportDir."/premium_conformity_{$timestamp}.json";
-        $latestPath = $reportDir.'/premium_conformity_latest.json';
-        $reportJson = json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        $timestamp     = now()->format('Ymd_His');
+        $versionedPath = $reportDir . "/premium_conformity_{$timestamp}.json";
+        $latestPath    = $reportDir . '/premium_conformity_latest.json';
+        $reportJson    = json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 
         if (false !== $reportJson) {
             File::put($versionedPath, $reportJson);
@@ -229,12 +229,12 @@ class EnforcePremiumConformity extends Command
         }
 
         $this->info('Premium conformity check finalizada.');
-        $this->line('Dry-run: '.($dryRun ? 'sim' : 'nao'));
-        $this->line('Subscriptions expiradas: '.$report['summary']['expired_invalid_active_subscriptions']);
-        $this->line('Usuarios promovidos: '.$report['summary']['promoted_users_from_active_subscription']);
-        $this->line('Usuarios sincronizados: '.$report['summary']['synced_user_premium_expiry_from_subscription']);
-        $this->line('Usuarios rebaixados: '.$report['summary']['demoted_users_without_active_subscription']);
-        $this->line('Relatorio: '.$versionedPath);
+        $this->line('Dry-run: ' . ($dryRun ? 'sim' : 'não'));
+        $this->line('Subscriptions expiradas: ' . $report['summary']['expired_invalid_active_subscriptions']);
+        $this->line('Usuarios promovidos: ' . $report['summary']['promoted_users_from_active_subscription']);
+        $this->line('Usuarios sincronizados: ' . $report['summary']['synced_user_premium_expiry_from_subscription']);
+        $this->line('Usuarios rebaixados: ' . $report['summary']['demoted_users_without_active_subscription']);
+        $this->line('Relatorio: ' . $versionedPath);
 
         return 0;
     }
@@ -245,7 +245,7 @@ class EnforcePremiumConformity extends Command
             return $value;
         }
 
-        if (!is_string($value) || '' === trim($value)) {
+        if (! is_string($value) || '' === trim($value)) {
             return null;
         }
 
@@ -262,11 +262,11 @@ class EnforcePremiumConformity extends Command
 
         foreach ($subscriptions as $subscription) {
             $expiresAt = $this->toCarbon($subscription->expires_at);
-            if (!$expiresAt) {
+            if (! $expiresAt) {
                 continue;
             }
 
-            if (!$latest || $expiresAt->gt($latest)) {
+            if (! $latest || $expiresAt->gt($latest)) {
                 $latest = $expiresAt;
             }
         }

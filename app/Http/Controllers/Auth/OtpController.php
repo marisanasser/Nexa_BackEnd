@@ -1,17 +1,16 @@
 <?php
 
-declare(strict_types=1);
+declare (strict_types = 1);
 
 namespace App\Http\Controllers\Auth;
-
-use Exception;
-use Illuminate\Support\Facades\Log;
 
 use App\Http\Controllers\Base\Controller;
 use App\Mail\OtpMail;
 use App\Models\User\User;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class OtpController extends Controller
@@ -23,11 +22,11 @@ class OtpController extends Controller
     {
         $request->validate([
             'contact' => 'required|string',
-            'type' => 'required|in:email,whatsapp',
+            'type'    => 'required|in:email,whatsapp',
         ]);
 
         $contact = $request->contact;
-        $type = $request->type;
+        $type    = $request->type;
 
         // Check if user already exists
         if ('email' === $type && User::where('email', $contact)->exists()) {
@@ -45,24 +44,24 @@ class OtpController extends Controller
         $key = "otp_{$type}_{$contact}";
 
         Cache::put($key, $code, 600);
-        $otpSent = true;
+        $otpSent  = true;
         $otpError = null;
 
         try {
             $defaultMailer = config('mail.default');
-            $fromAddress = config('mail.from.address');
-            $fromName = config('mail.from.name');
-            $sesRegion = env('AWS_SES_REGION', env('AWS_DEFAULT_REGION'));
-            $smtpHost = env('MAIL_HOST');
-            $smtpUser = env('MAIL_USERNAME') ? '***' : null;
+            $fromAddress   = config('mail.from.address');
+            $fromName      = config('mail.from.name');
+            $sesRegion     = env('AWS_SES_REGION', env('AWS_DEFAULT_REGION'));
+            $smtpHost      = env('MAIL_HOST');
+            $smtpUser      = env('MAIL_USERNAME') ? '***' : null;
             Log::info('OTP mail dispatch attempt', [
-                'contact' => $contact,
-                'type' => $type,
-                'mailer' => $defaultMailer,
-                'from_address' => $fromAddress,
-                'from_name' => $fromName,
-                'ses_region' => $sesRegion,
-                'smtp_host' => $smtpHost,
+                'contact'       => $contact,
+                'type'          => $type,
+                'mailer'        => $defaultMailer,
+                'from_address'  => $fromAddress,
+                'from_name'     => $fromName,
+                'ses_region'    => $sesRegion,
+                'smtp_host'     => $smtpHost,
                 'smtp_user_set' => (bool) $smtpUser,
             ]);
             if ('email' === $type) {
@@ -70,50 +69,50 @@ class OtpController extends Controller
 
                 Log::info('OTP email sent', [
                     'contact' => $contact,
-                    'type' => $type,
+                    'type'    => $type,
                 ]);
             } elseif ('whatsapp' === $type) {
                 Log::info('WhatsApp OTP generated', [
                     'contact' => $contact,
-                    'type' => $type,
+                    'type'    => $type,
                 ]);
             }
         } catch (Exception $e) {
-            $otpSent = false;
+            $otpSent  = false;
             $otpError = $e->getMessage();
             Log::error('Failed to send OTP', [
-                'contact' => $contact,
-                'type' => $type,
-                'error' => $otpError,
-                'mailer' => config('mail.default'),
+                'contact'      => $contact,
+                'type'         => $type,
+                'error'        => $otpError,
+                'mailer'       => config('mail.default'),
                 'from_address' => config('mail.from.address'),
-                'smtp_host' => env('MAIL_HOST'),
-                'ses_region' => env('AWS_SES_REGION', env('AWS_DEFAULT_REGION')),
+                'smtp_host'    => env('MAIL_HOST'),
+                'ses_region'   => env('AWS_SES_REGION', env('AWS_DEFAULT_REGION')),
             ]);
         }
 
         if ('email' === $type && ! $otpSent) {
             return response()->json([
-                'message' => 'Nao foi possivel enviar o codigo no momento. Tente novamente em instantes.',
+                'message' => 'Não foi possivel enviar o codigo no momento. Tente novamente em instantes.',
                 'success' => false,
-                'error' => app()->environment('production') ? null : $otpError,
+                'error'   => app()->environment('production') ? null : $otpError,
             ], 503);
         }
 
         $debug = ! app()->environment('production')
-            && filter_var(env('OTP_DEBUG', false), FILTER_VALIDATE_BOOL);
+        && filter_var(env('OTP_DEBUG', false), FILTER_VALIDATE_BOOL);
 
         if ($debug) {
             Log::debug('OTP debug code generated', [
                 'contact' => $contact,
-                'type' => $type,
-                'code' => $code,
+                'type'    => $type,
+                'code'    => $code,
             ]);
         }
 
         return response()->json([
-            'message' => 'Código de verificação gerado.',
-            'success' => true,
+            'message'  => 'Código de verificação gerado.',
+            'success'  => true,
             'dev_code' => $debug ? $code : null,
         ]);
     }
@@ -125,15 +124,15 @@ class OtpController extends Controller
     {
         $request->validate([
             'contact' => 'required|string',
-            'type' => 'required|in:email,whatsapp',
-            'code' => 'required|string|size:6',
+            'type'    => 'required|in:email,whatsapp',
+            'code'    => 'required|string|size:6',
         ]);
 
         $contact = $request->contact;
-        $type = $request->type;
-        $code = $request->code;
+        $type    = $request->type;
+        $code    = $request->code;
 
-        $key = "otp_{$type}_{$contact}";
+        $key        = "otp_{$type}_{$contact}";
         $cachedCode = Cache::get($key);
 
         if ($cachedCode && $cachedCode === $code) {

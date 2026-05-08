@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types=1);
+declare (strict_types = 1);
 
 namespace App\Console\Commands\Maintenance;
 
@@ -30,16 +30,16 @@ class DatabaseBackupCommand extends Command
 
     public function handle(): int
     {
-        if (!(bool) config('backup.enabled', true) && !$this->option('dry-run')) {
+        if (! (bool) config('backup.enabled', true) && ! $this->option('dry-run')) {
             $this->warn('Database backup is disabled by configuration.');
 
             return self::SUCCESS;
         }
 
         $connectionName = (string) config('database.default', 'pgsql');
-        $connection = config("database.connections.{$connectionName}");
+        $connection     = config("database.connections.{$connectionName}");
 
-        if (!is_array($connection)) {
+        if (! is_array($connection)) {
             $this->error("Database connection config not found: {$connectionName}");
 
             return self::FAILURE;
@@ -53,15 +53,15 @@ class DatabaseBackupCommand extends Command
 
         $connection = $this->resolvePgsqlConnectionConfig($connection);
 
-        $localDirectory = trim((string) config('backup.directory', 'backups/database'), '/\\');
-        $localDiskPath = storage_path('app'.DIRECTORY_SEPARATOR.$localDirectory);
-        $filenamePrefix = trim((string) config('backup.filename_prefix', 'nexa'));
-        $filenamePrefix = '' !== $filenamePrefix ? $filenamePrefix : 'nexa';
-        $timestamp = Carbon::now('UTC')->format('Ymd_His');
-        $filename = "{$filenamePrefix}_{$connectionName}_{$timestamp}_utc.sql.gz";
-        $tempSqlPath = $localDiskPath.DIRECTORY_SEPARATOR.str_replace('.sql.gz', '.sql', $filename);
-        $compressedPath = $localDiskPath.DIRECTORY_SEPARATOR.$filename;
-        $relativeCompressedPath = $localDirectory.'/'.$filename;
+        $localDirectory         = trim((string) config('backup.directory', 'backups/database'), '/\\');
+        $localDiskPath          = storage_path('app' . DIRECTORY_SEPARATOR . $localDirectory);
+        $filenamePrefix         = trim((string) config('backup.filename_prefix', 'nexa'));
+        $filenamePrefix         = '' !== $filenamePrefix ? $filenamePrefix : 'nexa';
+        $timestamp              = Carbon::now('UTC')->format('Ymd_His');
+        $filename               = "{$filenamePrefix}_{$connectionName}_{$timestamp}_utc.sql.gz";
+        $tempSqlPath            = $localDiskPath . DIRECTORY_SEPARATOR . str_replace('.sql.gz', '.sql', $filename);
+        $compressedPath         = $localDiskPath . DIRECTORY_SEPARATOR . $filename;
+        $relativeCompressedPath = $localDirectory . '/' . $filename;
         try {
             $keepDays = $this->resolveRetentionDays();
         } catch (RuntimeException $e) {
@@ -70,10 +70,10 @@ class DatabaseBackupCommand extends Command
             return self::FAILURE;
         }
 
-        $gcsEnabled = (bool) config('backup.gcs.enabled', false) || (bool) $this->option('upload-gcs');
-        $gcsDisk = (string) config('backup.gcs.disk', 'gcs');
+        $gcsEnabled   = (bool) config('backup.gcs.enabled', false) || (bool) $this->option('upload-gcs');
+        $gcsDisk      = (string) config('backup.gcs.disk', 'gcs');
         $gcsDirectory = trim((string) config('backup.gcs.directory', 'db-backups'), '/\\');
-        $gcsPath = '' !== $gcsDirectory ? "{$gcsDirectory}/{$filename}" : $filename;
+        $gcsPath      = '' !== $gcsDirectory ? "{$gcsDirectory}/{$filename}" : $filename;
 
         $notifyRecipients = $this->resolveNotifyRecipients();
 
@@ -114,18 +114,18 @@ class DatabaseBackupCommand extends Command
             File::delete($compressedPath);
 
             Log::error('Database backup failed while generating dump', [
-                'error' => $e->getMessage(),
+                'error'      => $e->getMessage(),
                 'connection' => $connectionName,
-                'path' => $compressedPath,
+                'path'       => $compressedPath,
             ]);
 
-            $this->error('Backup generation failed: '.$e->getMessage());
+            $this->error('Backup generation failed: ' . $e->getMessage());
 
             return self::FAILURE;
         }
 
-        $fileSizeBytes = (int) File::size($compressedPath);
-        $cloudUploadError = null;
+        $fileSizeBytes     = (int) File::size($compressedPath);
+        $cloudUploadError  = null;
         $cloudUploadResult = null;
 
         if ($gcsEnabled) {
@@ -135,9 +135,9 @@ class DatabaseBackupCommand extends Command
                 $cloudUploadError = $e->getMessage();
 
                 Log::error('Database backup generated but cloud upload failed', [
-                    'error' => $cloudUploadError,
-                    'disk' => $gcsDisk,
-                    'path' => $gcsPath,
+                    'error'      => $cloudUploadError,
+                    'disk'       => $gcsDisk,
+                    'path'       => $gcsPath,
                     'local_path' => $compressedPath,
                 ]);
             }
@@ -145,8 +145,8 @@ class DatabaseBackupCommand extends Command
 
         $localPruned = 0;
         $cloudPruned = 0;
-        if (!(bool) $this->option('skip-prune') && $keepDays > 0) {
-            $cutoff = Carbon::now()->subDays($keepDays);
+        if (! (bool) $this->option('skip-prune') && $keepDays > 0) {
+            $cutoff      = Carbon::now()->subDays($keepDays);
             $localPruned = $this->pruneLocalBackups($localDiskPath, $cutoff);
 
             if ($gcsEnabled && null === $cloudUploadError) {
@@ -154,16 +154,16 @@ class DatabaseBackupCommand extends Command
                     $cloudPruned = $this->pruneCloudBackups($gcsDisk, $gcsDirectory, $cutoff);
                 } catch (Throwable $e) {
                     Log::warning('Cloud backup prune failed', [
-                        'disk' => $gcsDisk,
+                        'disk'      => $gcsDisk,
                         'directory' => $gcsDirectory,
-                        'error' => $e->getMessage(),
+                        'error'     => $e->getMessage(),
                     ]);
                 }
             }
         }
 
         $emailError = null;
-        if (!empty($notifyRecipients)) {
+        if (! empty($notifyRecipients)) {
             try {
                 $this->sendSummaryEmail(
                     $notifyRecipients,
@@ -180,32 +180,32 @@ class DatabaseBackupCommand extends Command
                 $emailError = $e->getMessage();
                 Log::warning('Backup summary email failed', [
                     'recipients' => $notifyRecipients,
-                    'error' => $emailError,
+                    'error'      => $emailError,
                 ]);
             }
         }
 
         $this->info('Backup created successfully.');
-        $this->line('Local file: storage/app/'.$relativeCompressedPath);
-        $this->line('Size: '.$this->formatBytes($fileSizeBytes));
+        $this->line('Local file: storage/app/' . $relativeCompressedPath);
+        $this->line('Size: ' . $this->formatBytes($fileSizeBytes));
 
         if ($gcsEnabled) {
             if (null === $cloudUploadError) {
                 $this->line("GCS upload: ok ({$gcsDisk}:{$gcsPath})");
             } else {
-                $this->warn('GCS upload failed: '.$cloudUploadError);
+                $this->warn('GCS upload failed: ' . $cloudUploadError);
             }
         }
 
-        if (!empty($notifyRecipients)) {
+        if (! empty($notifyRecipients)) {
             if (null === $emailError) {
-                $this->line('Email notification sent to: '.implode(', ', $notifyRecipients));
+                $this->line('Email notification sent to: ' . implode(', ', $notifyRecipients));
             } else {
-                $this->warn('Email notification failed: '.$emailError);
+                $this->warn('Email notification failed: ' . $emailError);
             }
         }
 
-        if (!(bool) $this->option('skip-prune') && $keepDays > 0) {
+        if (! (bool) $this->option('skip-prune') && $keepDays > 0) {
             $this->line("Pruned local backups: {$localPruned}");
             if ($gcsEnabled && null === $cloudUploadError) {
                 $this->line("Pruned cloud backups: {$cloudPruned}");
@@ -226,12 +226,12 @@ class DatabaseBackupCommand extends Command
      */
     private function runPgDump(array $connection, string $destinationPath): void
     {
-        $host = (string) ($connection['host'] ?? '');
-        $port = (string) ($connection['port'] ?? '5432');
+        $host     = (string) ($connection['host'] ?? '');
+        $port     = (string) ($connection['port'] ?? '5432');
         $database = (string) ($connection['database'] ?? '');
         $username = (string) ($connection['username'] ?? '');
         $password = (string) ($connection['password'] ?? '');
-        $sslmode = (string) ($connection['sslmode'] ?? 'prefer');
+        $sslmode  = (string) ($connection['sslmode'] ?? 'prefer');
 
         if ('' === $host || '' === $database || '' === $username) {
             throw new RuntimeException('Invalid DB config for backup: host/database/username are required.');
@@ -259,19 +259,19 @@ class DatabaseBackupCommand extends Command
             base_path(),
             [
                 'PGPASSWORD' => $password,
-                'PGSSLMODE' => $sslmode,
+                'PGSSLMODE'  => $sslmode,
             ]
         );
         $process->setTimeout((int) config('backup.timeout_seconds', 600));
         $process->run();
 
-        if (!$process->isSuccessful()) {
-            $errorOutput = trim($process->getErrorOutput().' '.$process->getOutput());
+        if (! $process->isSuccessful()) {
+            $errorOutput     = trim($process->getErrorOutput() . ' ' . $process->getOutput());
             $normalizedError = strtolower($errorOutput);
 
             if (str_contains($normalizedError, 'not recognized')
                 || str_contains($normalizedError, 'not found')
-                || str_contains($normalizedError, 'nao e reconhecido')
+                || str_contains($normalizedError, 'não e reconhecido')
                 || str_contains($normalizedError, 'não é reconhecido')
             ) {
                 throw new RuntimeException('pg_dump was not found. Install PostgreSQL client tools or set DB_BACKUP_PG_DUMP_BINARY with the full binary path.');
@@ -295,7 +295,7 @@ class DatabaseBackupCommand extends Command
         }
 
         try {
-            while (!feof($source)) {
+            while (! feof($source)) {
                 $chunk = fread($source, 1024 * 1024);
                 if (false === $chunk) {
                     throw new RuntimeException("Error while reading SQL dump: {$sourcePath}");
@@ -335,7 +335,7 @@ class DatabaseBackupCommand extends Command
             }
         }
 
-        if (!$disk->exists($cloudPath)) {
+        if (! $disk->exists($cloudPath)) {
             throw new RuntimeException("Failed to upload backup to disk [{$diskName}] path [{$cloudPath}].");
         }
 
@@ -349,7 +349,7 @@ class DatabaseBackupCommand extends Command
         return [
             'disk' => $diskName,
             'path' => $cloudPath,
-            'url' => $url,
+            'url'  => $url,
         ];
     }
 
@@ -370,7 +370,7 @@ class DatabaseBackupCommand extends Command
             throw new RuntimeException("Could not open local file for upload: {$localPath}");
         }
 
-        $projectId = (string) config('filesystems.disks.gcs.project_id', env('GOOGLE_CLOUD_PROJECT_ID', ''));
+        $projectId    = (string) config('filesystems.disks.gcs.project_id', env('GOOGLE_CLOUD_PROJECT_ID', ''));
         $clientConfig = [];
         if ('' !== trim($projectId)) {
             $clientConfig['projectId'] = $projectId;
@@ -378,7 +378,7 @@ class DatabaseBackupCommand extends Command
 
         try {
             $storageClient = new StorageClient($clientConfig);
-            $bucket = $storageClient->bucket($bucketName);
+            $bucket        = $storageClient->bucket($bucketName);
             $bucket->upload($stream, [
                 'name' => ltrim($cloudPath, '/'),
             ]);
@@ -393,19 +393,19 @@ class DatabaseBackupCommand extends Command
         return [
             'disk' => 'gcs',
             'path' => $normalizedPath,
-            'url' => "https://storage.googleapis.com/{$bucketName}/{$normalizedPath}",
+            'url'  => "https://storage.googleapis.com/{$bucketName}/{$normalizedPath}",
         ];
     }
 
     private function pruneLocalBackups(string $directoryPath, Carbon $cutoff): int
     {
-        if (!File::exists($directoryPath)) {
+        if (! File::exists($directoryPath)) {
             return 0;
         }
 
         $deleted = 0;
         foreach (File::files($directoryPath) as $file) {
-            if (!str_ends_with($file->getFilename(), '.sql.gz')) {
+            if (! str_ends_with($file->getFilename(), '.sql.gz')) {
                 continue;
             }
 
@@ -423,12 +423,12 @@ class DatabaseBackupCommand extends Command
 
     private function pruneCloudBackups(string $diskName, string $directory, Carbon $cutoff): int
     {
-        $disk = Storage::disk($diskName);
+        $disk   = Storage::disk($diskName);
         $prefix = trim($directory, '/\\');
 
         $deleted = 0;
         foreach ($disk->files($prefix) as $filePath) {
-            if (!str_ends_with($filePath, '.sql.gz')) {
+            if (! str_ends_with($filePath, '.sql.gz')) {
                 continue;
             }
 
@@ -461,38 +461,38 @@ class DatabaseBackupCommand extends Command
         string $localAbsolutePath
     ): void {
         $subjectPrefix = trim((string) config('backup.mail.subject_prefix', '[Nexa DB Backup]'));
-        $subject = "{$subjectPrefix} ".Carbon::now()->format('Y-m-d H:i:s');
+        $subject       = "{$subjectPrefix} " . Carbon::now()->format('Y-m-d H:i:s');
 
         $lines = [
             'Database backup finished.',
             '',
-            'Connection: '.$connectionName,
-            'Generated at (UTC): '.Carbon::now('UTC')->toDateTimeString(),
-            'Local file: storage/app/'.$relativeCompressedPath,
-            'File size: '.$this->formatBytes($fileSizeBytes),
-            'Pruned local backups: '.$localPruned,
-            'Pruned cloud backups: '.$cloudPruned,
+            'Connection: ' . $connectionName,
+            'Generated at (UTC): ' . Carbon::now('UTC')->toDateTimeString(),
+            'Local file: storage/app/' . $relativeCompressedPath,
+            'File size: ' . $this->formatBytes($fileSizeBytes),
+            'Pruned local backups: ' . $localPruned,
+            'Pruned cloud backups: ' . $cloudPruned,
         ];
 
         if (null !== $cloudUploadResult) {
             $lines[] = 'Cloud upload: OK';
-            $lines[] = 'Cloud disk: '.$cloudUploadResult['disk'];
-            $lines[] = 'Cloud path: '.$cloudUploadResult['path'];
+            $lines[] = 'Cloud disk: ' . $cloudUploadResult['disk'];
+            $lines[] = 'Cloud path: ' . $cloudUploadResult['path'];
             if (null !== $cloudUploadResult['url']) {
-                $lines[] = 'Cloud URL: '.$cloudUploadResult['url'];
+                $lines[] = 'Cloud URL: ' . $cloudUploadResult['url'];
             }
         } elseif (null !== $cloudUploadError) {
             $lines[] = 'Cloud upload: FAILED';
-            $lines[] = 'Cloud error: '.$cloudUploadError;
+            $lines[] = 'Cloud error: ' . $cloudUploadError;
         } else {
             $lines[] = 'Cloud upload: not requested';
         }
 
-        $attachFile = (bool) config('backup.mail.attach_file', false);
+        $attachFile         = (bool) config('backup.mail.attach_file', false);
         $maxAttachmentBytes = max(1, (int) config('backup.mail.max_attachment_mb', 8)) * 1024 * 1024;
         if ($fileSizeBytes > $maxAttachmentBytes) {
             $attachFile = false;
-            $lines[] = 'Attachment: skipped because file is larger than configured email limit.';
+            $lines[]    = 'Attachment: skipped because file is larger than configured email limit.';
         }
 
         Mail::raw(implode(PHP_EOL, $lines), function (Message $message) use ($recipients, $subject, $attachFile, $localAbsolutePath): void {
@@ -500,7 +500,7 @@ class DatabaseBackupCommand extends Command
 
             if ($attachFile) {
                 $message->attach($localAbsolutePath, [
-                    'as' => basename($localAbsolutePath),
+                    'as'   => basename($localAbsolutePath),
                     'mime' => 'application/gzip',
                 ]);
             }
@@ -521,12 +521,12 @@ class DatabaseBackupCommand extends Command
         }
 
         $enabled = (bool) config('backup.mail.enabled', false);
-        if (!$enabled) {
+        if (! $enabled) {
             return [];
         }
 
         $recipients = config('backup.mail.recipients', []);
-        if (!is_array($recipients)) {
+        if (! is_array($recipients)) {
             return [];
         }
 
@@ -540,7 +540,7 @@ class DatabaseBackupCommand extends Command
     {
         $runtime = $this->option('keep-days');
         if (null !== $runtime && '' !== (string) $runtime) {
-            if (!is_numeric((string) $runtime)) {
+            if (! is_numeric((string) $runtime)) {
                 throw new RuntimeException('Option --keep-days must be numeric.');
             }
 
@@ -558,35 +558,35 @@ class DatabaseBackupCommand extends Command
 
         $kb = $bytes / 1024;
         if ($kb < 1024) {
-            return number_format($kb, 2).' KB';
+            return number_format($kb, 2) . ' KB';
         }
 
         $mb = $kb / 1024;
         if ($mb < 1024) {
-            return number_format($mb, 2).' MB';
+            return number_format($mb, 2) . ' MB';
         }
 
-        return number_format($mb / 1024, 2).' GB';
+        return number_format($mb / 1024, 2) . ' GB';
     }
 
     private function resolvePgDumpBinary(): string
     {
         $configuredBinary = trim((string) config('backup.pg_dump_binary', 'pg_dump'));
-        $candidates = array_filter(array_values(array_unique(array_merge(
+        $candidates       = array_filter(array_values(array_unique(array_merge(
             [$configuredBinary, 'pg_dump'],
             'Windows' === PHP_OS_FAMILY
                 ? [
-                    'pg_dump.exe',
-                    'C:\\Program Files\\PostgreSQL\\17\\bin\\pg_dump.exe',
-                    'C:\\Program Files\\PostgreSQL\\16\\bin\\pg_dump.exe',
-                    'C:\\Program Files\\PostgreSQL\\15\\bin\\pg_dump.exe',
-                  ]
+                'pg_dump.exe',
+                'C:\\Program Files\\PostgreSQL\\17\\bin\\pg_dump.exe',
+                'C:\\Program Files\\PostgreSQL\\16\\bin\\pg_dump.exe',
+                'C:\\Program Files\\PostgreSQL\\15\\bin\\pg_dump.exe',
+            ]
                 : [
-                    '/usr/bin/pg_dump',
-                    '/usr/lib/postgresql/17/bin/pg_dump',
-                    '/usr/lib/postgresql/16/bin/pg_dump',
-                    '/usr/lib/postgresql/15/bin/pg_dump',
-                  ]
+                '/usr/bin/pg_dump',
+                '/usr/lib/postgresql/17/bin/pg_dump',
+                '/usr/lib/postgresql/16/bin/pg_dump',
+                '/usr/lib/postgresql/15/bin/pg_dump',
+            ]
         ))));
 
         $finder = new ExecutableFinder();
@@ -636,7 +636,7 @@ class DatabaseBackupCommand extends Command
         }
 
         $scheme = strtolower((string) ($parsed['scheme'] ?? ''));
-        if ('' !== $scheme && !str_starts_with($scheme, 'postgres')) {
+        if ('' !== $scheme && ! str_starts_with($scheme, 'postgres')) {
             return $connection;
         }
 

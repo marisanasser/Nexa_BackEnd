@@ -1,13 +1,13 @@
 <?php
 
-declare(strict_types=1);
+declare (strict_types = 1);
 
 namespace App\Models\Payment;
 
-use App\Domain\Payment\Services\StripeSettlementService;
 use App\Domain\Notification\Services\PaymentNotificationService;
-use App\Models\User\User;
+use App\Domain\Payment\Services\StripeSettlementService;
 use App\Models\Payment\WithdrawalMethod;
+use App\Models\User\User;
 use Exception;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -92,9 +92,9 @@ class Withdrawal extends Model
     ];
 
     protected $casts = [
-        'amount' => 'decimal:2',
+        'amount'             => 'decimal:2',
         'withdrawal_details' => 'array',
-        'processed_at' => 'datetime',
+        'processed_at'       => 'datetime',
     ];
 
     public function creator(): BelongsTo
@@ -169,7 +169,7 @@ class Withdrawal extends Model
 
     public function process(): bool
     {
-        if (!$this->canBeProcessed()) {
+        if (! $this->canBeProcessed()) {
             return false;
         }
 
@@ -181,7 +181,7 @@ class Withdrawal extends Model
             $this->processWithdrawal();
 
             $this->update([
-                'status' => 'completed',
+                'status'       => 'completed',
                 'processed_at' => now(),
             ]);
 
@@ -194,7 +194,7 @@ class Withdrawal extends Model
             return true;
         } catch (Exception $e) {
             $this->update([
-                'status' => 'failed',
+                'status'         => 'failed',
                 'failure_reason' => $e->getMessage(),
             ]);
 
@@ -208,12 +208,12 @@ class Withdrawal extends Model
 
     public function cancel(?string $reason = null): bool
     {
-        if (!$this->canBeCancelled()) {
+        if (! $this->canBeCancelled()) {
             return false;
         }
 
         $this->update([
-            'status' => 'cancelled',
+            'status'         => 'cancelled',
             'failure_reason' => $reason,
         ]);
 
@@ -404,11 +404,11 @@ class Withdrawal extends Model
     {
         if ('bank_transfer' === $this->withdrawal_method && $this->withdrawal_details) {
             return [
-                'bank' => $this->withdrawal_details['bank'] ?? '',
-                'agency' => $this->withdrawal_details['agency'] ?? '',
-                'account' => $this->withdrawal_details['account'] ?? '',
+                'bank'         => $this->withdrawal_details['bank'] ?? '',
+                'agency'       => $this->withdrawal_details['agency'] ?? '',
+                'account'      => $this->withdrawal_details['account'] ?? '',
                 'account_type' => $this->withdrawal_details['account_type'] ?? '',
-                'holder_name' => $this->withdrawal_details['holder_name'] ?? '',
+                'holder_name'  => $this->withdrawal_details['holder_name'] ?? '',
             ];
         }
 
@@ -419,9 +419,9 @@ class Withdrawal extends Model
     {
         if ('pix' === $this->withdrawal_method && $this->withdrawal_details) {
             return [
-                'pix_key' => $this->withdrawal_details['pix_key'] ?? '',
+                'pix_key'      => $this->withdrawal_details['pix_key'] ?? '',
                 'pix_key_type' => $this->withdrawal_details['pix_key_type'] ?? '',
-                'holder_name' => $this->withdrawal_details['holder_name'] ?? '',
+                'holder_name'  => $this->withdrawal_details['holder_name'] ?? '',
             ];
         }
 
@@ -473,16 +473,16 @@ class Withdrawal extends Model
         try {
             /** @var StripeSettlementService $settlement */
             $settlement = app(StripeSettlementService::class);
-            $source = $settlement->findSourceChargeForWithdrawal($creatorId, $requiredAmountInCents);
+            $source     = $settlement->findSourceChargeForWithdrawal($creatorId, $requiredAmountInCents);
 
             if ($source) {
                 Log::info('Found settled source charge for withdrawal', [
-                    'withdrawal_id' => $this->id,
-                    'creator_id' => $creatorId,
-                    'required_amount_cents' => $requiredAmountInCents,
-                    'source_charge_id' => $source['charge_id'],
-                    'payment_intent_id' => $source['payment_intent_id'],
-                    'transaction_id' => $source['transaction_id'],
+                    'withdrawal_id'            => $this->id,
+                    'creator_id'               => $creatorId,
+                    'required_amount_cents'    => $requiredAmountInCents,
+                    'source_charge_id'         => $source['charge_id'],
+                    'payment_intent_id'        => $source['payment_intent_id'],
+                    'transaction_id'           => $source['transaction_id'],
                     'available_entitled_cents' => $source['available_entitled_cents'],
                 ]);
 
@@ -490,16 +490,16 @@ class Withdrawal extends Model
             }
         } catch (Exception $e) {
             Log::warning('Failed to resolve settled source charge for creator withdrawal', [
-                'withdrawal_id' => $this->id,
-                'creator_id' => $creatorId,
+                'withdrawal_id'         => $this->id,
+                'creator_id'            => $creatorId,
                 'required_amount_cents' => $requiredAmountInCents,
-                'error' => $e->getMessage(),
+                'error'                 => $e->getMessage(),
             ]);
         }
 
         Log::warning('No settled source charge found for creator withdrawal', [
-            'withdrawal_id' => $this->id,
-            'creator_id' => $creatorId,
+            'withdrawal_id'         => $this->id,
+            'creator_id'            => $creatorId,
             'required_amount_cents' => $requiredAmountInCents,
         ]);
 
@@ -509,7 +509,7 @@ class Withdrawal extends Model
     private function processStripeConnectWithdrawal(): void
     {
         $creator = User::find($this->creator_id);
-        if (!$creator || empty($creator->stripe_account_id)) {
+        if (! $creator || empty($creator->stripe_account_id)) {
             throw new Exception('Conta Stripe Connect não configurada para este criador.');
         }
 
@@ -526,19 +526,19 @@ class Withdrawal extends Model
         }
 
         $sourceChargeId = $this->findSourceChargeForCreator($this->creator_id, $amountInCents);
-        if (!$sourceChargeId) {
-            throw new Exception('Nao ha fundos liquidados reais na Stripe para este saque.');
+        if (! $sourceChargeId) {
+            throw new Exception('Não ha fundos liquidados reais na Stripe para este saque.');
         }
 
         $transferParams = [
-            'amount' => $amountInCents,
-            'currency' => 'brl',
-            'destination' => $creator->stripe_account_id,
+            'amount'             => $amountInCents,
+            'currency'           => 'brl',
+            'destination'        => $creator->stripe_account_id,
             'source_transaction' => $sourceChargeId,
-            'metadata' => [
+            'metadata'           => [
                 'withdrawal_id' => (string) $this->id,
-                'creator_id' => (string) $this->creator_id,
-                'gross_amount' => (string) $this->amount,
+                'creator_id'    => (string) $this->creator_id,
+                'gross_amount'  => (string) $this->amount,
                 'fees_disabled' => 'true',
             ],
         ];
@@ -609,7 +609,7 @@ class Withdrawal extends Model
 
             if ($existingTransaction) {
                 Log::info('Transaction record already exists for withdrawal', [
-                    'withdrawal_id' => $this->id,
+                    'withdrawal_id'  => $this->id,
                     'transaction_id' => $existingTransaction->id,
                 ]);
 
@@ -617,28 +617,28 @@ class Withdrawal extends Model
             }
 
             $withdrawalMethod = WithdrawalMethod::findByCode($this->withdrawal_method);
-            $methodName = $withdrawalMethod ? $withdrawalMethod->name : $this->withdrawal_method_label;
+            $methodName       = $withdrawalMethod ? $withdrawalMethod->name : $this->withdrawal_method_label;
 
             $paymentData = [
-                'withdrawal_id' => $this->id,
+                'withdrawal_id'     => $this->id,
                 'withdrawal_method' => $this->withdrawal_method,
-                'method_name' => $methodName,
-                'gross_amount' => $this->amount,
-                'net_amount' => $this->net_amount,
-                'total_fees' => $this->total_fees,
-                'platform_fee' => $this->platform_fee,
-                'fixed_fee' => $this->fixed_fee,
-                'transaction_id' => $this->transaction_id,
-                'processed_at' => $this->processed_at ? $this->processed_at->toDateTimeString() : null,
+                'method_name'       => $methodName,
+                'gross_amount'      => $this->amount,
+                'net_amount'        => $this->net_amount,
+                'total_fees'        => $this->total_fees,
+                'platform_fee'      => $this->platform_fee,
+                'fixed_fee'         => $this->fixed_fee,
+                'transaction_id'    => $this->transaction_id,
+                'processed_at'      => $this->processed_at ? $this->processed_at->toDateTimeString() : null,
             ];
 
             if ($this->withdrawal_details) {
                 $paymentData = array_merge($paymentData, $this->withdrawal_details);
             }
 
-            $paymentMethod = 'withdrawal';
+            $paymentMethod         = 'withdrawal';
             $stripePaymentIntentId = null;
-            $stripeChargeId = null;
+            $stripeChargeId        = null;
 
             if (in_array($this->withdrawal_method, ['stripe_connect', 'stripe_connect_bank_account', 'stripe_card'], true)) {
                 $paymentMethod = 'stripe_withdrawal';
@@ -654,56 +654,56 @@ class Withdrawal extends Model
                 $paymentMethod = 'bank_transfer_withdrawal';
             }
 
-            $cardBrand = null;
-            $cardLast4 = null;
+            $cardBrand      = null;
+            $cardLast4      = null;
             $cardHolderName = null;
 
             if ($this->withdrawal_details) {
                 if ('stripe_connect_bank_account' === $this->withdrawal_method) {
-                    $cardBrand = $this->withdrawal_details['bank_name'] ?? null;
-                    $cardLast4 = $this->withdrawal_details['bank_last4'] ?? null;
+                    $cardBrand      = $this->withdrawal_details['bank_name'] ?? null;
+                    $cardLast4      = $this->withdrawal_details['bank_last4'] ?? null;
                     $cardHolderName = $this->withdrawal_details['account_holder_name'] ?? null;
                 } else {
-                    $cardBrand = $this->withdrawal_details['card_brand'] ?? null;
-                    $cardLast4 = $this->withdrawal_details['card_last4'] ?? null;
+                    $cardBrand      = $this->withdrawal_details['card_brand'] ?? null;
+                    $cardLast4      = $this->withdrawal_details['card_last4'] ?? null;
                     $cardHolderName = $this->withdrawal_details['card_holder_name'] ?? null;
                 }
             }
 
             $transaction = Transaction::create([
-                'user_id' => $this->creator_id,
+                'user_id'                  => $this->creator_id,
                 'stripe_payment_intent_id' => $stripePaymentIntentId,
-                'stripe_charge_id' => $stripeChargeId,
-                'status' => 'paid',
-                'amount' => $this->amount,
-                'payment_method' => $paymentMethod,
-                'card_brand' => $cardBrand,
-                'card_last4' => $cardLast4,
-                'card_holder_name' => $cardHolderName,
-                'payment_data' => $paymentData,
-                'paid_at' => $this->processed_at ?? now(),
-                'metadata' => [
-                    'withdrawal_id' => $this->id,
+                'stripe_charge_id'         => $stripeChargeId,
+                'status'                   => 'paid',
+                'amount'                   => $this->amount,
+                'payment_method'           => $paymentMethod,
+                'card_brand'               => $cardBrand,
+                'card_last4'               => $cardLast4,
+                'card_holder_name'         => $cardHolderName,
+                'payment_data'             => $paymentData,
+                'paid_at'                  => $this->processed_at ?? now(),
+                'metadata'                 => [
+                    'withdrawal_id'     => $this->id,
                     'withdrawal_method' => $this->withdrawal_method,
-                    'method_name' => $methodName,
-                    'net_amount' => $this->net_amount,
-                    'total_fees' => $this->total_fees,
+                    'method_name'       => $methodName,
+                    'net_amount'        => $this->net_amount,
+                    'total_fees'        => $this->total_fees,
                 ],
             ]);
 
             Log::info('Transaction record created for withdrawal', [
-                'withdrawal_id' => $this->id,
+                'withdrawal_id'  => $this->id,
                 'transaction_id' => $transaction->id,
-                'creator_id' => $this->creator_id,
-                'amount' => $this->amount,
+                'creator_id'     => $this->creator_id,
+                'amount'         => $this->amount,
                 'payment_method' => $paymentMethod,
             ]);
         } catch (Exception $e) {
             Log::error('Failed to create transaction record for withdrawal', [
                 'withdrawal_id' => $this->id,
-                'creator_id' => $this->creator_id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                'creator_id'    => $this->creator_id,
+                'error'         => $e->getMessage(),
+                'trace'         => $e->getTraceAsString(),
             ]);
         }
     }

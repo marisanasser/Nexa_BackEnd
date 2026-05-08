@@ -91,7 +91,7 @@
 
         <div class="footer">
             <p>Este e um email automatico da plataforma Nexa.</p>
-            <p>Se voce tiver alguma duvida, entre em contato conosco.</p>
+            <p>Se você tiver alguma duvida, entre em contato conosco.</p>
         </div>
     </div>
 </body>

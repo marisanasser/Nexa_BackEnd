@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types=1);
+declare (strict_types = 1);
 
 namespace App\Http\Requests\Payment;
 
@@ -23,7 +23,7 @@ class StoreWithdrawalRequest extends FormRequest
     {
         $user = $this->user();
 
-        if (!$user) {
+        if (! $user) {
             return false;
         }
 
@@ -39,8 +39,8 @@ class StoreWithdrawalRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'amount' => ['required', 'numeric', 'min:0.01'],
-            'withdrawal_method' => ['required', 'string'],
+            'amount'             => ['required', 'numeric', 'min:0.01'],
+            'withdrawal_method'  => ['required', 'string'],
             'withdrawal_details' => ['nullable', 'array'],
         ];
     }
@@ -53,11 +53,11 @@ class StoreWithdrawalRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'amount.required' => 'O valor do saque é obrigatório.',
-            'amount.numeric' => 'O valor do saque deve ser numérico.',
-            'amount.min' => 'O valor mínimo para saque é R$ 0,01.',
+            'amount.required'            => 'O valor do saque é obrigatório.',
+            'amount.numeric'             => 'O valor do saque deve ser numérico.',
+            'amount.min'                 => 'O valor mínimo para saque é R$ 0,01.',
             'withdrawal_method.required' => 'O método de saque é obrigatório.',
-            'withdrawal_method.string' => 'O método de saque deve ser uma string válida.',
+            'withdrawal_method.string'   => 'O método de saque deve ser uma string válida.',
         ];
     }
 
@@ -90,14 +90,14 @@ class StoreWithdrawalRequest extends FormRequest
      */
     public function getDynamicMethod(): ?array
     {
-        $code = $this->string('withdrawal_method')->toString();
+        $code             = $this->string('withdrawal_method')->toString();
         $withdrawalMethod = WithdrawalMethod::findByCode($code);
 
         if ($withdrawalMethod) {
             return null;
         }
 
-        $user = $this->user();
+        $user             = $this->user();
         $availableMethods = $user->getWithdrawalMethods();
 
         return $availableMethods->firstWhere('id', $code);
@@ -110,12 +110,12 @@ class StoreWithdrawalRequest extends FormRequest
      */
     private function validateBalance($validator): void
     {
-        $user = $this->user();
+        $user   = $this->user();
         $amount = (float) $this->input('amount', 0);
 
         $balance = CreatorBalance::where('creator_id', $user->id)->first();
 
-        if (!$balance || !$balance->canWithdraw($amount)) {
+        if (! $balance || ! $balance->canWithdraw($amount)) {
             $availableBalance = $balance ? $balance->formattedAvailableBalance() : 'R$ 0,00';
             $validator->errors()->add(
                 'amount',
@@ -131,10 +131,10 @@ class StoreWithdrawalRequest extends FormRequest
      */
     private function validateWithdrawalMethod($validator): void
     {
-        $user = $this->user();
+        $user                 = $this->user();
         $withdrawalMethodCode = $this->string('withdrawal_method')->toString();
 
-        if (!WithdrawalMethod::isAllowedCreatorMethodCode($withdrawalMethodCode)) {
+        if (! WithdrawalMethod::isAllowedCreatorMethodCode($withdrawalMethodCode)) {
             $validator->errors()->add(
                 'withdrawal_method',
                 'Metodo de saque invalido. Use apenas metodos Stripe.'
@@ -145,15 +145,15 @@ class StoreWithdrawalRequest extends FormRequest
 
         $withdrawalMethod = WithdrawalMethod::findByCode($withdrawalMethodCode);
 
-        if (!$withdrawalMethod) {
+        if (! $withdrawalMethod) {
             // Check dynamic methods
             $availableMethods = $user->getWithdrawalMethods();
-            $dynamicMethod = $availableMethods->firstWhere('id', $withdrawalMethodCode);
+            $dynamicMethod    = $availableMethods->firstWhere('id', $withdrawalMethodCode);
 
-            if (!$dynamicMethod) {
+            if (! $dynamicMethod) {
                 $validator->errors()->add(
                     'withdrawal_method',
-                    'Metodo de saque invalido ou nao disponivel.'
+                    'Metodo de saque invalido ou não disponivel.'
                 );
 
                 return;
